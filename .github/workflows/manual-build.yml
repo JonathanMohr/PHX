@@ -1,0 +1,149 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu_x86_64:
+        description: "Build for Ubuntu x86_64"
+        required: true
+        default: false
+        type: boolean
+      ubuntu_arm:
+        description: "Build for Ubuntu arm"
+        required: true
+        default: false
+        type: boolean
+      windows_x86_64:
+        description: "Build for Windows x86_64"
+        required: true
+        default: false
+        type: boolean
+      windows_arm:
+        description: "Build for Windows arm"
+        required: true
+        default: false
+        type: boolean
+      macos_x86_64:
+        description: "Build for macOS x86_64"
+        required: true
+        default: false
+        type: boolean
+      macos_arm:
+        description: "Build for macOS arm"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  planner:
+    name: Planner
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      should_run: ${{ steps.set-matrix.outputs.should_run }}
+    steps:
+      - id: set-matrix
+        run: |
+          MATRIX='{"include":['
+          COUNT=0
+
+          if [[ "${{ github.event.inputs.ubuntu_x86_64 }}" == "true" ]]; then
+            MATRIX+='{"os":"ubuntu-24.04","arch":"x86_64","os_name":"linux"},'
+            COUNT=$((COUNT+1))
+          fi
+          if [[ "${{ github.event.inputs.ubuntu_arm }}" == "true" ]]; then
+            MATRIX+='{"os":"ubuntu-24.04-arm","arch":"arm64","os_name":"linux"},'
+            COUNT=$((COUNT+1))
+          fi
+          if [[ "${{ github.event.inputs.windows_x86_64 }}" == "true" ]]; then
+            MATRIX+='{"os":"windows-2025","arch":"x86_64","os_name":"windows"},'
+            COUNT=$((COUNT+1))
+          fi
+          if [[ "${{ github.event.inputs.windows_arm }}" == "true" ]]; then
+            MATRIX+='{"os":"windows-11-arm","arch":"arm64","os_name":"windows"},'
+            COUNT=$((COUNT+1))
+          fi
+          if [[ "${{ github.event.inputs.macos_x86_64 }}" == "true" ]]; then
+            MATRIX+='{"os":"macos-15-intel","arch":"x86_64","os_name":"macos"},'
+            COUNT=$((COUNT+1))
+          fi
+          if [[ "${{ github.event.inputs.macos_arm }}" == "true" ]]; then
+            MATRIX+='{"os":"macos-15","arch":"arm64","os_name":"macos"},'
+            COUNT=$((COUNT+1))
+          fi
+
+          if [ $COUNT -eq 0 ]; then
+            # dummy
+            MATRIX+='{"os":"ubuntu-latest","arch":"x86_64","os_name":"skip","skip":"true"}'
+            SHOULD_RUN=false
+          else
+            # remove last comma
+            MATRIX="${MATRIX%,}"
+            SHOULD_RUN=true
+          fi
+
+          MATRIX+=']}'
+
+          echo "Matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build
+    needs: planner
+
+    strategy:
+      matrix: ${{ fromJson(needs.planner.outputs.matrix) }}
+  
+    runs-on: ${{ matrix.os }}
+
+    if: ${{ needs.planner.outputs.should_run == 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Init on Linux
+        if: ${{ matrix.os_name == 'linux' }}
+        run: |
+          echo "No init on Linux :)"
+          
+      - name: Init on macOS
+        if: ${{ matrix.os_name == 'macos' }}
+        run: |
+          brew install llvm lld
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
+
+      - name: Init on Windows
+        if: ${{ matrix.os_name == 'windows' }}
+        run: |
+          choco install llvm -y --no-progress
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Build on Linux/macOS
+        if: ${{ matrix.os_name != 'windows' }}
+        run: |
+          FLAGS="-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }} "
+          FLAGS+="--os ${{ matrix.os_name }} --arch ${{ matrix.arch }} "
+          python3 -m ci $FLAGS
+
+      - name: Build on Windows
+        if: ${{ matrix.os_name == 'windows' }}
+        run: |
+          set FLAGS=-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }}
+          set FLAGS=%FLAGS% --os ${{ matrix.os_name }} --arch ${{ matrix.arch }}
+          python -m ci %FLAGS%
+        shell: cmd
+
+      - name: Upload binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phx-${{ matrix.os_name }}-${{ matrix.arch }}
+          path: dist/
+
+      - name: Upload logs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phx-${{ matrix.os_name }}-${{ matrix.arch }}-logs
+          path: logs/

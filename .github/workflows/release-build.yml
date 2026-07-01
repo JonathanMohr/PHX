@@ -1,0 +1,81 @@
+name: Release build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+  actions: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+            os_name: linux
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            os_name: linux
+          - os: windows-2025
+            arch: x86_64
+            os_name: windows
+          - os: windows-11-arm
+            arch: arm64
+            os_name: windows
+          - os: macos-15-intel
+            arch: x86_64
+            os_name: macos
+          - os: macos-15
+            arch: arm64
+            os_name: macos
+    
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Init on Linux
+        if: ${{ matrix.os_name == 'linux' }}
+        run: |
+          echo "No init on Linux :)"
+          
+      - name: Init on macOS
+        if: ${{ matrix.os_name == 'macos' }}
+        run: |
+          brew install llvm lld
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
+
+      - name: Init on Windows
+        if: ${{ matrix.os_name == 'windows' }}
+        run: |
+          choco install llvm -y --no-progress
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Build on Linux/macOS
+        if: ${{ matrix.os_name != 'windows' }}
+        run: |
+          FLAGS="-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }} "
+          FLAGS+="--os ${{ matrix.os_name }} --arch ${{ matrix.arch }} "
+          python3 -m ci $FLAGS -v "${{ github.event.release.tag_name }}"
+
+      - name: Build on Windows
+        if: ${{ matrix.os_name == 'windows' }}
+        run: |
+          set FLAGS=-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }}
+          set FLAGS=%FLAGS% --os ${{ matrix.os_name }} --arch ${{ matrix.arch }}
+          python -m ci %FLAGS% -v "${{ github.event.release.tag_name }}"
+        shell: cmd
+
+      - name: Upload archive as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            archives/${{ matrix.os_name == 'windows' && format('phx-{0}-{1}.zip', matrix.os_name, matrix.arch) || format('phx-{0}-{1}.tar.gz', matrix.os_name, matrix.arch) }}
+          token: ${{ secrets.GITHUB_TOKEN }}
