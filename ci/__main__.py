@@ -402,9 +402,6 @@ def main() -> bool:
 
     archives_path = project_dir / "archives"
 
-    os_dir = project_dir / "os"
-    windows_dir = os_dir / "windows"
-
     dist_dir = project_dir / "dist"
     general_build_dir = project_dir / "build"
     general_log_dir = project_dir / "logs"
@@ -424,8 +421,6 @@ def main() -> bool:
     toolchain.Set_STDC("c99")
     toolchain.Set_STDCPP("c++98")
     toolchain.Add_Define("VERSION", f"\"{version}\"")
-
-    dll_libraries: list[Path] = []
     
     sysroot_path: str | None = args.sysroot
     if sysroot_path:
@@ -495,13 +490,18 @@ def main() -> bool:
             build_dir = specific_build_dir / target_os_str / target_arch_str / optimization_str / portability_str / linking_str
             log_dir = specific_log_dir / target_os_str / target_arch_str / optimization_str / portability_str / linking_str
 
-            if buildMode.target_os == OS.Windows:
-                windows_dll = Build_Static_Library(logger, toolchain, buildMode, windows_dir / "dll", build_dir / "os" / "windows", "windows_dll", True)
-                dll_libraries.append(windows_dll)
-
             toolchain.Add_Define("PHX_BUILD")
 
             dist_include_dir, dist_lib_dir = StageLibraries(logger, dist_dir, None, [])
+
+
+            phxToolchain = copy.copy(toolchain)
+            phxToolchain.Add_Include_Directory(tools_dir / "phx")
+
+            phxBuildMode = copy.copy(buildMode)
+            phxBuildMode.host = HOST.HOSTED
+
+            phx = Build_Executable(logger, phxToolchain, phxBuildMode, [], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
             phx_lfsToolchain = copy.copy(toolchain)
@@ -513,7 +513,7 @@ def main() -> bool:
 
             phx_lfs = Build_Executable(logger, phx_lfsToolchain, phx_lfsBuildMode, [], [], tools_dir / "phx-lfs", build_dir / "tools" / "phx-lfs", "phx-lfs")
 
-            StageExecutables(logger, dist_dir, [phx_lfs])
+            StageExecutables(logger, dist_dir, [phx, phx_lfs])
 
         else:
             pass
