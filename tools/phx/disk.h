@@ -18,6 +18,11 @@ extern "C" {
         E01
 */
 
+typedef uint8_t Disk_Result;
+#define DISK_RESULT_SUCCESS        ((Disk_Result)0)
+#define DISK_RESULT_ERROR          ((Disk_Result)1)
+#define DISK_RESULT_INVALID_FORMAT ((Disk_Result)2)
+
 typedef struct Disk
 {
     /** Returns how many sectors have been read */
