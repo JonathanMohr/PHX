@@ -1,5 +1,6 @@
 #include "vdi.h"
 #include "disk.h"
+#include "file.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -35,13 +36,14 @@ Disk_Result VDI_CreateDisk(Disk* disk, const char* path, uint64_t sectorSize, ui
 
 Disk_Result VDI_ReadDisk(Disk* disk, const char* path, bool readOnly)
 {
-    //FILE* file = fopen(path, "rb");
+    PHX_File* file = PHX_File_Open(path, "rb");
 
     VDI_PreHeader preHeader;
 
-    (void)disk;
-    (void)path;
+    (void)file;
     (void)preHeader;
+
+    (void)disk;
     (void)readOnly;
     return DISK_RESULT_SUCCESS;
 }
