@@ -17,7 +17,7 @@ struct PHX_File
 PHX_File* PHX_File_Open(const char* path, const char* mode)
 {
     PHX_File* file = malloc(sizeof(PHX_File));
-    if (file) return NULL;
+    if (!file) return NULL;
 
 #ifdef _WIN32
     errno_t fileError = fopen_s(&file->file, path, mode);
@@ -42,13 +42,17 @@ void PHX_File_Close(PHX_File* file)
 
 uint64_t PHX_File_Read(PHX_File* file, uint64_t size, void* buffer)
 {
+    uint8_t* buf = buffer;
     const uint64_t start = size;
+
     while (size > 0)
     {
         const size_t block = (size > SIZE_MAX) ? SIZE_MAX : size;
-        const size_t read = fread(buffer, 1, block, file->file);
+        const size_t read = fread(buf, 1, block, file->file);
         if (read != block)
-            return start - size;
+            return start - size + read;
+        buf += block;
+        size -= block;
     }
 
     return start;
@@ -56,13 +60,17 @@ uint64_t PHX_File_Read(PHX_File* file, uint64_t size, void* buffer)
 
 uint64_t PHX_File_Write(PHX_File* file, uint64_t size, const void* buffer)
 {
+    const uint8_t* buf = buffer;
     const uint64_t start = size;
+
     while (size > 0)
     {
         const size_t block = (size > SIZE_MAX) ? SIZE_MAX : size;
-        const size_t read = fwrite(buffer, 1, block, file->file);
-        if (read != block)
-            return start - size;
+        const size_t written = fwrite(buf, 1, block, file->file);
+        if (written != block)
+            return start - size + written;
+        buf += block;
+        size -= block;
     }
 
     return start;
