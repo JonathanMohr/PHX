@@ -12,7 +12,6 @@ extern "C" {
         VMDK
         VHD(X)
         QCOW2
-        VDI
 
     List of other static container formats:
         E01
