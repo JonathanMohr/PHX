@@ -1,5 +1,5 @@
-#ifndef PHX_DEVICE_VDI_H
-#define PHX_DEVICE_VDI_H
+#ifndef PHX_DEVICE_RAW_H
+#define PHX_DEVICE_RAW_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -7,7 +7,7 @@ extern "C" {
 
 #include "device.h"
 
-extern PHX_Disk_Interface PHX_VDI_Interface;
+extern PHX_Disk_Interface PHX_RAW_Interface;
 
 #ifdef __cplusplus
 }

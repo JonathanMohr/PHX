@@ -6,7 +6,8 @@ extern "C" {
 
 #include <device/device.h>
 
-PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out);
+#define PHX_FILE_SIZE_NONE 0
+PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size);
 
 #ifdef __cplusplus
 }

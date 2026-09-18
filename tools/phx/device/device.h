@@ -39,30 +39,17 @@ typedef struct PHX_BlockDevice
 
 typedef struct PHX_Disk_Interface
 {
-    PHX_Bool (*getDevice)(PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
+    PHX_Bool (*getDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
+    PHX_Bool (*formatDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
 
     const char* type;
     const char* name;
 } PHX_Disk_Interface;
 
 
-PHX_Bool PHX_OpenFile(const char* path, PHX_Bool readonly, PHX_BlockDevice* out);
+extern PHX_Disk_Interface* PHX_Disk_Interfaces[];
+extern PHX_Size PHX_Disk_InterfaceCount;
 
-
-typedef struct Disk
-{
-    /** Returns how many sectors have been read */
-    uint64_t (*readSectors)(struct Disk* disk, uint8_t* buffer, uint64_t lba, uint64_t count);
-    /** Returns how many sectors have been written */
-    uint64_t (*writeSectors)(struct Disk* disk, const uint8_t* buffer, uint64_t lba, uint64_t count);
-
-    uint64_t (*getSectorCount)(struct Disk* disk);
-    uint64_t (*getSectorSize)(struct Disk* disk);
-
-    void (*close)(struct Disk* disk);
-
-    void* data;
-} Disk;
 
 #ifdef __cplusplus
 }

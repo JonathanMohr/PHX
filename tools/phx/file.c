@@ -1,17 +1,14 @@
 #include "file.h"
-
-#include <stdio.h>
+#include "types.h"
 
 #ifdef _WIN32
 #   include <windows.h>
 #else
+#   define _FILE_OFFSET_BITS 64
 #   include <sys/stat.h>
 #endif
 
-struct PHX_File
-{
-    FILE* file;
-};
+#include <stdio.h>
 
 static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
 {
@@ -32,14 +29,96 @@ static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
     return PHX_TRUE;
 }
 
+static inline PHX_Bool PHX_File_Tell(FILE* file, uint64_t* outPos)
+{
+#ifdef _WIN32
+    const int64_t pos = _ftelli64(file);
+    if (pos < 0)
+        return PHX_FALSE;
+    *outPos = (uint64_t)pos;
+#else
+    const off_t pos = ftello(file);
+    if (pos < 0)
+        return PHX_FALSE;
+    *outPos = (uint64_t)pos;
+#endif
+    return PHX_TRUE;
+}
+
+static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
+{
+    if (pos > INT64_MAX)
+        return PHX_FALSE;
+#ifdef _WIN32
+    if (_fseeki64(file, (int64_t)pos, SEEK_SET) != 0)
+        return PHX_FALSE;
+#else
+    if (fseeko(file, (int64_t)pos, SEEK_SET) != 0)
+        return PHX_FALSE;
+#endif
+    return PHX_TRUE;
+}
+
+
 static PHX_BlockSize PHX_File_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
 {
-    // TODO
+    FILE* file = (FILE*)device->data;
+
+    PHX_BlockSize currentPos;
+    if (PHX_File_Tell(file, &currentPos) != PHX_TRUE)
+        return 0;
+
+    if (currentPos != block)
+    {
+        if (PHX_File_Seek(file, block) != PHX_TRUE)
+            return 0;
+    }
+
+    uint8_t* buf = (uint8_t*)buffer;
+    PHX_BlockSize remaining = count;
+    while (remaining > 0)
+    {
+        const size_t toRead = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
+        if (fread(buf, toRead, 1, file) != 1)
+            return count - remaining;
+
+        remaining -= toRead;
+        buf += toRead;
+    }
+
+    return count;
 }
 
 static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
 {
-    // TODO
+    if (device->readonly)
+        return 0;
+
+    FILE* file = (FILE*)device->data;
+
+    PHX_BlockSize currentPos;
+    if (PHX_File_Tell(file, &currentPos) != PHX_TRUE)
+        return 0;
+
+    if (currentPos != block)
+    {
+        if (PHX_File_Seek(file, block) != PHX_TRUE)
+            return 0;
+    }
+
+    uint8_t* buf = (uint8_t*)buffer;
+    PHX_BlockSize remaining = count;
+    while (remaining > 0)
+    {
+        const size_t toWrite = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
+        if (fwrite(buf, toWrite, 1, file) != 1)
+            return count - remaining;
+
+        remaining -= toWrite;
+        buf += toWrite;
+    }
+
+    return count;
 }
 
 static void PHX_File_Close(PHX_BlockDevice* device)
@@ -47,9 +126,15 @@ static void PHX_File_Close(PHX_BlockDevice* device)
     fclose((FILE*)device->data);
 }
 
-PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out)
+PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size)
 {
-    const char* mode = (readonly == PHX_TRUE) ? "r+b" : "rb";
+    const char* mode;
+    if (size != PHX_FILE_SIZE_NONE)
+        mode = "w+b";
+    else if (readonly)
+        mode = "rb";
+    else
+        mode = "r+b";
 
 #ifdef _MSC_VER
     FILE* file;
@@ -63,11 +148,16 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
         return PHX_FALSE;
     }
 
-    if (get_file_size(path, &out->blockCount) != PHX_TRUE)
+    if (size == PHX_FILE_SIZE_NONE)
     {
-        fclose((FILE*)out->data);
-        return PHX_FALSE;
+        if (get_file_size(path, &out->blockCount) != PHX_TRUE)
+        {
+            fclose((FILE*)out->data);
+            return PHX_FALSE;
+        }
     }
+    else
+        out->blockCount = size;
 
     out->blockSize = 1;
     out->data = (void*)file;
@@ -84,92 +174,7 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
     return PHX_TRUE;
 }
 
-PHX_File* PHX_File_Open(const char* path, const char* mode)
+struct PHX_File
 {
-    PHX_File* file = malloc(sizeof(PHX_File));
-    if (!file) return NULL;
-
-#ifdef _WIN32
-    errno_t fileError = fopen_s(&file->file, path, mode);
-    if (fileError != 0)
-#else
-    file->file = fopen(path, mode);
-    if (!file->file)
-#endif
-    {
-        free(file);
-        return NULL;
-    }
-
-    return file;
-}
-
-void PHX_File_Close(PHX_File* file)
-{
-    fclose(file->file);
-    free(file);
-}
-
-uint64_t PHX_File_Read(PHX_File* file, uint64_t size, void* buffer)
-{
-    uint8_t* buf = buffer;
-    const uint64_t start = size;
-
-    while (size > 0)
-    {
-        const size_t block = (size > SIZE_MAX) ? SIZE_MAX : size;
-        const size_t read = fread(buf, 1, block, file->file);
-        if (read != block)
-            return start - size + read;
-        buf += block;
-        size -= block;
-    }
-
-    return start;
-}
-
-uint64_t PHX_File_Write(PHX_File* file, uint64_t size, const void* buffer)
-{
-    const uint8_t* buf = buffer;
-    const uint64_t start = size;
-
-    while (size > 0)
-    {
-        const size_t block = (size > SIZE_MAX) ? SIZE_MAX : size;
-        const size_t written = fwrite(buf, 1, block, file->file);
-        if (written != block)
-            return start - size + written;
-        buf += block;
-        size -= block;
-    }
-
-    return start;
-}
-
-bool PHX_File_Seek(PHX_File* file, uint64_t offset)
-{
-    if (offset > (unsigned long long)INT64_MAX)
-        return false;
-#ifdef _WIN32
-    if (_fseeki64(file->file, (long long)offset, SEEK_SET) != 0)
-        return false;
-#else
-    if (fseeko(file->file, (long long)offset, SEEK_SET) != 0)
-        return false;
-#endif
-    return true;
-}
-
-bool PHX_File_Tell(PHX_File* file, uint64_t* pos)
-{
-#ifdef _WIN32
-    long long sPos = _ftelli64(file->file);
-#else
-    off_t sPos = ftello(file->file);
-#endif
-
-    if (sPos < 0) return false;
-
-    *pos = (uint64_t)sPos;
-    return true;
-}
+    FILE* file;
+};

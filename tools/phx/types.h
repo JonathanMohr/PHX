@@ -9,6 +9,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 
+typedef size_t PHX_Size;
 typedef uint64_t PHX_BlockSize;
 
 typedef bool PHX_Bool;
@@ -16,6 +17,11 @@ typedef bool PHX_Bool;
 #define PHX_FALSE false
 
 #define PHX_NULL NULL
+
+typedef struct
+{
+    PHX_Bool fast;
+} PHX_Context;
 
 #ifdef __cplusplus
 }
