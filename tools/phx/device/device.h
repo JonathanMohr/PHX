@@ -8,7 +8,7 @@ extern "C" {
 
 /*
     List of dynamic container formats:
-        Raw
+        VDI
         VMDK
         VHD(X)
         QCOW2

@@ -12,7 +12,7 @@ int main(int argc, const char* argv[])
     }
 
     PHX_Context context = {
-        PHX_FALSE
+        PHX_TRUE
     };
 
     const char* file = argv[1];
