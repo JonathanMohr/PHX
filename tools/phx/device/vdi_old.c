@@ -1,5 +1,5 @@
 #include "vdi.h"
-#include "disk.h"
+#include "device.h"
 #include "file.h"
 
 #include <endianness.h>

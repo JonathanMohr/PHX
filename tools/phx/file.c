@@ -1,18 +1,88 @@
 #include "file.h"
 
-#ifndef _WIN32
-#define _FILE_OFFSET_BITS 64
-#endif
-
-#include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
+
+#ifdef _WIN32
+#   include <windows.h>
+#else
+#   include <sys/stat.h>
+#endif
 
 struct PHX_File
 {
     FILE* file;
 };
+
+static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
+{
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad))
+        return PHX_FALSE;
+    const uint64_t size = (uint64_t)fad.nFileSizeHigh << 32 | (uint64_t)fad.nFileSizeLow;
+#else
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return PHX_FALSE;
+    const uint64_t size = (uint64_t)fad.nFileSizeHigh << 32 | (uint64_t)fad.nFileSizeLow;
+#endif
+
+    *out = size;
+
+    return PHX_TRUE;
+}
+
+static PHX_BlockSize PHX_File_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+{
+    // TODO
+}
+
+static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+{
+    // TODO
+}
+
+static void PHX_File_Close(PHX_BlockDevice* device)
+{
+    fclose((FILE*)device->data);
+}
+
+PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out)
+{
+    const char* mode = (readonly == PHX_TRUE) ? "r+b" : "rb";
+
+#ifdef _MSC_VER
+    FILE* file;
+    errno_t fileError = fopen_s(&file, path, mode);
+    if (fileError != 0)
+#else
+    FILE* file = fopen(path, mode);
+    if (!file)
+#endif
+    {
+        return PHX_FALSE;
+    }
+
+    if (get_file_size(path, &out->blockCount) != PHX_TRUE)
+    {
+        fclose((FILE*)out->data);
+        return PHX_FALSE;
+    }
+
+    out->blockSize = 1;
+    out->data = (void*)file;
+
+    out->read = PHX_File_Read;
+    out->write = PHX_File_Write;
+    out->close = PHX_File_Close;
+
+    out->type = "FILE";
+
+    memset(out->name, '\0', sizeof(out->name));
+    out->readonly = readonly;
+
+    return PHX_TRUE;
+}
 
 PHX_File* PHX_File_Open(const char* path, const char* mode)
 {
