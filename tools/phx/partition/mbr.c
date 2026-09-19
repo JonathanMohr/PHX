@@ -90,7 +90,76 @@ static PHX_Bool MBR_GetPartition(PHX_Context* context, PHX_Partition_Table* tabl
 
     MBR_Data* data = table->data;
 
-    PHX_Byte* partition = data->bootSectorBuffer;
+    PHX_Byte* partition;
+    for (int i = 0; i < 4; i++)
+    {
+        partition = data->bootSectorBuffer + 446 + (PHX_Size)i * 16;
+
+        const PHX_Byte type = partition[4];
+        if (type != MBR_TYPE_EMPTY)
+        {
+            index--;
+            if (index == 0)
+                break;
+        }
+    }
+
+    if (index != 0)
+        return PHX_FALSE;
+
+    // TODO
+}
+
+static PHX_Bool MBR_RemovePartition(PHX_Context* context, PHX_Partition_Table* table, PHX_PartitionSize index)
+{
+    (void)context;
+
+    MBR_Data* data = table->data;
+
+    PHX_Byte* partition;
+    for (int i = 0; i < 4; i++)
+    {
+        partition = data->bootSectorBuffer + 446 + (PHX_Size)i * 16;
+
+        const PHX_Byte type = partition[4];
+        if (type != MBR_TYPE_EMPTY)
+        {
+            index--;
+            if (index == 0)
+                break;
+        }
+    }
+
+    if (index != 0)
+        return PHX_FALSE;
+
+    // TODO
+}
+
+static PHX_Bool MBR_AddPartition(PHX_Context* context, PHX_Partition_Table* table, PHX_PartitionSize index, PHX_BlockSize start, PHX_BlockSize size)
+{
+    (void)context;
+
+    MBR_Data* data = table->data;
+
+    PHX_Byte* partition;
+    for (int i = 0; i < 4; i++)
+    {
+        partition = data->bootSectorBuffer + 446 + (PHX_Size)i * 16;
+
+        const PHX_Byte type = partition[4];
+        if (type != MBR_TYPE_EMPTY)
+        {
+            index--;
+            if (index == 0)
+                break;
+        }
+    }
+
+    if (index != 0)
+        return PHX_FALSE;
+
+    // TODO
 }
 
 
@@ -192,9 +261,9 @@ static PHX_Bool MBR_GetTable(PHX_Context* context, PHX_BlockDevice* device, PHX_
 
     out->getPartitionCount = MBR_GetPartitionCount;
     out->getMaximumPartitionCount = MBR_GetMaximumPartitionCount;
-    out->getPartition; // TODO
-    out->removePartition; // TODO
-    out->addPartition; // TODO
+    out->getPartition = MBR_GetPartition;
+    out->removePartition = MBR_RemovePartition;
+    out->addPartition = MBR_AddPartition;
 
     out->close = MBR_Close;
 
@@ -226,9 +295,9 @@ static PHX_Bool MBR_FormatTable(PHX_Context* context, PHX_BlockDevice* device, P
 
     out->getPartitionCount = MBR_GetPartitionCount;
     out->getMaximumPartitionCount = MBR_GetMaximumPartitionCount;
-    out->getPartition; // TODO
-    out->removePartition; // TODO
-    out->addPartition; // TODO
+    out->getPartition = MBR_GetPartition;
+    out->removePartition = MBR_RemovePartition;
+    out->addPartition = MBR_AddPartition;
 
     out->close = MBR_Close;
 
