@@ -1,7 +1,27 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "device/device.h"
 #include "file.h"
+#include "types.h"
+
+static void* PHX_Allocate(struct PHX_Allocator* allocator, PHX_Size size)
+{
+    (void)allocator;
+    return malloc(size);
+}
+
+static void* PHX_Reallocate(struct PHX_Allocator* allocator, void* oldPtr, PHX_Size newSize)
+{
+    (void)allocator;
+    return realloc(oldPtr, newSize);
+}
+
+static void PHX_Free(struct PHX_Allocator* allocator, void* ptr)
+{
+    (void)allocator;
+    free(ptr);
+}
 
 int main(int argc, const char* argv[])
 {
@@ -11,8 +31,16 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    struct PHX_Allocator allocator = {
+        PHX_Allocate,
+        PHX_Reallocate,
+        PHX_Free,
+        NULL
+    };
+
     PHX_Context context = {
-        PHX_TRUE
+        PHX_TRUE,
+        allocator
     };
 
     const char* file = argv[1];

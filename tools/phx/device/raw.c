@@ -4,7 +4,7 @@
 
 static const char zeroBuffer[65536] = {0};
 
-static const char* type = "RAW-DISK";
+#define RAW_Type "RAW-DISK"
 
 static PHX_BlockSize PHX_RAW_Device_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
 {
@@ -39,7 +39,7 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
     out->write = PHX_RAW_Device_Write;
     out->close = device->close;
 
-    out->type = type;
+    out->type = RAW_Type;
 
     memcpy(out->name, device->name, sizeof(device->name));
     out->readonly = readonly;
@@ -60,7 +60,7 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
     out->write = PHX_RAW_Device_Write;
     out->close = PHX_RAW_Device_Close;
 
-    out->type = type;
+    out->type = RAW_Type;
 
     memcpy(out->name, device->name, sizeof(device->name));
     out->readonly = readonly;
@@ -85,6 +85,6 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
 PHX_Disk_Interface PHX_RAW_Interface = {
     PHX_RAW_GetDevice,
     PHX_RAW_FormatDevice,
-    "RAW-DISK",
+    RAW_Type,
     "RAW-DISK-INTERFACE"
 };

@@ -9,6 +9,7 @@
 #endif
 
 #include <stdio.h>
+#include <base.h>
 
 static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
 {
@@ -21,7 +22,7 @@ static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
     struct stat st;
     if (stat(path, &st) != 0)
         return PHX_FALSE;
-    const uint64_t size = (uint64_t)fad.nFileSizeHigh << 32 | (uint64_t)fad.nFileSizeLow;
+    const uint64_t size = (uint64_t)st.st_size;
 #endif
 
     *out = size;

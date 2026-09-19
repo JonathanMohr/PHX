@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PHX_DEVICE_DEVICE_H
+#define PHX_DEVICE_DEVICE_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,4 +53,6 @@ extern PHX_Size PHX_Disk_InterfaceCount;
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

@@ -9,8 +9,13 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 
+#define NAME_LEN 128
+
 typedef size_t PHX_Size;
 typedef uint64_t PHX_BlockSize;
+typedef uint64_t PHX_PartitionSize;
+
+typedef uint8_t PHX_Byte;
 
 typedef bool PHX_Bool;
 #define PHX_TRUE true
@@ -18,9 +23,18 @@ typedef bool PHX_Bool;
 
 #define PHX_NULL NULL
 
-typedef struct
+struct PHX_Allocator
+{
+    void* (*allocate)(struct PHX_Allocator* allocator, PHX_Size size);
+    void* (*reallocate)(struct PHX_Allocator* allocator, void* oldPtr, PHX_Size newSize);
+    void (*free)(struct PHX_Allocator* allocator, void* ptr);
+    void* data;
+};
+
+typedef struct PHX_Context
 {
     PHX_Bool fast;
+    struct PHX_Allocator allocator;
 } PHX_Context;
 
 #ifdef __cplusplus
