@@ -1,7 +1,6 @@
 #ifndef PHX_PARTITION_PARTITION_H
 #define PHX_PARTITION_PARTITION_H
 
-#include "types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif

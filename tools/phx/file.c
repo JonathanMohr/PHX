@@ -1,12 +1,13 @@
-#include "file.h"
-#include "types.h"
-
 #ifdef _WIN32
 #   include <windows.h>
 #else
+#   define _XOPEN_SOURCE 700
 #   define _FILE_OFFSET_BITS 64
 #   include <sys/stat.h>
 #endif
+
+#include "file.h"
+#include "types.h"
 
 #include <stdio.h>
 #include <base.h>
