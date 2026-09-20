@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "device/device.h"
 #include "file.h"
@@ -69,18 +70,46 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    PHX_BlockDevice realisticFileDevice;
+    puts("Creating realistic file device");
+    if (PHX_BlockCountTransformDevice(&context, &fileDevice, 512, PHX_TRUE, &realisticFileDevice) != PHX_TRUE)
+    {
+        fputs("Creating realistic file device failed\n", stderr);
+        fileDevice.close(&fileDevice);
+        return 1;
+    }
+
     PHX_BlockDevice diskDevice;
     printf("Formatting image with disk interface %s...\n", diskInterface->name);
-    if (diskInterface->formatDevice(&context, &fileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
+    if (diskInterface->formatDevice(&context, &realisticFileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
     {
         fputs("Formatting failed\n", stderr);
-        fileDevice.close(&fileDevice);
+        realisticFileDevice.close(&realisticFileDevice);
         return 1;
     }
 
     PHX_Partition_Table partitionTable;
     partitionInterface->getDefaultTable(&context, &diskDevice, &partitionTable);
-    printf("Formatting image with partition interface %s...\n", partitionInterface->name);
+    printf("Getting empty partition table with partition interface %s...\n", partitionInterface->name);
+
+    puts("Creating partition 1");
+    partitionTable.partitions = context.allocator.allocate(&context.allocator, sizeof(PHX_Partition));
+    if (!partitionTable.partitions)
+    {
+        fputs("Could not allocate partition\n", stderr);
+        diskDevice.close(&diskDevice);
+        return 1;
+    }
+    PHX_Partition* partition1 = &partitionTable.partitions[0];
+    partition1->start = partitionTable.startUsable;
+    partition1->size = partitionTable.sizeUsable;
+    partition1->flags = PHX_PARTITION_BOOTABLE;
+    partition1->type = PHX_PARTITION_UNKNOWN;
+    memset(partition1->name, '\0', sizeof(partition1->name));
+
+    partitionTable.partitionCount = 1;
+
+    printf("Writting partition table with partition interface %s...\n", partitionInterface->name);
     if (partitionInterface->writeTable(&context, &diskDevice, &partitionTable, PHX_NULL) != PHX_TRUE)
     {
         fputs("Formatting failed\n", stderr);
@@ -88,7 +117,8 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    
+
+    if (partitionTable.partitions) context.allocator.free(&context.allocator, partitionTable.partitions);
     diskDevice.close(&diskDevice);
 
     return 0;
