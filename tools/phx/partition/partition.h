@@ -1,33 +1,46 @@
 #ifndef PHX_PARTITION_PARTITION_H
 #define PHX_PARTITION_PARTITION_H
 
+#include "types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <device/device.h>
 
+typedef PHX_Byte PHX_Partition_Type;
+#define PHX_PARTITION_UNKNOWN 0
+
+typedef PHX_u16 PHX_Partition_Flags;
+#define PHX_PARTITION_BOOTABLE (1 << 0)
+
+typedef struct PHX_Partition
+{
+    PHX_BlockSize start;
+    PHX_BlockSize size;
+
+    PHX_u16 flags;
+
+    PHX_Partition_Type type;
+
+    char name[NAME_LEN];
+} PHX_Partition;
+
 typedef struct PHX_Partition_Table
 {
-    PHX_BlockDevice* device;
-    void* data;
+    PHX_Partition* partitions;
+    PHX_PartitionSize partitionCount;
+    PHX_PartitionSize maxPartitionCount;
 
-    PHX_PartitionSize (*getPartitionCount)(PHX_Context* context, struct PHX_Partition_Table* table);
-    PHX_PartitionSize (*getMaximumPartitionCount)(PHX_Context* context, struct PHX_Partition_Table* table);
-    PHX_Bool (*getPartition)(PHX_Context* context, struct PHX_Partition_Table* table, PHX_PartitionSize index, PHX_Bool readonly, PHX_BlockDevice* out);
-    PHX_Bool (*removePartition)(PHX_Context* context, struct PHX_Partition_Table* table, PHX_PartitionSize index);
-    PHX_Bool (*addPartition)(PHX_Context* context, struct PHX_Partition_Table* table, PHX_PartitionSize index, PHX_BlockSize start, PHX_BlockSize size);
-
-    void (*close)(PHX_Context* context, struct PHX_Partition_Table* table);
-
-    const char* type;
-    char name[128];
+    PHX_BlockSize startUsable;
+    PHX_BlockSize sizeUsable;
 } PHX_Partition_Table;
 
 typedef struct PHX_Partition_Interface
 {
-    PHX_Bool (*getTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* out);
-    PHX_Bool (*formatTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* out, PHX_Byte* bootSector);
+    PHX_Bool (*readTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
+    PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table, const PHX_Byte* bootSector);
+    void (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
 
     const char* type;
     const char* name;

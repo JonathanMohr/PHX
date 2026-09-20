@@ -21,7 +21,7 @@ static PHX_BlockSize PHX_RAW_Device_Write(PHX_BlockDevice* device, const void* b
 static void PHX_RAW_Device_Close(PHX_BlockDevice* device)
 {
     PHX_BlockDevice* parent = (PHX_BlockDevice*)device->data;
-    device->close(parent);
+    parent->close(parent);
 }
 
 static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
@@ -33,7 +33,7 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
 
     out->blockSize = device->blockSize;
     out->blockCount = device->blockCount;
-    out->data = device;
+    out->data = (void*)device;
 
     out->read = PHX_RAW_Device_Read;
     out->write = PHX_RAW_Device_Write;

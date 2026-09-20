@@ -173,10 +173,9 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
     memset(out->name, '\0', sizeof(out->name));
     out->readonly = readonly;
 
+    PHX_Byte zero = 0;
+    (void)PHX_File_Seek(file, size - 1);
+    (void)fwrite(&zero, 1, 1, file);
+
     return PHX_TRUE;
 }
-
-struct PHX_File
-{
-    FILE* file;
-};

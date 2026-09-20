@@ -50,6 +50,8 @@ typedef struct PHX_Disk_Interface
 extern PHX_Disk_Interface* PHX_Disk_Interfaces[];
 extern PHX_Size PHX_Disk_InterfaceCount;
 
+PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_BlockSize targetBlockSize, PHX_Bool takeOwnership, PHX_BlockDevice* outDevice);
+
 
 #ifdef __cplusplus
 }
