@@ -351,7 +351,6 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* de
 
     outDevice->type = PHX_BLOCK_SIZE_TRANSFORM_TYPE;
 
-    memcpy(outDevice->name, device->name, NAME_LEN);
     outDevice->readonly = device->readonly;
 
     return PHX_TRUE;

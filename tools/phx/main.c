@@ -64,7 +64,7 @@ int main(int argc, const char* argv[])
 
     PHX_BlockDevice fileDevice;
     printf("Opening file device for %s\n", file);
-    if (PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024 * 1024 * 1024) != PHX_TRUE)
+    if (PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024 * 1024 * 1024 / 4) != PHX_TRUE)
     {
         fprintf(stderr, "Could not open file %s\n", file);
         return 1;
@@ -118,7 +118,7 @@ int main(int argc, const char* argv[])
     }
 
 
-    if (partitionTable.partitions) context.allocator.free(&context.allocator, partitionTable.partitions);
+    PHX_Partition_CloseTable(&context, &partitionTable);
     diskDevice.close(&diskDevice);
 
     return 0;

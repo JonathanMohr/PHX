@@ -16,6 +16,7 @@ class Toolchain:
 
     _Compile_C_Source: Compile_Function
     _Compile_CPP_Source: Compile_Function
+    _Compile_Assembly_Source: Compile_Function
     _Archive_Objects: Archive_Function
     _Link_Executable: Link_Executable_Function
     _Link_DynamicLibrary: Link_DynamicLibrary_Function
@@ -23,6 +24,7 @@ class Toolchain:
     def __init__(self, context: BuildContext,
                  Compile_C_Source: Compile_Function,
                  Compile_CPP_Source: Compile_Function,
+                 Compile_Assembly_Source: Compile_Function,
                  Archive_Objects: Archive_Function,
                  Link_Executable: Link_Executable_Function,
                  Link_DynamicLibrary: Link_DynamicLibrary_Function):
@@ -38,6 +40,7 @@ class Toolchain:
 
         self._Compile_C_Source = Compile_C_Source
         self._Compile_CPP_Source = Compile_CPP_Source
+        self._Compile_Assembly_Source = Compile_Assembly_Source
         self._Archive_Objects = Archive_Objects
         self._Link_Executable = Link_Executable
         self._Link_DynamicLibrary = Link_DynamicLibrary
@@ -66,6 +69,9 @@ class Toolchain:
     
     def Compile_CPP_Source(self, mode: BuildMode, src: Path, src_rel: Path, out_dir: Path, doCompileCommands: bool) -> Path:
         return self._Compile_CPP_Source(self, mode, src, src_rel, out_dir, doCompileCommands)
+
+    def Compile_Assembly_Source(self, mode: BuildMode, src: Path, src_rel: Path, out_dir: Path, doCompileCommands: bool) -> Path:
+        return self._Compile_Assembly_Source(self, mode, src, src_rel, out_dir, doCompileCommands)
     
     def Archive_Objects(self, mode: BuildMode, objects: list[Path], name: str, out_dir: Path) -> Path:
         return self._Archive_Objects(self, mode, objects, name, out_dir)

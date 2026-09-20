@@ -170,7 +170,6 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
 
     out->type = "FILE";
 
-    memset(out->name, '\0', sizeof(out->name));
     out->readonly = readonly;
 
     PHX_Byte zero = 0;

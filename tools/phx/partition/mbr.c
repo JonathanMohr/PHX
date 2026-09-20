@@ -1,9 +1,9 @@
 #include "mbr.h"
-#include "device/device.h"
-#include "endianness.h"
-#include "partition/partition.h"
-#include "types.h"
+
+#include <endianness.h>
 #include <base.h>
+
+#include <embed/mbr.h>
 
 /*
     Partition (16 byte):
@@ -241,6 +241,8 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     // Bootsector code
     if (bootsector)
         memcpy(bootsectorBuffer, bootsector, 446);
+    else
+        memcpy(bootsectorBuffer, binary_file_data, 446);
 
     for (PHX_PartitionSize i = 0; i < table->partitionCount; i++)
     {

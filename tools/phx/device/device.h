@@ -32,7 +32,6 @@ typedef struct PHX_BlockDevice
 
     const char* type;
 
-    char name[128];
     PHX_Bool readonly;
 } PHX_BlockDevice;
 

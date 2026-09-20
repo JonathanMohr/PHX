@@ -41,7 +41,6 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
 
     out->type = RAW_Type;
 
-    memcpy(out->name, device->name, sizeof(device->name));
     out->readonly = readonly;
 
     return PHX_TRUE;
@@ -62,7 +61,6 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
 
     out->type = RAW_Type;
 
-    memcpy(out->name, device->name, sizeof(device->name));
     out->readonly = readonly;
 
     if (!context->fast)

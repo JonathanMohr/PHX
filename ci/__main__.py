@@ -8,6 +8,8 @@ import ci.cache as cacheModule
 import ci.logger as loggerModule
 import ci.archive as archiveModule
 
+from ci.toolchains.nasm import Compile_Assembly_To_Binary
+
 from pathlib import Path
 import sys
 import argparse
@@ -16,9 +18,10 @@ import copy
 import shutil
 import platform
 import subprocess
+import os
 
 def Build_Sources_To_Objects(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, src_dir: Path, build_dir: Path, doCompileCommands: bool) -> Path:
-    patterns = ["*.c", "*.cpp"]
+    patterns = ["*.c", "*.cpp", "*.asm"]
 
     files: list[Path] = []
     for pattern in patterns:
@@ -31,6 +34,8 @@ def Build_Sources_To_Objects(logger: logging.Logger, toolchain: Toolchain, mode:
                 object = toolchain.Compile_C_Source(mode, file, file.relative_to(src_dir), build_dir, doCompileCommands)
             elif file.suffix == ".cpp":
                 object = toolchain.Compile_CPP_Source(mode, file, file.relative_to(src_dir), build_dir, doCompileCommands)
+            elif file.suffix == ".asm":
+                object = toolchain.Compile_Assembly_Source(mode, file, file.relative_to(src_dir), build_dir, doCompileCommands)
             else:
                 logger.warning(f"Invalid source extension of file {file}")
                 continue
@@ -195,95 +200,6 @@ def Copy_Path(logger: logging.Logger, src: Path, dst: Path):
     else:
         logger.warning(f"{src} does not exist")
 
-
-def StageOther(logger: logging.Logger, dist_dir: Path):
-    project_root = Path(".")
-
-    readme = project_root / "README.md"
-    license = project_root / "LICENSE"
-
-    docs = project_root / "docs"
-
-    dist_license = dist_dir / "LICENSE"
-
-    dist_share = dist_dir / "share"
-
-    dist_doc = dist_share / "doc" / "phx"
-
-    # License
-    dist_license.parent.mkdir(parents=True, exist_ok=True)
-    Copy_Path(logger, license, dist_license)
-
-    # share/
-    dist_share.mkdir(parents=True, exist_ok=True)
-
-    ## doc/
-    dist_doc.mkdir(parents=True, exist_ok=True)
-
-    ### docs
-    Copy_Path(logger, docs, dist_doc)
-
-    ### LICENSE
-    dist_doc_license = dist_doc / "LICENSE"
-    Copy_Path(logger, license, dist_doc_license)
-
-    ### README.md
-    dist_doc_readme = dist_doc / "README.md"
-    Copy_Path(logger, readme, dist_doc_readme)
-
-def StageLibraries(logger: logging.Logger, dist_dir: Path, include_path: Path | None, libraries: list[tuple[list[tuple[Path, Path | None, Path | None]], list[Path]]]) -> tuple[Path, Path]:
-    include_dir = dist_dir / "include"
-    lib_dir = dist_dir / "lib"
-
-    # Include directory
-    if include_path:
-        include_dir.mkdir(parents=True, exist_ok=True)
-        Copy_Path(logger, include_path, include_dir)
-
-    # Libraries
-    if libraries:
-        lib_dir.mkdir(parents=True, exist_ok=True)
-
-    for library in libraries:
-        dynamic_libraries, static_libraries = library
-
-        for dynamic_library in dynamic_libraries:
-            dylib, implib, debug_info = dynamic_library
-
-            dst_dylib = lib_dir / dylib.name
-            Copy_Path(logger, dylib, dst_dylib)
-
-            if implib is not None:
-                dst_implib = lib_dir / implib.name
-                Copy_Path(logger, implib, dst_implib)
-
-            if debug_info is not None:
-                dst_debug_info = lib_dir / debug_info.name
-                Copy_Path(logger, debug_info, dst_debug_info)
-
-        for static_library in static_libraries:
-            dst_static_library = lib_dir / static_library.name
-            Copy_Path(logger, static_library, dst_static_library)
-
-    return (include_dir, lib_dir)
-
-def StageExecutables(logger: logging.Logger, dist_dir: Path, executables: list[tuple[Path, Path | None]]):
-    bin_dir = dist_dir / "bin"
-
-    bin_dir.mkdir(parents=True, exist_ok=True)
-
-    # Executables
-    for exe in executables:
-        executable, executable_debug_info = exe
-
-        dst_exe = bin_dir / executable.name
-        Copy_Path(logger, executable, dst_exe)
-
-        if executable_debug_info is not None:
-            dst_debug_info = bin_dir / executable_debug_info.name
-            Copy_Path(logger, executable_debug_info, dst_debug_info)
-
-
 def run_git(cmd):
     try:
         return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
@@ -308,6 +224,40 @@ def get_version() -> str:
         version = f"{branch}+{commit_hash}"
     
     return version
+
+
+def to_c_identifier(name: str) -> str:
+    ident = "".join(c if c.isalnum() else "_" for c in name)
+    if ident[0].isdigit():
+        ident = "_" + ident
+    return ident
+
+def generate_header(input_path: str, output_path: str, var_name: str = None, bytes_per_line: int = 12):
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    if var_name is None:
+        base = os.path.basename(input_path)
+        var_name = to_c_identifier(base)
+
+    guard = to_c_identifier(os.path.basename(output_path)).upper() + "_"
+
+    with open(output_path, "w") as f:
+        f.write(f"#ifndef {guard}\n")
+        f.write(f"#define {guard}\n\n")
+        f.write("#include <types.h>\n\n")
+
+        f.write(f"static const unsigned char {var_name}_data[] = {{\n")
+
+        for i in range(0, len(data), bytes_per_line):
+            chunk = data[i:i + bytes_per_line]
+            line = ", ".join(f"0x{b:02x}" for b in chunk)
+            f.write(f"    {line},\n")
+
+        f.write("};\n\n")
+        f.write(f"static const PHX_Size {var_name}_size = sizeof({var_name}_data);\n\n")
+        f.write(f"#endif // {guard}\n")
+
 
 def main() -> bool:
     dist_build = True
@@ -427,6 +377,7 @@ def main() -> bool:
     # include_dir = project_dir / "include"
     # lib_dir = project_dir / "libs"
     tools_dir = project_dir / "tools"
+    embed_dir = project_dir / "embed"
 
     archives_path = project_dir / "archives"
 
@@ -520,11 +471,28 @@ def main() -> bool:
 
             toolchain.Add_Define("PHX_BUILD")
 
-            dist_include_dir, dist_lib_dir = StageLibraries(logger, dist_dir, None, [])
+
+            # Embed
+            embed_build_dir = build_dir / "embed"
+            embed_include_dir = build_dir / "embed-include"
+
+            if embed_include_dir.exists():
+                shutil.rmtree(str(embed_include_dir))
+
+            embed_files = embed_dir.rglob("*.asm")
+            for embed_file in embed_files:
+                binary = embed_build_dir / embed_file.relative_to(embed_dir)
+                Compile_Assembly_To_Binary(buildContext, embed_file, binary)
+
+                header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
+                header.parent.mkdir(parents=True, exist_ok=True)
+                generate_header(str(binary), str(header), "binary_file")
 
 
+            # PHX
             phxToolchain = copy.copy(toolchain)
             phxToolchain.Add_Include_Directory(tools_dir / "phx")
+            phxToolchain.Add_Include_Directory(embed_include_dir)
 
             phxBuildMode = copy.copy(buildMode)
             phxBuildMode.host = HOST.HOSTED
@@ -532,6 +500,7 @@ def main() -> bool:
             phx = Build_Executable(logger, phxToolchain, phxBuildMode, [], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
+            # PHX-LFS
             phx_lfsToolchain = copy.copy(toolchain)
             phx_lfsToolchain.Add_Include_Directory(tools_dir / "phx-lfs")
 
@@ -541,9 +510,39 @@ def main() -> bool:
 
             phx_lfs = Build_Executable(logger, phx_lfsToolchain, phx_lfsBuildMode, [], [], tools_dir / "phx-lfs", build_dir / "tools" / "phx-lfs", "phx-lfs")
 
-            StageExecutables(logger, dist_dir, [phx, phx_lfs])
 
-            StageOther(logger, dist_dir)
+            # dist
+            if dist_dir.exists():
+                shutil.rmtree(str(dist_dir))
+            dist_dir.mkdir(parents=True, exist_ok=True)
+
+            ## README
+            readme = project_dir / "README.md"
+            dist_doc_readme = dist_dir / "README.md"
+            Copy_Path(logger, readme, dist_doc_readme)
+
+            ## LICENSE
+            license = project_dir / "LICENSE"
+            dist_license = dist_dir / "LICENSE"
+            Copy_Path(logger, license, dist_license)
+
+            ## docs
+            docs = project_dir / "docs"
+            dist_docs = dist_dir / "docs"
+            Copy_Path(logger, docs, dist_docs)
+
+            ## bin
+            bin_dir = dist_dir / "bin"
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            
+            ### phx
+            phx_executable, phx_executable_debug_info = phx
+            bin_phx = bin_dir / phx_executable.name
+            Copy_Path(logger, phx_executable, bin_phx)
+
+            phx_lfs_executable, phx_lfs_executable_debug_info = phx_lfs
+            bin_phx_lfs = bin_dir / phx_lfs_executable.name
+            Copy_Path(logger, phx_lfs_executable, bin_phx_lfs)
 
         else:
             pass

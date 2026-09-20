@@ -1,7 +1,6 @@
 #ifndef PHX_PARTITION_PARTITION_H
 #define PHX_PARTITION_PARTITION_H
 
-#include "types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -48,6 +47,15 @@ typedef struct PHX_Partition_Interface
 
 extern PHX_Partition_Interface* PHX_Partition_Interfaces[];
 extern PHX_Size PHX_Partition_InterfaceCount;
+
+static inline void PHX_Partition_CloseTable(PHX_Context* context, PHX_Partition_Table* table)
+{
+    if (table->partitions)
+        context->allocator.free(&context->allocator, table->partitions);
+    table->partitions = PHX_NULL;
+}
+
+PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition* partition, PHX_BlockDevice* outDevice);
 
 #ifdef __cplusplus
 }
