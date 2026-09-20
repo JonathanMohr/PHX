@@ -481,7 +481,7 @@ def main() -> bool:
 
             embed_files = embed_dir.rglob("*.asm")
             for embed_file in embed_files:
-                binary = embed_build_dir / embed_file.relative_to(embed_dir)
+                binary = embed_build_dir / f"{embed_file.relative_to(embed_dir)}.bin"
                 Compile_Assembly_To_Binary(buildContext, embed_file, binary)
 
                 header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
