@@ -5,8 +5,11 @@
 %define RETRIES 3
 
 entry:
+
+boot_drive: ; Reusing code that will not be used again after initializing as space for variable
     cli
 
+partition: ; Reusing code that will not be used again after initializing as space for variable
     xor ax, ax
 
     mov ds, ax
@@ -203,7 +206,7 @@ lba_too_high_error:
 
 print_error:
     lodsb
-    cmp al, 0
+    cmp al, 0x10
     je short .done
     mov ah, 0eh
     mov bh, 0
@@ -229,9 +232,6 @@ partition_no_marker:
 
 retry_count db RETRIES
 
-boot_drive db 0
-partition dw 0
-
 ;
 ; Overlap between dap and chs conversion storage because only one is used
 ;
@@ -245,6 +245,10 @@ partition dw 0
 ; head_result db 0
 ; cyl_result dw 0
 ;
+
+no_partition_found_msg db "No bootable partition found", 0x10
+disk_error_msg db "Disk error", 0x10
+lba_too_high_error_msg db "Partition LBA too high", ; using the 0x10 of the DAP, because if this error message is used, we're using CHS, which means the DAP has not been used
 
 dap:
     db 0x10
@@ -267,10 +271,6 @@ cyl_result: ; chs: 2 bytes
     db 0
     db 0
 
-
-no_partition_found_msg db "No bootable partition", 0
-disk_error_msg db "Disk error", 0
-lba_too_high_error_msg db "Partition LBA too high", 0
 
 
 times 446 - ($ - $$) db 0

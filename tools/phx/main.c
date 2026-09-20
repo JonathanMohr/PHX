@@ -63,7 +63,7 @@ int main(int argc, const char* argv[])
     PHX_Partition_Interface* partitionInterface = PHX_Partition_Interfaces[0];
 
     PHX_BlockDevice fileDevice;
-    printf("Opening file device for %s\n", file);
+    printf("Opening file device for %s...\n", file);
     if (PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024 * 1024 * 1024 / 4) != PHX_TRUE)
     {
         fprintf(stderr, "Could not open file %s\n", file);
@@ -71,7 +71,7 @@ int main(int argc, const char* argv[])
     }
 
     PHX_BlockDevice realisticFileDevice;
-    puts("Creating realistic file device");
+    puts("Creating realistic file device...");
     if (PHX_BlockCountTransformDevice(&context, &fileDevice, 512, PHX_TRUE, &realisticFileDevice) != PHX_TRUE)
     {
         fputs("Creating realistic file device failed\n", stderr);
@@ -92,7 +92,7 @@ int main(int argc, const char* argv[])
     partitionInterface->getDefaultTable(&context, &diskDevice, &partitionTable);
     printf("Getting empty partition table with partition interface %s...\n", partitionInterface->name);
 
-    puts("Creating partition 1");
+    puts("Creating partition 1...");
     partitionTable.partitions = context.allocator.allocate(&context.allocator, sizeof(PHX_Partition));
     if (!partitionTable.partitions)
     {
@@ -109,15 +109,27 @@ int main(int argc, const char* argv[])
 
     partitionTable.partitionCount = 1;
 
+
+    PHX_BlockDevice partitionDevice;
+    puts("Creating device for partition 1...");
+    if (PHX_Partition_CreateDevice(&context, &diskDevice, partition1, &partitionDevice) != PHX_TRUE)
+    {
+        fputs("Creating device failed\n", stderr);
+        diskDevice.close(&diskDevice);
+        return 1;
+    }
+
     printf("Writting partition table with partition interface %s...\n", partitionInterface->name);
     if (partitionInterface->writeTable(&context, &diskDevice, &partitionTable, PHX_NULL) != PHX_TRUE)
     {
         fputs("Formatting failed\n", stderr);
+        partitionDevice.close(&partitionDevice);
         diskDevice.close(&diskDevice);
         return 1;
     }
 
 
+    partitionDevice.close(&partitionDevice);
     PHX_Partition_CloseTable(&context, &partitionTable);
     diskDevice.close(&diskDevice);
 
