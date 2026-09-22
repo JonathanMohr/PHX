@@ -9,7 +9,8 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 
-#define NAME_LEN 128
+#define PHX_NAME_LEN 512
+#define NAME_LEN (PHX_NAME_LEN + 1)
 
 typedef size_t PHX_Size;
 typedef uint64_t PHX_BlockSize;

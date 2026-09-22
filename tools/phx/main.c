@@ -3,8 +3,10 @@
 #include <string.h>
 
 #include "device/device.h"
-#include "file.h"
 #include "partition/partition.h"
+#include "filesystem/filesystem.h"
+
+#include "file.h"
 #include "types.h"
 
 static void* PHX_Allocate(struct PHX_Allocator* allocator, PHX_Size size)
@@ -59,8 +61,16 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    if (PHX_Filesystem_InterfaceCount == 0)
+    {
+        fputs("No filesystem interface found\n", stderr);
+        return 1;
+    }
+
     PHX_Disk_Interface* diskInterface = PHX_Disk_Interfaces[0];
     PHX_Partition_Interface* partitionInterface = PHX_Partition_Interfaces[0];
+    PHX_Filesystem_Interface* filesystemInterface = PHX_Filesystem_Interfaces[0];
+
 
     PHX_BlockDevice fileDevice;
     printf("Opening file device for %s...\n", file);
@@ -129,6 +139,18 @@ int main(int argc, const char* argv[])
     }
 
 
+    PHX_Filesystem filesystem;
+    printf("Formatting partition with filesystem interface %s...\n", filesystemInterface->name);
+    if (filesystemInterface->formatFilesystem(&context, &partitionDevice, &filesystem, PHX_NULL) != PHX_SUCCESS)
+    {
+        fputs("Formatting failed\n", stderr);
+        partitionDevice.close(&partitionDevice);
+        diskDevice.close(&diskDevice);
+        return 1;
+    }
+
+
+    filesystem.ops->destroy(&filesystem);
     partitionDevice.close(&partitionDevice);
     PHX_Partition_CloseTable(&context, &partitionTable);
     diskDevice.close(&diskDevice);
