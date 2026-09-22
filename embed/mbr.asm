@@ -16,9 +16,7 @@ boot_drive: ; 1 byte
 partition: ; 2 byte
     xor ax, ax
 
-spt: ; 2 bytes
     mov ds, ax
-heads: ; 2 bytes
     mov es, ax
     mov ss, ax
     mov sp, 0x7C00
@@ -114,34 +112,27 @@ partition_found:
     mov si, [partition]
     jc short .disk_error_short
 
-    cmp dh, 0xFF
-    je short .disk_error_short
-
     and cx, 0x3F
     jz short .disk_error_short
-    mov [spt], cx
-    mov dl, dh
-    xor dh, dh
-    inc dx
-    mov [heads], dx
+    inc dh
+    jz short .disk_error_short
+    mov bx, cx
+    mov cl, dh
+    mov di, cx
 
     mov ax, [si + 10]
     xor dx, dx
-    div word [spt]
-    mov cx, ax
+    div bx
+    xchg ax, cx
     mov ax, [si + 8]
-    div word [spt]
+    div bx
     inc dx
     push dx
 
-    xchg ax, cx
-    xor dx, dx
-    div word [heads]
-    xchg ax, cx
-    div word [heads]
-
-    or cx, cx
-    jnz short lba_too_high_error
+    cmp cx, di
+    jae short lba_too_high_error
+    mov dx, cx
+    div di
     cmp ax, 1023
     ja short lba_too_high_error
 
@@ -164,7 +155,8 @@ partition_found:
     int 0x13
     jnc short after_read
 
-    mov dl, [boot_drive]
+    pop dx
+    push dx
     xor ah, ah
     int 0x13
 
@@ -189,21 +181,20 @@ after_read:
 
     mov dl, [boot_drive]
     mov si, [partition]
-    jmp near 0x7C00
+    jmp sp
 
 no_partition_found:
     mov si, no_partition_found_msg
     jmp short print_error
 
+print_char:
+    int 10h
 print_raw:
-    lodsb
-    cmp al, 0
-    je short .finish
     mov ah, 0eh
     mov bx, 0x07
-    int 10h
-    jmp short print_raw
-.finish:
+    lodsb
+    test al, al
+    jnz short print_char
     ret
 
 lba_too_high_error:
@@ -214,21 +205,38 @@ print_error:
     call print_raw
     mov si, press_enter_to_restart_msg
     call print_raw
+
+    cbw
+    int 16h
     ; jmp short restart
 
 restart:
-    mov ah, 00h
-    int 16h
+    cli
+    xor cx, cx
 
 .wait:
     in al, 0x64
     test al, 2
-    jnz .wait
+    loopnz .wait
 
-.finish:
     mov al, 0xFE
     out 0x64, al
 
+    xor cx, cx
+.delay:
+    in al, 0x64
+    loop .delay
+
+    pushf
+    pop ax
+    test ah, ah
+    js .fallback
+[cpu 286]
+    lidt [cs:.fallback + 1]
+    int 3
+
+[cpu 8086]
+.fallback:
     jmp 0xFFFF:0x0000
 
 
@@ -239,9 +247,9 @@ partition_no_marker:
     jmp near init_check_loop
 
 
-no_partition_found_msg db "No bootable partition found!", 0
-disk_error_msg db "Disk error!", 0
-lba_too_high_error_msg db "LBA too high!", 0
+no_partition_found_msg db "No bootable partition found", 0
+disk_error_msg db "Disk error", 0
+lba_too_high_error_msg db "LBA too high", 0
 press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart...", 0
 
 times 440 - ($ - $$) db 0
