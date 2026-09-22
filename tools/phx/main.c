@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "device/device.h"
 #include "partition/partition.h"
@@ -43,6 +44,7 @@ int main(int argc, const char* argv[])
     };
 
     PHX_Context context = {
+        (PHX_u32)time(NULL),
         PHX_TRUE,
         allocator
     };

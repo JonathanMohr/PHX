@@ -4,15 +4,21 @@
 
 %define RETRIES 3
 
+;
+; Reusing code that will not be used again after initializing as space for variable
+;
+
 entry:
 
-boot_drive: ; Reusing code that will not be used again after initializing as space for variable
+boot_drive: ; 1 byte
     cli
 
-partition: ; Reusing code that will not be used again after initializing as space for variable
+partition: ; 2 byte
     xor ax, ax
 
+spt: ; 2 bytes
     mov ds, ax
+heads: ; 2 bytes
     mov es, ax
     mov ss, ax
     mov sp, 0x7C00
@@ -75,29 +81,27 @@ partition_found:
     mov cx, RETRIES
 
 .lba_retry:
-    ; TODO: After error set count in dap to 1
-
     mov si, sp
+    mov byte [si + 2], 1
     push cx
     mov ah, 0x42
     mov dl, [boot_drive]
     int 0x13
     jnc short .lba_success
 
-    mov ah, 0x00
+    xor ah, ah
     mov dl, [boot_drive]
     int 0x13
     pop cx
     loop .lba_retry
 
-    jmp short .disk_error_short
-
-.lba_success:
-    pop cx
-    jmp near after_read
+    ; jmp short .disk_error_short
 
 .disk_error_short:
     jmp near disk_error
+
+.lba_success:
+    jmp near after_read
 
 .no_lba:
     push es
@@ -113,93 +117,74 @@ partition_found:
     cmp dh, 0xFF
     je short .disk_error_short
 
-    and cl, 0x3F
+    and cx, 0x3F
     jz short .disk_error_short
-    mov [spt], cl
-    inc dh
-    mov [heads], dh
-
-    mov ax, [si + 8]
-    mov dx, [si + 10]
-
-    mov bx, ax
-    mov ax, dx
-    xor dx, dx
-    div word [spt]
-    mov cx, ax
-    mov ax, bx
-    div word [spt]
-
+    mov [spt], cx
+    mov dl, dh
+    xor dh, dh
     inc dx
-    mov [sector_result], dl
+    mov [heads], dx
 
-    mov bx, ax
-    mov ax, cx
+    mov ax, [si + 10]
+    xor dx, dx
+    div word [spt]
+    mov cx, ax
+    mov ax, [si + 8]
+    div word [spt]
+    inc dx
+    push dx
+
+    xchg ax, cx
     xor dx, dx
     div word [heads]
-    mov cx, ax
-    mov ax, bx
+    xchg ax, cx
     div word [heads]
-
-    mov [head_result], dl
-    mov [cyl_result], ax
 
     or cx, cx
     jnz short lba_too_high_error
     cmp ax, 1023
     ja short lba_too_high_error
 
-    mov ch, [cyl_result]
-    mov dl, [sector_result]
-    mov al, [cyl_result + 1]
-    mov cl, 6
-    shl al, cl
-    or dl, al
+    mov dh, dl
+    pop cx
+    mov ch, al
+    ror ah, 1
+    ror ah, 1
+    or cl, ah
 
-    mov cl, dl
-    mov dh, [head_result]
-    call do_read_chs
+    mov di, RETRIES
+.chs_retry:
+    push di
+    push cx
+    push dx
 
-    ; jmp short after_read
+    mov bx, 0x7C00
+    mov ax, 0x0201
+    int 0x13
+    jnc short after_read
+
+    mov dl, [boot_drive]
+    xor ah, ah
+    int 0x13
+
+    pop dx
+    pop cx
+    pop di
+
+    dec di
+
+    jnz short .chs_retry
+    jmp short disk_error
 
 after_read:
     cmp word [0x7DFE], 0xAA55
     jne short partition_no_marker
 
+    mov sp, 0x7C00
+
     mov dl, [boot_drive]
     mov si, [partition]
     jmp near 0x7C00
-
-
-read_chs_success:
-    add sp, 6
-    ret
-
-do_read_chs:
-    mov dl, [boot_drive]
-    mov bx, 0x7C00
-
-    push bx
-    push cx
-    push dx
-
-    mov ah, 0x02
-    mov al, 1
-    int 0x13
-    jnc short read_chs_success
-
-    mov ah, 0x00
-    mov dl, [boot_drive]
-    int 0x13
-
-    pop dx
-    pop cx
-    pop bx
-
-    dec byte [retry_count]
-    jnz short do_read_chs
-    ; jmp short disk_error
-
 
 disk_error:
     mov si, disk_error_msg
@@ -213,42 +198,50 @@ lba_too_high_error:
     mov si, lba_too_high_error_msg
     ; jmp short print_error
 
-print_error:
+print_raw:
     lodsb
     cmp al, 0
-    je short .done
+    je short .finish
     mov ah, 0eh
     mov bx, 0x07
     int 10h
-    jmp short print_error
+    jmp short print_raw
+.finish:
+    ret
 
-.done:
-    cli
-.halt:
-    hlt
-    jmp short .halt
+print_error:
+    call print_raw
+    mov si, press_enter_to_restart_msg
+    call print_raw
+    ; jmp short restart
+
+restart:
+    mov ah, 00h
+    int 16h
+
+.wait:
+    in al, 0x64
+    test al, 2
+    jnz .wait
+
+.finish:
+    mov al, 0xFE
+    out 0x64, al
+
+    jmp 0xFFFF:0x0000
 
 
 partition_no_marker:
-    mov byte [retry_count], RETRIES
-
     mov si, [partition]
     mov byte [si], 0x00
 
     jmp near init_check_loop
 
 
-retry_count db RETRIES
-
-no_partition_found_msg db "No bootable partition found", 0
-disk_error_msg db "Disk error", 0
-lba_too_high_error_msg db "Partition LBA too high", 0
-
-spt dw 0
-heads dw 0
-sector_result db 0
-head_result db 0
-cyl_result dw 0
+no_partition_found_msg db "No bootable partition found!", 0
+disk_error_msg db "Disk error!", 0
+lba_too_high_error_msg db "LBA too high!", 0
+press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart...", 0
 
 times 440 - ($ - $$) db 0
 

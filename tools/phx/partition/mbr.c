@@ -136,6 +136,14 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
         return PHX_FALSE;
     }
 
+    // Disk signature
+    PHX_u32 diskSignature;
+    memcpy(&diskSignature, &bootsectorBuffer[440], 4);
+    diskSignature = Endian_Convert_u32_Le(diskSignature);
+
+    while (diskSignature == 0)
+        diskSignature = PHX_Context_GetRandomU32(context);
+
     PHX_PartitionSize currentPartitionCount = 0;
     for (int i = 0; i < 4; i++)
     {
@@ -207,6 +215,7 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
     outTable->partitions = partitions;
     outTable->partitionCount = partitionCount;
     outTable->maxPartitionCount = 4;
+    outTable->signature = diskSignature;
     outTable->startUsable = startUsable;
     outTable->sizeUsable = (device->blockCount > startUsable) ? device->blockCount - startUsable : 0;
 
@@ -234,15 +243,23 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
 
     memset(bootsectorBuffer, 0, 512);
 
-    // Signature
-    bootsectorBuffer[510] = 0x55;
-    bootsectorBuffer[511] = 0xAA;
-
     // Bootsector code
     if (bootsector)
         memcpy(bootsectorBuffer, bootsector, 446);
     else
         memcpy(bootsectorBuffer, binary_file_data, 446);
+
+    // Signature
+    bootsectorBuffer[510] = 0x55;
+    bootsectorBuffer[511] = 0xAA;
+
+    // Disk signature
+    const PHX_u32 diskSignature = Endian_Convert_u32_Le(table->signature);
+    memcpy(&bootsectorBuffer[440], &diskSignature, 4);
+
+    // Disk reserved
+    bootsectorBuffer[444] = 0;
+    bootsectorBuffer[445] = 0;
 
     for (PHX_PartitionSize i = 0; i < table->partitionCount; i++)
     {
@@ -294,6 +311,7 @@ static void MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_
     outTable->partitions = PHX_NULL;
     outTable->partitionCount = 0;
     outTable->maxPartitionCount = 4;
+    outTable->signature = PHX_Context_GetRandomU32(context);
     outTable->startUsable = startUsable;
     outTable->sizeUsable = (device->blockCount > startUsable) ? device->blockCount - startUsable : 0;
 }

@@ -38,9 +38,13 @@ struct PHX_Allocator
 
 typedef struct PHX_Context
 {
+    PHX_u32 seed;
+
     PHX_Bool fast;
     struct PHX_Allocator allocator;
 } PHX_Context;
+
+PHX_u32 PHX_Context_GetRandomU32(PHX_Context* context);
 
 #ifdef __cplusplus
 }

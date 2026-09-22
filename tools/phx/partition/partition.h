@@ -31,6 +31,8 @@ typedef struct PHX_Partition_Table
     PHX_PartitionSize partitionCount;
     PHX_PartitionSize maxPartitionCount;
 
+    PHX_u32 signature;
+
     PHX_BlockSize startUsable;
     PHX_BlockSize sizeUsable;
 } PHX_Partition_Table;
