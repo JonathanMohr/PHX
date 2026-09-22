@@ -146,6 +146,7 @@ partition_found:
     ja short lba_too_high_error
 
     mov dh, dl
+    mov dl, [boot_drive]
     pop cx
     mov ch, al
     ror ah, 1
@@ -174,7 +175,11 @@ partition_found:
     dec di
 
     jnz short .chs_retry
-    jmp short disk_error
+    ; jmp short disk_error
+
+disk_error:
+    mov si, disk_error_msg
+    jmp short print_error
 
 after_read:
     cmp word [0x7DFE], 0xAA55
@@ -185,10 +190,6 @@ after_read:
     mov dl, [boot_drive]
     mov si, [partition]
     jmp near 0x7C00
-
-disk_error:
-    mov si, disk_error_msg
-    jmp short print_error
 
 no_partition_found:
     mov si, no_partition_found_msg
