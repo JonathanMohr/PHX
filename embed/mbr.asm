@@ -17,7 +17,7 @@ partition: ; Reusing code that will not be used again after initializing as spac
     mov ss, ax
     mov sp, 0x7C00
 
-    mov si, 0x7C00
+    mov si, sp
     mov di, 0x0600
     mov cx, 512
     cld
@@ -59,17 +59,26 @@ partition_found:
     jz short .no_lba
 
 .use_lba:
-    mov ax, [si + 8]
-    mov dx, [si + 10]
-
-    mov [dap_lba], ax
-    mov [dap_lba + 2], dx
+    xor ax, ax
+    push ax
+    push ax
+    push word [si + 10]
+    push word [si + 8]
+    push ax
+    mov bx, 0x7C00
+    push bx
+    inc ax
+    push ax
+    mov al, 0x10
+    push ax
 
     mov cx, RETRIES
 
 .lba_retry:
+    ; TODO: After error set count in dap to 1
+
+    mov si, sp
     push cx
-    mov si, dap
     mov ah, 0x42
     mov dl, [boot_drive]
     int 0x13
@@ -81,7 +90,7 @@ partition_found:
     pop cx
     loop .lba_retry
 
-    jmp near disk_error
+    jmp short .disk_error_short
 
 .lba_success:
     pop cx
@@ -159,7 +168,7 @@ after_read:
 
     mov dl, [boot_drive]
     mov si, [partition]
-    jmp 0x0000:0x7C00
+    jmp near 0x7C00
 
 
 read_chs_success:
@@ -206,11 +215,10 @@ lba_too_high_error:
 
 print_error:
     lodsb
-    cmp al, 0x10
+    cmp al, 0
     je short .done
     mov ah, 0eh
-    mov bh, 0
-    mov bl, 0x07
+    mov bx, 0x07
     int 10h
     jmp short print_error
 
@@ -232,50 +240,20 @@ partition_no_marker:
 
 retry_count db RETRIES
 
-;
-; Overlap between dap and chs conversion storage because only one is used
-;
-; dap_lba: ; 8 bytes
-;     dd 0
-;     dd 0
-;
-; spt dw 0
-; heads dw 0
-; sector_result db 0
-; head_result db 0
-; cyl_result dw 0
-;
+no_partition_found_msg db "No bootable partition found", 0
+disk_error_msg db "Disk error", 0
+lba_too_high_error_msg db "Partition LBA too high", 0
 
-no_partition_found_msg db "No bootable partition found", 0x10
-disk_error_msg db "Disk error", 0x10
-lba_too_high_error_msg db "Partition LBA too high", ; using the 0x10 of the DAP, because if this error message is used, we're using CHS, which means the DAP has not been used
+spt dw 0
+heads dw 0
+sector_result db 0
+head_result db 0
+cyl_result dw 0
 
-dap:
-    db 0x10
-    db 0
-    dw 1
-    dw 0x7C00
-    dw 0x0000
-dap_lba: ; dap: 8 bytes
-spt: ; chs: 2 bytes
-    db 0
-    db 0
-heads: ; chs: 2 bytes
-    db 0
-    db 0
-sector_result: ; chs: 1 byte
-    db 0
-head_result: ; chs: 1 byte
-    db 0
-cyl_result: ; chs: 2 bytes
-    db 0
-    db 0
+times 440 - ($ - $$) db 0
 
-
-
-times 446 - ($ - $$) db 0
-
-
+disk_signature dd 0
+disk_reserved dw 0
 
 partition1:
     times 16 db 0

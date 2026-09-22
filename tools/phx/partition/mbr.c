@@ -6,6 +6,8 @@
 #include <embed/mbr.h>
 
 /*
+    TODO: Disk signature
+
     Partition (16 byte):
         u8 bootFlag
         u8 chsFirst[3]
@@ -212,8 +214,6 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
 
     return PHX_TRUE;
 }
-
-#include <stdio.h>
 
 static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table, const PHX_Byte* bootsector)
 {
