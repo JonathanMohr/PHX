@@ -195,10 +195,6 @@ no_partition_found:
     mov si, no_partition_found_msg
     jmp short print_error
 
-lba_too_high_error:
-    mov si, lba_too_high_error_msg
-    ; jmp short print_error
-
 print_raw:
     lodsb
     cmp al, 0
@@ -209,6 +205,10 @@ print_raw:
     jmp short print_raw
 .finish:
     ret
+
+lba_too_high_error:
+    mov si, lba_too_high_error_msg
+    ; jmp short print_error
 
 print_error:
     call print_raw
