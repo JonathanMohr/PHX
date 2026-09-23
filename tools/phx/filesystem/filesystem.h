@@ -64,7 +64,7 @@ struct PHX_Filesystem_Operations
 
     // Directories
     PHX_Filesystem_Size (*dir_getEntryCount)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir);
-    PHX_Result (*dir_readEntry)(PHX_Filesystem fs, PHX_Filesystem_OpenNode* dir, PHX_Filesystem_Entry* entryOut);
+    PHX_Result (*dir_readEntry)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* dir, PHX_Filesystem_Entry* entryOut);
     PHX_Result (*dir_lookupEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut);
 
     // Files
