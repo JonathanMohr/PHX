@@ -1,4 +1,5 @@
 #include "mbr.h"
+#include "types.h"
 
 #include <endianness.h>
 #include <base.h>
@@ -312,6 +313,8 @@ static void MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_
     outTable->partitionCount = 0;
     outTable->maxPartitionCount = 4;
     outTable->signature = PHX_Context_GetRandomU32(context);
+    while (outTable->signature == 0)
+        outTable->signature = PHX_Context_GetRandomU32(context);
     outTable->startUsable = startUsable;
     outTable->sizeUsable = (device->blockCount > startUsable) ? device->blockCount - startUsable : 0;
 }

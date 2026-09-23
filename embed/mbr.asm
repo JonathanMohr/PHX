@@ -247,7 +247,7 @@ partition_no_marker:
     jmp near init_check_loop
 
 
-no_partition_found_msg db "No bootable partition found!", 0
+no_partition_found_msg db "No bootable partition found.", 0
 disk_error_msg db "Disk error!", 0
 lba_too_high_error_msg db "LBA too high!", 0
 press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart...", 0x0D, 0x0A, 0
