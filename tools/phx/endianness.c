@@ -8,24 +8,6 @@
 #error "Endianness not defined"
 #endif
 
-uint8_t Endian_Convert_u8_Le(const uint8_t val)
-{
-#if defined(INTERNAL_LITTLE_ENDIAN)
-    return val;
-#elif defined(INTERNAL_BIG_ENDIAN)
-    return val;
-#endif
-}
-
-uint8_t Endian_Convert_u8_Be(const uint8_t val)
-{
-#if defined(INTERNAL_LITTLE_ENDIAN)
-    return val;
-#elif defined(INTERNAL_BIG_ENDIAN)
-    return val;
-#endif
-}
-
 uint16_t Endian_Convert_u16_Le(const uint16_t val)
 {
 #if defined(INTERNAL_LITTLE_ENDIAN)

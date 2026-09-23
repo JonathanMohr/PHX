@@ -93,6 +93,8 @@ struct PHX_Filesystem
     
     const struct PHX_Filesystem_Operations* ops;
 
+    PHX_u32 id;
+
     PHX_Bool caseSensitive;
 };
 

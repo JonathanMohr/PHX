@@ -9,12 +9,47 @@ extern "C" {
 
 #include <filesystem/filesystem.h>
 
+#define PHX_FILESYSTEM_FAT_HEADER_BPS 11
+#define PHX_FILESYSTEM_FAT_HEADER_SPC 13
+#define PHX_FILESYSTEM_FAT_HEADER_RES 14
+
+#define PHX_FILESYSTEM_FAT_HEADER_FAC 16
+#define PHX_FILESYSTEM_FAT_HEADER_RDC 17
+#define PHX_FILESYSTEM_FAT_HEADER_TOS 19
+
+#define PHX_FILESYSTEM_FAT_HEADER_MED 21
+
+#define PHX_FILESYSTEM_FAT_HEADER_FAS 22
+
+#define PHX_FILESYSTEM_FAT_HEADER_SPT 24
+#define PHX_FILESYSTEM_FAT_HEADER_NOH 26
+
+#define PHX_FILESYSTEM_FAT_HEADER_HIS 28
+#define PHX_FILESYSTEM_FAT_HEADER_LTS 32
+
+#define PHX_FILESYSTEM_FAT1X_HEADER_DRN 36
+#define PHX_FILESYSTEM_FAT1X_HEADER_BOS 38
+
+#define PHX_FILESYSTEM_FAT1X_HEADER_EXTSTART 39
+
+#define PHX_FILESYSTEM_FAT32_HEADER_FAS32 36
+#define PHX_FILESYSTEM_FAT32_HEADER_EXF 40
+#define PHX_FILESYSTEM_FAT32_HEADER_FSV 42
+#define PHX_FILESYSTEM_FAT32_HEADER_ROC 44
+#define PHX_FILESYSTEM_FAT32_HEADER_FIS 48
+#define PHX_FILESYSTEM_FAT32_HEADER_BBS 50
+
+#define PHX_FILESYSTEM_FAT32_HEADER_DRN 64
+#define PHX_FILESYSTEM_FAT32_HEADER_BOS 66
+
+#define PHX_FILESYSTEM_FAT32_HEADER_EXTSTART 67
+
 /*
 
     bootsector:
         u8 jmp[3]
         header
-        u8 code[420]
+        u8 code[448/420] // 448 if FAT12/FAT16, 420 if FAT32
         u8 signature[2]
 
     header:
@@ -73,10 +108,19 @@ extern "C" {
 
 */
 
+typedef enum
+{
+    PHX_FILESYSTEM_FAT_12,
+    PHX_FILESYSTEM_FAT_16,
+    PHX_FILESYSTEM_FAT_32
+} PHX_Filesystem_FAT_Version;
+
 typedef struct PHX_Filesystem_FAT_Data
 {
     PHX_BlockDevice* usedDevice;
     PHX_Byte* buffer;
+
+    PHX_Filesystem_FAT_Version version;
 
     PHX_u32 freeClusterCount;
     PHX_u32 nextFreeCluster;
@@ -94,14 +138,15 @@ typedef struct PHX_Filesystem_FAT_Data
     {
         struct
         {
-            PHX_u32 cluster;
+            PHX_u32 rootDirCluster;
+            PHX_u16 backupBootsector;
         } fat32;
         struct
         {
-            PHX_u32 sector;
-            PHX_u16 entryCount;
+            PHX_u32 rootDirSector;
+            PHX_u16 rootDirEntryCount;
         } fat12_16;
-    } rootDir;
+    } specific;
 
     PHX_u16 bytesPerSector;
     PHX_u16 sectorsPerCluster;
