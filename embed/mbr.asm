@@ -210,6 +210,7 @@ print_error:
     int 16h
     ; jmp short restart
 
+
 restart:
     cli
     xor cx, cx
@@ -250,7 +251,7 @@ partition_no_marker:
 no_partition_found_msg db "No bootable partition found.", 0
 disk_error_msg db "Disk error!", 0
 lba_too_high_error_msg db "LBA too high!", 0
-press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart...", 0x0D, 0x0A, 0
+press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
 
 times 440 - ($ - $$) db 0
 

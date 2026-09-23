@@ -1,5 +1,7 @@
 #include "fat.h"
 
+#include <embed/fat.h>
+
 
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_Filesystem_FAT_ChangeBootsector,
@@ -56,7 +58,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     context->allocator.free(&context->allocator, sectorBuffer);
 
-    
+
 
     (void)outFs;
 
