@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "device/device.h"
 
 #include <endianness.h>
 #include <base.h>
@@ -204,6 +205,33 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     }
 
     
+    if (device->blockSize != bytesPerSector)
+    {
+        PHX_BlockDevice* usedDevice = context->allocator.allocate(&context->allocator, sizeof(PHX_BlockDevice));
+        if (!usedDevice)
+        {
+            context->allocator.free(&context->allocator, data);
+            return PHX_ERROR_INTERNAL;
+        }
+        if (PHX_BlockCountTransformDevice(context, device, bytesPerSector, PHX_FALSE, usedDevice) != PHX_TRUE)
+        {
+            context->allocator.free(&context->allocator, usedDevice);
+            context->allocator.free(&context->allocator, data);
+            return PHX_ERROR_INTERNAL;
+        }
+
+        data->usedDevice = usedDevice;
+        data->useDevice = PHX_TRUE;
+    }
+    else
+    {
+        data->usedDevice = device;
+        data->useDevice = PHX_FALSE;
+    }
+
+
+    
+
 
     (void)outFs;
 
