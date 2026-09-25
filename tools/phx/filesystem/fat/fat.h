@@ -52,6 +52,10 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_FSINFO_TRS 508
 
 
+#define PHX_FILESYSTEM_FAT_BOOT_SIGNATURE_EXTENDED_BOOT_SIGNATURE_OLD 0x28
+#define PHX_FILESYSTEM_FAT_BOOT_SIGNATURE_EXTENDED_BOOT_SIGNATURE 0x29
+
+
 /*
 
     bootsector:
@@ -123,6 +127,8 @@ typedef enum
     PHX_FILESYSTEM_FAT_32
 } PHX_Filesystem_FAT_Version;
 
+#define PHX_FILESYSTEM_FAT_ACTIVE_ALL 0xFFFF
+
 typedef struct PHX_Filesystem_FAT_Data
 {
     PHX_BlockDevice* usedDevice;
@@ -147,6 +153,7 @@ typedef struct PHX_Filesystem_FAT_Data
         struct
         {
             PHX_u32 rootDirCluster;
+            PHX_u16 fsInfoSector;
             PHX_u16 backupBootsector;
         } fat32;
         struct
@@ -172,6 +179,12 @@ typedef struct PHX_Filesystem_FAT_Data
 } PHX_Filesystem_FAT_Data;
 
 extern PHX_Filesystem_Interface PHX_Filesystem_FAT_Interface;
+
+PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data);
+
+PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data);
+PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data);
+
 
 #ifdef __cplusplus
 }

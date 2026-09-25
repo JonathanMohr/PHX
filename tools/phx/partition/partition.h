@@ -28,6 +28,7 @@ typedef struct PHX_Partition
 typedef struct PHX_Partition_Table
 {
     PHX_Partition* partitions;
+
     PHX_PartitionSize partitionCount;
     PHX_PartitionSize maxPartitionCount;
 
@@ -35,12 +36,14 @@ typedef struct PHX_Partition_Table
 
     PHX_BlockSize startUsable;
     PHX_BlockSize sizeUsable;
+
+    PHX_Byte bootsector[512];
 } PHX_Partition_Table;
 
 typedef struct PHX_Partition_Interface
 {
     PHX_Bool (*readTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
-    PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table, const PHX_Byte* bootSector);
+    PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table);
     void (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
 
     const char* type;

@@ -1,12 +1,12 @@
 #include "fat.h"
 #include "device/device.h"
+#include "types.h"
 
 #include <endianness.h>
 #include <base.h>
 
 #include <embed/fat.h>
 
-/*
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_Filesystem_FAT_ChangeBootsector,
     PHX_Filesystem_FAT_Destroy,
@@ -34,7 +34,46 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_Filesystem_FAT_CloseOpenNode,
     PHX_Filesystem_FAT_ResetOpenNode
 };
-*/
+
+PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data)
+{
+    if (data->usedDevice->read(data->usedDevice, data->buffer, 0, 1) != 1)
+        return PHX_FALSE;
+    memcpy(data->buffer, data->bootsector, 512);
+    if (data->usedDevice->write(data->usedDevice, data->buffer, 0, 1) != 1)
+        return PHX_FALSE;
+
+    if (data->usedDevice->read(data->usedDevice, data->buffer, data->specific.fat32.backupBootsector, 1) != 1)
+        return PHX_FALSE;
+    memcpy(data->buffer, data->bootsector, 512);
+    if (data->usedDevice->write(data->usedDevice, data->buffer, data->specific.fat32.backupBootsector, 1) != 1)
+        return PHX_FALSE;
+
+    return PHX_TRUE;
+}
+
+PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data)
+{
+    if (data->version != PHX_FILESYSTEM_FAT_32)
+        return PHX_FALSE;
+    if (data->usedDevice->read(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
+        return PHX_FALSE;
+    memcpy(data->fsInfo, data->buffer, 512);
+    return PHX_TRUE;
+}
+
+PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data)
+{
+    if (data->version != PHX_FILESYSTEM_FAT_32)
+        return PHX_FALSE;
+    if (data->usedDevice->read(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
+        return PHX_FALSE;
+    memcpy(data->buffer, data->fsInfo, 512);
+    if (data->usedDevice->write(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
+        return PHX_FALSE;
+    return PHX_TRUE;
+}
+
 
 static PHX_Byte read_u8(PHX_Byte* buffer)
 {
@@ -98,12 +137,16 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     const PHX_u16 fatSize16 = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_FAS);
     const PHX_u32 fatSize = fatSize16 ? fatSize16 : read_u32(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_FAS32);
 
-    // const PHX_Byte mediaDescriptor = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_MED);
+    const PHX_Byte mediaDescriptor = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_MED);
     
     // const PHX_u16 sectorsPerTrack = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_SPT);
     // const PHX_u16 numberOfHeads = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_NOH);
 
     // const PHX_u32 hiddenSectors = read_u32(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_HIS);
+
+
+    PHX_u32 bootSignature;
+    PHX_u32 volumeID;
 
 
     if (data->bootsector[510] != 0x55 ||data->bootsector[511] != 0xAA)
@@ -173,6 +216,10 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
             version = PHX_FILESYSTEM_FAT_12;
         else
             version = PHX_FILESYSTEM_FAT_16;
+
+
+        bootSignature = read_u8(data->bootsector + PHX_FILESYSTEM_FAT1X_HEADER_BOS);
+        volumeID = read_u32(data->bootsector + PHX_FILESYSTEM_FAT1X_HEADER_EXTSTART);
     }
     else
     {
@@ -202,6 +249,10 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         }
 
         version = PHX_FILESYSTEM_FAT_32;
+
+
+        bootSignature = read_u8(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_BOS);
+        volumeID = read_u32(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXTSTART);
     }
 
     
@@ -230,10 +281,89 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     }
 
 
-    
+    data->buffer = context->allocator.allocate(&context->allocator, bytesPerSector);
+    if (!data->buffer)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data);
+        return PHX_ERROR_MEMORY;
+    }
 
 
-    (void)outFs;
+    data->version = version;
+
+    data->freeClusterCount = 0xFFFFFFFF; // TODO
+    data->nextFreeCluster = 0; // TODO
+
+    data->fatSector = reservedSectors;
+    data->fatSize = fatSectors;
+
+    data->dataSector = nonDataSectors;
+    data->dataSize = dataSectors;
+
+    data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
+    data->totalSectors = totalSectors;
+
+    data->bytesPerCluster = bytesPerSector;
+    data->sectorsPerCluster = sectorsPerCluster;
+    data->reservedSectors = reservedSectors;
+
+    data->fatCount = fatCount;
+    data->mediaDescriptor = mediaDescriptor;
+
+    if (version != PHX_FILESYSTEM_FAT_32)
+    {
+        data->specific.fat12_16.rootDirSector = rootDirEntryStart;
+        data->specific.fat12_16.rootDirEntryCount = rootDirEntryCount;
+        data->activeFat = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
+    }
+    else
+    {
+        const PHX_u16 extFlags = read_u16(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXF);
+        // const PHX_u16 fsVersion = read_u16(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_FSV);
+        
+        const PHX_u32 rootCluster = read_u32(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_ROC);
+        const PHX_u16 fsInfoSector = read_u16(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_FIS);
+        const PHX_u16 backupBootsector = read_u16(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_BBS);
+
+        data->specific.fat32.rootDirCluster = rootCluster;
+        data->specific.fat32.fsInfoSector = fsInfoSector;
+        data->specific.fat32.backupBootsector = backupBootsector;
+
+        if (extFlags & (1 << 7))
+        {
+            data->activeFat = extFlags & (1 | 2 | 4 | 8);
+        }
+        else
+            data->activeFat = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
+
+        if (PHX_Filesystem_FAT_ReadFsInfo(data) != PHX_TRUE)
+        {
+            if (data->useDevice)
+            {
+                data->usedDevice->close(data->usedDevice);
+                context->allocator.free(&context->allocator, data->usedDevice);
+            }
+            context->allocator.free(&context->allocator, data);
+            return PHX_ERROR_IO;
+        }
+    }
+
+
+    outFs->context = context;
+    outFs->device = device;
+
+    outFs->data = data;
+
+    outFs->ops = &PHX_Filesystem_FAT_Operations;
+
+    outFs->id = (bootSignature == PHX_FILESYSTEM_FAT_BOOT_SIGNATURE_EXTENDED_BOOT_SIGNATURE) ? volumeID : 0;
+
+    outFs->caseSensitive = PHX_FALSE;
 
     return PHX_ERROR_INTERNAL;
 }
