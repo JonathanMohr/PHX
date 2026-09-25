@@ -35,6 +35,8 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
     out->blockCount = device->blockCount;
     out->data = (void*)device;
 
+    out->sectorOffset = 0;
+
     out->read = PHX_RAW_Device_Read;
     out->write = PHX_RAW_Device_Write;
     out->close = device->close;
@@ -54,6 +56,8 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
     out->blockSize = device->blockSize;
     out->blockCount = device->blockCount;
     out->data = device;
+
+    out->sectorOffset = 0;
 
     out->read = PHX_RAW_Device_Read;
     out->write = PHX_RAW_Device_Write;

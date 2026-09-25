@@ -164,6 +164,8 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
     out->blockSize = 1;
     out->data = (void*)file;
 
+    out->sectorOffset = 0;
+
     out->read = PHX_File_Read;
     out->write = PHX_File_Write;
     out->close = PHX_File_Close;

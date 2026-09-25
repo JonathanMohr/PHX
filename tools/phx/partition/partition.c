@@ -68,6 +68,8 @@ PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* devic
     outDevice->blockCount = partition->size;
     outDevice->data = data;
 
+    outDevice->sectorOffset = partition->start;
+
     outDevice->read = PHX_Partition_Read;
     outDevice->write = PHX_Partition_Write;
     outDevice->close = PHX_Partition_Close_;

@@ -25,6 +25,8 @@ typedef struct PHX_BlockDevice
     PHX_BlockSize blockCount;
     void* data;
 
+    PHX_BlockSize sectorOffset;
+
     PHX_BlockSize (*read)(struct PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count);
     PHX_BlockSize (*write)(struct PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count);
 

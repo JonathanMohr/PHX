@@ -8,31 +8,31 @@
 #include <embed/fat.h>
 
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
-    PHX_Filesystem_FAT_ChangeBootsector,
-    PHX_Filesystem_FAT_Destroy,
+    PHX_NULL, // PHX_Filesystem_FAT_ChangeBootsector,
+    PHX_NULL, // PHX_Filesystem_FAT_Destroy,
     
-    PHX_Filesystem_FAT_GetRoot,
-    PHX_Filesystem_FAT_GetNode,
-    PHX_Filesystem_FAT_RemoveNode,
-    PHX_Filesystem_FAT_CleanupNode,
+    PHX_NULL, // PHX_Filesystem_FAT_GetRoot,
+    PHX_NULL, // PHX_Filesystem_FAT_GetNode,
+    PHX_NULL, // PHX_Filesystem_FAT_RemoveNode,
+    PHX_NULL, // PHX_Filesystem_FAT_CleanupNode,
 
-    PHX_Filesystem_FAT_Dir_GetEntryCount,
-    PHX_Filesystem_FAT_Dir_ReadEntry,
-    PHX_Filesystem_FAT_Dir_LookupEntry,
+    PHX_NULL, // PHX_Filesystem_FAT_Dir_GetEntryCount,
+    PHX_NULL, // PHX_Filesystem_FAT_Dir_ReadEntry,
+    PHX_NULL, // PHX_Filesystem_FAT_Dir_LookupEntry,
 
-    PHX_Filesystem_FAT_File_Read,
-    PHX_Filesystem_FAT_File_Write,
-    PHX_Filesystem_FAT_File_Seek,
+    PHX_NULL, // PHX_Filesystem_FAT_File_Read,
+    PHX_NULL, // PHX_Filesystem_FAT_File_Write,
+    PHX_NULL, // PHX_Filesystem_FAT_File_Seek,
 
-    PHX_Filesystem_FAT_CreateNode,
+    PHX_NULL, // PHX_Filesystem_FAT_CreateNode,
 
-    PHX_Filesystem_FAT_LinkEntry,
-    PHX_Filesystem_FAT_UnlinkEntry,
-    PHX_Filesystem_FAT_MoveEntry,
+    PHX_NULL, // PHX_Filesystem_FAT_LinkEntry,
+    PHX_NULL, // PHX_Filesystem_FAT_UnlinkEntry,
+    PHX_NULL, // PHX_Filesystem_FAT_MoveEntry,
 
-    PHX_Filesystem_FAT_CreateOpenNode,
-    PHX_Filesystem_FAT_CloseOpenNode,
-    PHX_Filesystem_FAT_ResetOpenNode
+    PHX_NULL, // PHX_Filesystem_FAT_CreateOpenNode,
+    PHX_NULL, // PHX_Filesystem_FAT_CloseOpenNode,
+    PHX_NULL // PHX_Filesystem_FAT_ResetOpenNode
 };
 
 PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data)
@@ -365,13 +365,13 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     outFs->caseSensitive = PHX_FALSE;
 
-    return PHX_ERROR_INTERNAL;
+    return PHX_SUCCESS;
 }
 
 
 static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector)
 {
-
+    
 
     (void)context;
     (void)device;
