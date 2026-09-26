@@ -371,10 +371,23 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
 static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector)
 {
-    
+    PHX_Filesystem_FAT_Data* data = context->allocator.allocate(&context->allocator, sizeof(PHX_Filesystem_FAT_Data));
+    if (!data)
+        return PHX_ERROR_MEMORY;
+
+    PHX_u16 bytesPerSector;
+    if (device->blockSize <= 512)
+        bytesPerSector = 512;
+    else if (device->blockSize <= 1024)
+        bytesPerSector = 1024;
+    else if (device->blockSize <= 2048)
+        bytesPerSector = 2048;
+    else
+        bytesPerSector = 4096;
+
+    (void)bytesPerSector;
 
     (void)context;
-    (void)device;
     (void)outFs;
     (void)bootsector;
     return PHX_ERROR_INTERNAL;

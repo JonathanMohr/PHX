@@ -9,6 +9,8 @@ extern "C" {
 
 #include <filesystem/filesystem.h>
 
+#define PHX_FILESYSTEM_FAT_HEADER_OEM 3
+
 #define PHX_FILESYSTEM_FAT_HEADER_BPS 11
 #define PHX_FILESYSTEM_FAT_HEADER_SPC 13
 #define PHX_FILESYSTEM_FAT_HEADER_RES 14
