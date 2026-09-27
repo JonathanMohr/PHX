@@ -132,7 +132,7 @@ int main(int argc, const char* argv[])
     }
 
     printf("Writting partition table with partition interface %s...\n", partitionInterface->name);
-    if (partitionInterface->writeTable(&context, &diskDevice, &partitionTable, PHX_NULL) != PHX_TRUE)
+    if (partitionInterface->writeTable(&context, &diskDevice, &partitionTable) != PHX_TRUE)
     {
         fputs("Formatting failed\n", stderr);
         partitionDevice.close(&partitionDevice);
