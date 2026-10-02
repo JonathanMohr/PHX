@@ -64,13 +64,13 @@ struct PHX_Filesystem_Operations
 
     // Directories
     PHX_Filesystem_Size (*dir_getEntryCount)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir);
-    PHX_Result (*dir_readEntry)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* dir, PHX_Filesystem_Entry* entryOut);
+    PHX_Result (*dir_readEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut);
     PHX_Result (*dir_lookupEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut);
 
     // Files
-    PHX_Result (*file_read)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* file, PHX_Filesystem_Size size, void* buffer);
-    PHX_Result (*file_write)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* file, PHX_Filesystem_Size size, const void* buffer);
-    PHX_Result (*file_seek)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* file, PHX_Filesystem_Size pos);
+    PHX_Result (*file_read)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, void* buffer);
+    PHX_Result (*file_write)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer);
+    PHX_Result (*file_seek)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size pos);
 
     // General
     PHX_Result (*createNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut);
