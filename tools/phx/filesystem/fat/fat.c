@@ -31,9 +31,9 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_NULL, // PHX_Filesystem_FAT_UnlinkEntry,
     PHX_NULL, // PHX_Filesystem_FAT_MoveEntry,
 
-    PHX_NULL, // PHX_Filesystem_FAT_CreateOpenNode,
-    PHX_NULL, // PHX_Filesystem_FAT_CloseOpenNode,
-    PHX_NULL // PHX_Filesystem_FAT_ResetOpenNode
+    PHX_Filesystem_FAT_CreateOpenNode,
+    PHX_Filesystem_FAT_CloseOpenNode,
+    PHX_Filesystem_FAT_ResetOpenNode
 };
 
 

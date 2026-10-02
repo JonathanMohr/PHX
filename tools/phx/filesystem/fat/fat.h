@@ -200,6 +200,18 @@ typedef struct PHX_Filesystem_FAT_Data
     PHX_Bool useDevice;
 } PHX_Filesystem_FAT_Data;
 
+
+typedef struct
+{
+    PHX_u32 startCluster;
+} PHX_Filesystem_FAT_Node_Extra;
+
+typedef struct
+{
+    PHX_u32 currentCluster;
+} PHX_Filesystem_FAT_OpenNode_Extra;
+
+
 extern PHX_Filesystem_Interface PHX_Filesystem_FAT_Interface;
 
 PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data);
@@ -212,6 +224,12 @@ void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data);
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);
 void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs);
+
+
+PHX_Result PHX_Filesystem_FAT_CreateOpenNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
+PHX_Result PHX_Filesystem_FAT_CloseOpenNode(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
+PHX_Result PHX_Filesystem_FAT_ResetOpenNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
+
 
 #ifdef __cplusplus
 }

@@ -81,7 +81,7 @@ struct PHX_Filesystem_Operations
 
     PHX_Result (*createOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
     PHX_Result (*closeOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
-    PHX_Result (*resetOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
+    PHX_Result (*resetOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
 };
 
 struct PHX_Filesystem
