@@ -73,6 +73,11 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_MEDIA_DESCRIPTOR_FLOPPY_320K_2P        0xFF
 
 
+#define PHX_FILESYSTEM_FAT_FSINFO_LEAD_SIGNATURE   0x41615252
+#define PHX_FILESYSTEM_FAT_FSINFO_STRUCT_SIGNATURE 0x61417272
+#define PHX_FILESYSTEM_FAT_FSINFO_TRAIL_SIGNATURE  0xAA550000
+
+
 /*
 
     bootsector:
@@ -201,6 +206,8 @@ PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data);
 
 PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data);
 PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data);
+
+void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data);
 
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);

@@ -80,6 +80,7 @@ PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data)
 }
 
 
+
 static PHX_Byte read_u8(const PHX_Byte* buffer)
 {
     PHX_Byte val;
@@ -116,6 +117,23 @@ static void write_u32(PHX_Byte* buffer, PHX_u32 val)
 {
     PHX_u32 rawVal = Endian_Convert_u32_Le(val);
     memcpy(buffer, &rawVal, sizeof(rawVal));
+}
+
+
+void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data)
+{
+    if (data->version != PHX_FILESYSTEM_FAT_32) return;
+
+    memset(data->fsInfo, 0, 512);
+
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_LES, PHX_FILESYSTEM_FAT_FSINFO_LEAD_SIGNATURE);
+
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_STS, PHX_FILESYSTEM_FAT_FSINFO_STRUCT_SIGNATURE);
+
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_FCC, data->freeClusterCount);
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_NFC, data->nextFreeCluster);
+
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_TRS, PHX_FILESYSTEM_FAT_FSINFO_TRAIL_SIGNATURE);
 }
 
 
@@ -446,9 +464,6 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     data->version = version;
 
-    data->freeClusterCount = 0xFFFFFFFF; // TODO
-    data->nextFreeCluster = 0; // TODO
-
     data->fatSector = reservedSectors;
     data->fatSize = fatSectors;
 
@@ -470,6 +485,9 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         data->specific.fat12_16.rootDirSector = rootDirEntryStart;
         data->specific.fat12_16.rootDirEntryCount = rootDirEntryCount;
         data->activeFat = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
+
+        data->freeClusterCount = 0xFFFFFFFF;
+        data->nextFreeCluster = 2;
     }
     else
     {
@@ -501,6 +519,21 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
             context->allocator.free(&context->allocator, data->buffer);
             context->allocator.free(&context->allocator, data);
             return PHX_ERROR_IO;
+        }
+
+        const PHX_u32 leadSignature = read_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_LES);
+        const PHX_u32 structSignature = read_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_STS);
+        const PHX_u32 trailSignature = read_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_TRS);
+
+        if (leadSignature == PHX_FILESYSTEM_FAT_FSINFO_LEAD_SIGNATURE && structSignature == PHX_FILESYSTEM_FAT_FSINFO_STRUCT_SIGNATURE && trailSignature == PHX_FILESYSTEM_FAT_FSINFO_TRAIL_SIGNATURE)
+        {
+            data->freeClusterCount = read_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_FCC);
+            data->nextFreeCluster = read_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_NFC);
+        }
+        else
+        {
+            data->freeClusterCount = 0xFFFFFFFF;
+            data->nextFreeCluster = 2;
         }
     }
 
@@ -796,7 +829,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         data->specific.fat32.fsInfoSector = fat32_fsInfoSector;
         data->specific.fat32.backupBootsector = (customBackupBootsector == PHX_TRUE) ? backupBootsector : fat32_backupBootsector;
 
-        // TODO: Write fsInfo
+        // TODO: Set root dir cluster
+
+        PHX_Filesystem_FAT_UpdateFsInfo(data);
     }
 
 
@@ -812,9 +847,8 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         return PHX_ERROR_MEMORY;
     }
 
-
-    data->freeClusterCount = 0xFFFFFFFF; // TODO
-    data->nextFreeCluster = 0; // TODO
+    data->freeClusterCount = dataSectors / (PHX_u32)sectorsPerCluster;
+    data->nextFreeCluster = 2; // TODO: or 3
 
     data->fatSector = reservedSectors;
     data->fatSize = fatSectors;
