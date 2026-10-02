@@ -46,8 +46,6 @@ typedef struct PHX_Filesystem_Entry
 typedef struct PHX_Filesystem_OpenNode
 {
     PHX_Filesystem_Size pos;
-    PHX_Filesystem_Node* node;
-
     void* extra;
 } PHX_Filesystem_OpenNode;
 
@@ -55,7 +53,7 @@ typedef struct PHX_Filesystem PHX_Filesystem;
 
 struct PHX_Filesystem_Operations
 {
-    void (*changeBootsector)(PHX_Filesystem* fs, const PHX_Byte* bootsector);
+    PHX_Result (*changeBootsector)(PHX_Filesystem* fs, const PHX_Byte* bootsector);
     void (*destroy)(PHX_Filesystem* fs);
 
     // Node

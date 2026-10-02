@@ -1,5 +1,6 @@
 #include "fat.h"
 #include "device/device.h"
+#include "filesystem/filesystem.h"
 #include "types.h"
 
 #include <endianness.h>
@@ -8,7 +9,7 @@
 #include <embed/fat.h>
 
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
-    PHX_NULL, // PHX_Filesystem_FAT_ChangeBootsector,
+    PHX_Filesystem_FAT_ChangeBootsector,
     PHX_Filesystem_FAT_Destroy,
     
     PHX_NULL, // PHX_Filesystem_FAT_GetRoot,
@@ -188,6 +189,45 @@ static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
         memcpy(bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXTSTART + 4, volumeLabel, 11);
         memcpy(bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXTSTART + 15, filesystemType, 8);
     }
+}
+
+static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u64 id)
+{
+    if (bootsector)
+        memcpy(data->bootsector, bootsector, 512);
+    else
+        memcpy(data->bootsector, binary_file_data, 512);
+
+    const char* filesystemType;
+    if (data->version == PHX_FILESYSTEM_FAT_12)
+        filesystemType = "FAT12   ";
+    else if (data->version == PHX_FILESYSTEM_FAT_16)
+        filesystemType = "FAT16   ";
+    else // FAT32
+        filesystemType = "FAT32   ";
+
+    PHX_Filesystem_FAT_WriteBootsectorBuffer(
+        data,
+        "LFS     ",
+        (data->version == PHX_FILESYSTEM_FAT_12) ? 18 : 32,
+        (data->version == PHX_FILESYSTEM_FAT_32) ? 8 : 2,
+        (PHX_u32)data->usedDevice->sectorOffset,
+        (data->version == PHX_FILESYSTEM_FAT_12) ? 0x00 : 0x80,
+        (id == PHX_FILESYSTEM_NO_ID) ? 0 : (PHX_u32)id,
+        "NO NAME    ",
+        filesystemType
+    );
+
+    if (PHX_Filesystem_FAT_WriteBootsector(data) != PHX_TRUE)
+        return PHX_ERROR_IO;
+    
+    return PHX_SUCCESS;
+}
+
+
+PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector)
+{
+    return PHX_Filesystem_FAT_UpdateBootsector(fs->data, bootsector, fs->id);
 }
 
 
@@ -538,6 +578,8 @@ static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX
 
 static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector)
 {
+    PHX_Result result;
+
     if (device->sectorOffset > 0xFFFFFFFF)
         return PHX_ERROR_PARAMETER;
 
@@ -596,7 +638,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     PHX_u16 activeFAT = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
 
     PHX_Byte fatCount = 2;
-    PHX_Byte mediaDescriptor = 0; // TODO
+    PHX_Byte mediaDescriptor = PHX_FILESYSTEM_FAT_MEDIA_DESCRIPTOR_DISK; // TODO
 
 
     // if FAT32
@@ -794,35 +836,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     data->mediaDescriptor = mediaDescriptor;
 
 
-    PHX_u32 volumeId = PHX_Context_GetRandomU32(context);
+    const PHX_u32 volumeId = PHX_Context_GetRandomU32(context);
 
-
-    if (bootsector)
-        memcpy(data->bootsector, bootsector, 512);
-    else
-        memcpy(data->bootsector, binary_file_data, 512);
-
-    const char* filesystemType;
-    if (version == PHX_FILESYSTEM_FAT_12)
-        filesystemType = "FAT12   ";
-    else if (version == PHX_FILESYSTEM_FAT_16)
-        filesystemType = "FAT16   ";
-    else // FAT32
-        filesystemType = "FAT32   ";
-
-    PHX_Filesystem_FAT_WriteBootsectorBuffer(
-        data,
-        "LFS     ",
-        (version == PHX_FILESYSTEM_FAT_12) ? 18 : 32,
-        (version == PHX_FILESYSTEM_FAT_32) ? 8 : 2,
-        (PHX_u32)device->sectorOffset,
-        (version == PHX_FILESYSTEM_FAT_12) ? 0x00 : 0x80,
-        volumeId,
-        "NO NAME    ",
-        filesystemType
-    );
-
-    if (PHX_Filesystem_FAT_WriteBootsector(data) != PHX_TRUE)
+    if ((result = PHX_Filesystem_FAT_UpdateBootsector(data, bootsector, volumeId)) != PHX_TRUE)
     {
         if (data->useDevice)
         {
@@ -831,7 +847,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         }
         context->allocator.free(&context->allocator, data->buffer);
         context->allocator.free(&context->allocator, data);
-        return PHX_ERROR_IO;
+        return result;
     }
 
     outFs->context = context;

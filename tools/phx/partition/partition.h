@@ -22,7 +22,7 @@ typedef struct PHX_Partition
 
     PHX_Partition_Type type;
 
-    char name[NAME_LEN];
+    char name[PHX_NAME_LEN + 1];
 } PHX_Partition;
 
 typedef struct PHX_Partition_Table
