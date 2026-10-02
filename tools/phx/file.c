@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #ifdef _WIN32
 #   include <windows.h>
 #else
@@ -128,8 +130,10 @@ static void PHX_File_Close(PHX_BlockDevice* device)
     fclose((FILE*)device->data);
 }
 
-PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size)
+PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size)
 {
+    PHX_DetailedResult result = {PHX_SUCCESS, PHX_NULL};
+
     const char* mode;
     if (size != PHX_FILE_SIZE_NONE)
         mode = "w+b";
@@ -144,10 +148,13 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
     if (fileError != 0)
 #else
     FILE* file = fopen(path, mode);
+    int fileError = errno;
     if (!file)
 #endif
     {
-        return PHX_FALSE;
+        result.msg = strerror(fileError);
+        result.code = PHX_ERROR_IO;
+        return result;
     }
 
     if (size == PHX_FILE_SIZE_NONE)
@@ -155,7 +162,9 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
         if (get_file_size(path, &out->blockCount) != PHX_TRUE)
         {
             fclose((FILE*)out->data);
-            return PHX_FALSE;
+            result.msg = "Could not get size";
+            result.code = PHX_ERROR_IO;
+            return result;
         }
     }
     else
@@ -178,5 +187,5 @@ PHX_Bool PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out
     (void)PHX_File_Seek(file, size - 1);
     (void)fwrite(&zero, 1, 1, file);
 
-    return PHX_TRUE;
+    return result;
 }

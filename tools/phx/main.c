@@ -8,6 +8,7 @@
 #include "filesystem/filesystem.h"
 
 #include "file.h"
+#include "result.h"
 #include "types.h"
 
 static void* PHX_Allocate(struct PHX_Allocator* allocator, PHX_Size size)
@@ -31,6 +32,8 @@ static void PHX_Free(struct PHX_Allocator* allocator, void* ptr)
 
 int main(int argc, const char* argv[])
 {
+    PHX_DetailedResult detailedResult;
+
     if (argc != 2)
     {
         fprintf(stderr, "Usage: %s <file>\n", argv[0]);
@@ -77,9 +80,9 @@ int main(int argc, const char* argv[])
 
     PHX_BlockDevice fileDevice;
     printf("Opening file device for %s...\n", file);
-    if (PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024 * 1024 * 1024 / 4) != PHX_TRUE)
+    if ((detailedResult = PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024ull * 1024ull * 1024ull / 4ull)).code != PHX_SUCCESS)
     {
-        fprintf(stderr, "Could not open file %s\n", file);
+        fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg ? detailedResult.msg : "?");
         return 1;
     }
 

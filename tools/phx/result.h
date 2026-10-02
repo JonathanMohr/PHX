@@ -13,4 +13,12 @@ typedef PHX_Byte PHX_Result;
 #define PHX_ERROR_SIZE 6
 #define PHX_ERROR_PARAMETER 7
 
+
+typedef struct
+{
+    PHX_Result code;
+    const char* msg;
+} PHX_DetailedResult;
+
+
 #endif
