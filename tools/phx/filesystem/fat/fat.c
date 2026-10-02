@@ -909,6 +909,8 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         }
     }
 
+    // TODO: Create FAT and zero root directory
+
     outFs->context = context;
     outFs->device = device;
 
