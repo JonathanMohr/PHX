@@ -10,10 +10,9 @@
 
 entry:
 
-boot_drive: ; 1 byte
+boot_drive:
     cli
 
-partition: ; 2 byte
     xor ax, ax
 
     mov ds, ax
@@ -247,6 +246,8 @@ partition_no_marker:
 
     jmp near init_check_loop
 
+
+partition dw 0
 
 no_partition_found_msg db "No bootable partition found.", 0
 disk_error_msg db "Disk error!", 0
