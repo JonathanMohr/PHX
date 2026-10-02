@@ -13,7 +13,8 @@
 static void* PHX_Allocate(struct PHX_Allocator* allocator, PHX_Size size)
 {
     (void)allocator;
-    return malloc(size);
+    void* r = malloc(size);
+    return r;
 }
 
 static void* PHX_Reallocate(struct PHX_Allocator* allocator, void* oldPtr, PHX_Size newSize)

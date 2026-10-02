@@ -9,6 +9,8 @@ extern "C" {
 
 #include <device/device.h>
 
+#define PHX_FILESYSTEM_NO_ID 0xFFFFFFFFFFFFFFFF
+
 typedef PHX_Byte PHX_Filesystem_Entry_Type;
 #define PHX_FILESYSTEM_ENTRY_FILE      ((PHX_Filesystem_Entry_Type)0)
 #define PHX_FILESYSTEM_ENTRY_DIRECTORY ((PHX_Filesystem_Entry_Type)1)
@@ -93,7 +95,7 @@ struct PHX_Filesystem
     
     const struct PHX_Filesystem_Operations* ops;
 
-    PHX_u32 id;
+    PHX_u64 id;
 
     PHX_Bool caseSensitive;
 };

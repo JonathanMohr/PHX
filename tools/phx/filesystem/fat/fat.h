@@ -30,6 +30,7 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_HEADER_LTS 32
 
 #define PHX_FILESYSTEM_FAT1X_HEADER_DRN 36
+#define PHX_FILESYSTEM_FAT1X_HEADER_RES 37
 #define PHX_FILESYSTEM_FAT1X_HEADER_BOS 38
 
 #define PHX_FILESYSTEM_FAT1X_HEADER_EXTSTART 39
@@ -40,8 +41,10 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT32_HEADER_ROC 44
 #define PHX_FILESYSTEM_FAT32_HEADER_FIS 48
 #define PHX_FILESYSTEM_FAT32_HEADER_BBS 50
+#define PHX_FILESYSTEM_FAT32_HEADER_RES12 52
 
 #define PHX_FILESYSTEM_FAT32_HEADER_DRN 64
+#define PHX_FILESYSTEM_FAT32_HEADER_RES 65
 #define PHX_FILESYSTEM_FAT32_HEADER_BOS 66
 
 #define PHX_FILESYSTEM_FAT32_HEADER_EXTSTART 67
@@ -187,6 +190,8 @@ PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data);
 PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data);
 PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data);
 
+
+void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs);
 
 #ifdef __cplusplus
 }
