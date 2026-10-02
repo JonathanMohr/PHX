@@ -238,7 +238,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
 
     if (PHX_Filesystem_FAT_WriteBootsector(data) != PHX_TRUE)
         return PHX_ERROR_IO;
-    
+
     return PHX_SUCCESS;
 }
 
@@ -561,7 +561,7 @@ static PHX_u32 ceilToPowerOfTwo32(PHX_u32 value)
     return result;
 }
 
-static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX_Byte fatCount, PHX_Byte fatEntryBitCount, PHX_u32 minClusterCount, PHX_u32 maxClusterCount, PHX_u64 totalSectorCount, PHX_u16 bytesPerSector, PHX_u16 maxSectorsPerCluster, PHX_u16* outSectorsPerCluster, PHX_u32* outFatSectors)
+static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX_Byte fatCount, PHX_Byte fatEntryBitCount, PHX_u32 minClusterCount, PHX_u32 maxClusterCount, PHX_u64 totalSectorCount, PHX_u16 bytesPerSector, PHX_u16 maxSectorsPerCluster, PHX_u32 minSectorsPerClusterFloor, PHX_u16* outSectorsPerCluster, PHX_u32* outFatSectors)
 {
     if (totalSectorCount > 0xFFFFFFFF)
         return PHX_FALSE;
@@ -583,8 +583,10 @@ static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX
 
     for (PHX_Byte attempt = 0; attempt < 2; attempt++)
     {
-        const PHX_u32 sectorsPerCluster = (attempt == 0) ? minSectorsPerCluster / 2 : minSectorsPerCluster;
-        if (sectorsPerCluster == 0 || sectorsPerCluster > 0xFFFF)
+        PHX_u32 sectorsPerCluster = (attempt == 0) ? minSectorsPerCluster / 2 : minSectorsPerCluster;
+        if (sectorsPerCluster < minSectorsPerClusterFloor)
+            sectorsPerCluster = minSectorsPerClusterFloor;
+        if (sectorsPerCluster == 0 || sectorsPerCluster > (PHX_u32)maxSectorsPerCluster)
             continue;
 
         const PHX_u64 fatEntryCount = (PHX_u64)dataSectorCountUpperBound / (PHX_u64)sectorsPerCluster + 2;
@@ -654,6 +656,11 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         data->useDevice = PHX_FALSE;
     }
 
+
+    PHX_Filesystem_FAT_Version setVersion = PHX_FILESYSTEM_FAT_32;
+    const PHX_Bool customVersion = PHX_FALSE;
+
+
     const PHX_u32 maxClusterSizeBytes = allow64kCluster ? 65536 : 32768;
     const PHX_u16 maxSectorsPerCluster = (PHX_u16)(maxClusterSizeBytes / (PHX_u32)bytesPerSector);
 
@@ -690,16 +697,18 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     static const PHX_u16 fat32_fsInfoSector = 1;
     static const PHX_u16 fat32_backupBootsector = 6;
 
+    const PHX_u32 fat32Floor = (customVersion == PHX_TRUE) ? 1 : (4096 / bytesPerSector);
+
     PHX_Filesystem_FAT_Version version;
-    if (fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat12_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat12_rootDirEntryCount, fatCount, 12, 1, 4084, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_32) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat32_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat32_rootDirEntryCount, fatCount, 32, 65525, 0x0FFFFFF4, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, fat32Floor, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
-        version = PHX_FILESYSTEM_FAT_12;
+        version = PHX_FILESYSTEM_FAT_32;
         if (customRootDirEntryCount != PHX_TRUE)
-            rootDirEntryCount = fat12_rootDirEntryCount;
+            rootDirEntryCount = fat32_rootDirEntryCount;
         if (customReservedSectors != PHX_TRUE)
-            reservedSectors = fat12_reservedSectors;
+            reservedSectors = fat32_reservedSectors;
     }
-    else if (fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat16_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat16_rootDirEntryCount, fatCount, 16, 4085, 65524, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_16) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat16_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat16_rootDirEntryCount, fatCount, 16, 4085, 65524, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
         version = PHX_FILESYSTEM_FAT_16;
         if (customRootDirEntryCount != PHX_TRUE)
@@ -707,13 +716,13 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (customReservedSectors != PHX_TRUE)
             reservedSectors = fat16_reservedSectors;
     }
-    else if (fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat32_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat32_rootDirEntryCount, fatCount, 32, 65525, 0x0FFFFFF4, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_12) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat12_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat12_rootDirEntryCount, fatCount, 12, 1, 4084, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
-        version = PHX_FILESYSTEM_FAT_32;
+        version = PHX_FILESYSTEM_FAT_12;
         if (customRootDirEntryCount != PHX_TRUE)
-            rootDirEntryCount = fat32_rootDirEntryCount;
+            rootDirEntryCount = fat12_rootDirEntryCount;
         if (customReservedSectors != PHX_TRUE)
-            reservedSectors = fat32_reservedSectors;
+            reservedSectors = fat12_reservedSectors;
     }
     else
     {
@@ -830,10 +839,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         data->specific.fat32.backupBootsector = (customBackupBootsector == PHX_TRUE) ? backupBootsector : fat32_backupBootsector;
 
         // TODO: Set root dir cluster
-
-        PHX_Filesystem_FAT_UpdateFsInfo(data);
     }
-
 
     data->buffer = context->allocator.allocate(&context->allocator, bytesPerSector);
     if (!data->buffer)
@@ -847,8 +853,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         return PHX_ERROR_MEMORY;
     }
 
+    data->version = version;
+
     data->freeClusterCount = dataSectors / (PHX_u32)sectorsPerCluster;
-    data->nextFreeCluster = 2; // TODO: or 3
+    data->nextFreeCluster = 3;
 
     data->fatSector = reservedSectors;
     data->fatSize = fatSectors;
@@ -872,7 +880,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     const PHX_u32 volumeId = PHX_Context_GetRandomU32(context);
 
-    if ((result = PHX_Filesystem_FAT_UpdateBootsector(data, bootsector, volumeId)) != PHX_TRUE)
+    if ((result = PHX_Filesystem_FAT_UpdateBootsector(data, bootsector, volumeId)) != PHX_SUCCESS)
     {
         if (data->useDevice)
         {
@@ -882,6 +890,23 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         context->allocator.free(&context->allocator, data->buffer);
         context->allocator.free(&context->allocator, data);
         return result;
+    }
+
+    if (version == PHX_FILESYSTEM_FAT_32)
+    {
+        PHX_Filesystem_FAT_UpdateFsInfo(data);
+
+        if (PHX_Filesystem_FAT_WriteFsInfo(data) != PHX_TRUE)
+        {
+            if (data->useDevice)
+            {
+                data->usedDevice->close(data->usedDevice);
+                context->allocator.free(&context->allocator, data->usedDevice);
+            }
+            context->allocator.free(&context->allocator, data->buffer);
+            context->allocator.free(&context->allocator, data);
+            return PHX_ERROR_PARAMETER;
+        }
     }
 
     outFs->context = context;

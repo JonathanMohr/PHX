@@ -80,7 +80,7 @@ int main(int argc, const char* argv[])
 
     PHX_BlockDevice fileDevice;
     printf("Opening file device for %s...\n", file);
-    if ((detailedResult = PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024ull * 1024ull * 1024ull / 4ull)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_File_Open(file, PHX_FALSE, &fileDevice, 1024ull * 1024ull * 512ull)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg ? detailedResult.msg : "?");
         return 1;
@@ -143,7 +143,6 @@ int main(int argc, const char* argv[])
         diskDevice.close(&diskDevice);
         return 1;
     }
-
 
     PHX_Filesystem filesystem;
     printf("Formatting partition with filesystem interface %s...\n", filesystemInterface->name);
