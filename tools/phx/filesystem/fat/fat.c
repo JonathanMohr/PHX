@@ -182,7 +182,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
 
     PHX_Filesystem_FAT_WriteBootsectorBuffer(
         data,
-        "LFS     ",
+        "PHX     ",
         (data->version == PHX_FILESYSTEM_FAT_12) ? 18 : 32,
         (data->version == PHX_FILESYSTEM_FAT_32) ? 8 : 2,
         (PHX_u32)data->usedDevice->sectorOffset,
