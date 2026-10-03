@@ -57,7 +57,6 @@ struct PHX_Filesystem_Operations
     void (*destroy)(PHX_Filesystem* fs);
 
     // Node
-    PHX_Result (*getRoot)(PHX_Filesystem* fs, PHX_Filesystem_Node* nodeOut);
     PHX_Result (*getNode)(PHX_Filesystem* fs, PHX_Filesystem_NodeNumber number, PHX_Filesystem_Node* nodeOut);
     PHX_Result (*removeNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
     void (*cleanupNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
@@ -82,6 +81,8 @@ struct PHX_Filesystem_Operations
     PHX_Result (*createOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
     PHX_Result (*closeOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
     PHX_Result (*resetOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
+
+    PHX_u64 rootNodeNumber;
 };
 
 struct PHX_Filesystem

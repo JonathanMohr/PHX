@@ -80,6 +80,35 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_FSINFO_TRAIL_SIGNATURE  0xAA550000
 
 
+#define PHX_FILESYSTEM_FAT_DIRENT_NAM 0
+#define PHX_FILESYSTEM_FAT_DIRENT_EXT 8
+#define PHX_FILESYSTEM_FAT_DIRENT_ATR 11
+#define PHX_FILESYSTEM_FAT_DIRENT_RES 12
+#define PHX_FILESYSTEM_FAT_DIRENT_CTT 13
+#define PHX_FILESYSTEM_FAT_DIRENT_CRT 14
+#define PHX_FILESYSTEM_FAT_DIRENT_CRD 16
+#define PHX_FILESYSTEM_FAT_DIRENT_LAD 18
+#define PHX_FILESYSTEM_FAT_DIRENT_FCH 20
+#define PHX_FILESYSTEM_FAT_DIRENT_LMT 22
+#define PHX_FILESYSTEM_FAT_DIRENT_LMD 24
+#define PHX_FILESYSTEM_FAT_DIRENT_FCL 26
+#define PHX_FILESYSTEM_FAT_DIRENT_FIS 28
+#define PHX_FILESYSTEM_FAT_DIRENT_SIZE 32
+
+#define PHX_FILESYSTEM_FAT_ENTRY_FREE         0x00
+#define PHX_FILESYSTEM_FAT_ENTRY_DELETED      0xE5
+#define PHX_FILESYSTEM_FAT_ENTRY_KANJI_ESCAPE 0x05
+
+#define PHX_FILESYSTEM_FAT_LFN_ATTRIBUTE 0x0F
+
+#define PHX_FILESYSTEM_FAT_ENTRY_READONLY     0x01
+#define PHX_FILESYSTEM_FAT_ENTRY_HIDDEN       0x02
+#define PHX_FILESYSTEM_FAT_ENTRY_SYSTEM       0x04
+#define PHX_FILESYSTEM_FAT_ENTRY_VOLUME_LABEL 0x08
+#define PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY    0x10
+#define PHX_FILESYSTEM_FAT_ENTRY_ARCHIVE      0x20
+
+
 /*
 
     bootsector:
@@ -141,6 +170,45 @@ extern "C" {
         u32 nextFreeCluster
         u8 reserved[12]
         u32 trailSignature
+
+
+    directory_entry:
+        u8 name[8]
+        u8 ext[3]
+
+        u8 attribute
+
+        u8 reserved
+
+        u8 creationTimeTenths
+        u16 creationTime
+        u16 creationDate
+
+        u16 lastAccessDate
+
+        u16 firstClusterHigh
+
+        u16 lastModificationTime
+        u16 lastModificationDate
+
+        u16 firstCluster
+
+        u32 fileSize
+
+    lfn_entry:
+        u8 order
+        
+        u16 name1[5]
+
+        u8 attribute
+        u8 reserved
+        u8 checksum
+
+        u16 name2[6]
+
+        u16 reserved
+
+        u16 name3[2]
 
 */
 
@@ -269,6 +337,8 @@ PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data);
 
 void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data);
 
+#define PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT 0xFFFFFFFFFFFFFFFF
+
 #define PHX_FILESYSTEM_FAT_CLUSTER_VALUE_EOC 0xFFFFFFFF
 
 #define PHX_FILESYSTEM_FAT_CLUSTER_NORMAL 0
@@ -281,10 +351,21 @@ PHX_u32 PHX_Filesystem_FAT_Cluster(PHX_Filesystem_FAT_Version version, PHX_u32 c
 PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32* outValue);
 PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32 value);
 
+PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntry(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_Byte* outEntry);
+PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntry(PHX_Filesystem_FAT_Data* data, PHX_u16 index, const PHX_Byte* entry);
+
+static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
+{
+    return (PHX_u64)(cluster - 2) * (PHX_u64)data->sectorsPerCluster + (PHX_u64)data->dataSector;
+}
+
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);
 void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs);
 
+PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNumber number, PHX_Filesystem_Node* nodeOut);
+PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
+void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
 
 PHX_Result PHX_Filesystem_FAT_CreateOpenNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
 PHX_Result PHX_Filesystem_FAT_CloseOpenNode(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);

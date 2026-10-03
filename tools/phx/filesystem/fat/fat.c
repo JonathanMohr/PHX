@@ -1,22 +1,15 @@
 #include "fat.h"
-#include "device/device.h"
-#include "filesystem/filesystem.h"
-#include "types.h"
 
-#include <endianness.h>
-#include <base.h>
 #include <zero.h>
-
 #include <embed/fat.h>
 
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_Filesystem_FAT_ChangeBootsector,
     PHX_Filesystem_FAT_Destroy,
     
-    PHX_NULL, // PHX_Filesystem_FAT_GetRoot,
-    PHX_NULL, // PHX_Filesystem_FAT_GetNode,
-    PHX_NULL, // PHX_Filesystem_FAT_RemoveNode,
-    PHX_NULL, // PHX_Filesystem_FAT_CleanupNode,
+    PHX_Filesystem_FAT_GetNode,
+    PHX_Filesystem_FAT_RemoveNode,
+    PHX_Filesystem_FAT_CleanupNode,
 
     PHX_NULL, // PHX_Filesystem_FAT_Dir_GetEntryCount,
     PHX_NULL, // PHX_Filesystem_FAT_Dir_ReadEntry,
@@ -34,7 +27,9 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
 
     PHX_Filesystem_FAT_CreateOpenNode,
     PHX_Filesystem_FAT_CloseOpenNode,
-    PHX_Filesystem_FAT_ResetOpenNode
+    PHX_Filesystem_FAT_ResetOpenNode,
+    
+    PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT
 };
 
 
@@ -213,6 +208,9 @@ PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byt
 void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
 {
     PHX_Filesystem_FAT_Data* data = fs->data;
+
+    PHX_Filesystem_FAT_UpdateFsInfo(data);
+    (void)PHX_Filesystem_FAT_WriteFsInfo(data);
 
     if (data->useDevice)
     {
@@ -449,7 +447,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         data->activeFat = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
 
         data->freeClusterCount = 0xFFFFFFFF;
-        data->nextFreeCluster = 2;
+        data->nextFreeCluster = 0xFFFFFFFF;
     }
     else
     {
@@ -495,7 +493,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         else
         {
             data->freeClusterCount = 0xFFFFFFFF;
-            data->nextFreeCluster = 2;
+            data->nextFreeCluster = 0xFFFFFFFF;
         }
     }
 
