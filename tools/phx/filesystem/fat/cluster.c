@@ -75,7 +75,7 @@ PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 clu
 
     PHX_u64 fatStartSector = (PHX_u64)data->fatSector;
     if (data->activeFat != PHX_FILESYSTEM_FAT_ACTIVE_ALL)
-        fatStartSector += (PHX_u64)data->fatSize * (PHX_u64)data->activeFat;
+        fatStartSector += (PHX_u64)(data->fatSize / data->fatCount) * (PHX_u64)data->activeFat;
 
     PHX_u64 currentSector = fatStartSector + fatIndex / (PHX_u64)data->bytesPerSector;
     const PHX_u16 offsetInSector = (PHX_u16)(fatIndex % (PHX_u64)data->bytesPerSector);
@@ -138,9 +138,11 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
             break;
     }
 
+    const PHX_u64 singleFatSize = (PHX_u64)(data->fatSize / data->fatCount);
+
     PHX_u64 fatStartSector = (PHX_u64)data->fatSector;
     if (data->activeFat != PHX_FILESYSTEM_FAT_ACTIVE_ALL)
-        fatStartSector += (PHX_u64)data->fatSize * (PHX_u64)data->activeFat;
+        fatStartSector += singleFatSize * (PHX_u64)data->activeFat;
 
     PHX_u64 currentSector = fatStartSector + fatIndex / (PHX_u64)data->bytesPerSector;
     PHX_u16 offsetInSector = (PHX_u16)(fatIndex % (PHX_u64)data->bytesPerSector);
@@ -165,7 +167,7 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
             {
                 for (PHX_Byte copy = copyCount; copy > 0; copy--)
                 {
-                    if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * (PHX_u64)data->fatSize, 1) != 1)
+                    if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * singleFatSize, 1) != 1)
                         return PHX_ERROR_IO;
                 }
 
@@ -195,7 +197,7 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
 
     for (PHX_Byte copy = copyCount; copy > 0; copy--)
     {
-        if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * (PHX_u64)data->fatSize, 1) != 1)
+        if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * singleFatSize, 1) != 1)
             return PHX_ERROR_IO;
     }
 
