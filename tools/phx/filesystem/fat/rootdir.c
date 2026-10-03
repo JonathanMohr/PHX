@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "result.h"
 
 PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntry(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_Byte* outEntry)
 {
@@ -39,4 +40,10 @@ PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntry(PHX_Filesystem_FAT_Data* d
         return PHX_ERROR_IO;
 
     return PHX_SUCCESS;
+}
+
+PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries)
+{
+    // TODO
+    return PHX_ERROR_INTERNAL;
 }

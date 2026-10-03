@@ -93,6 +93,16 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_DIRENT_LMD 24
 #define PHX_FILESYSTEM_FAT_DIRENT_FCL 26
 #define PHX_FILESYSTEM_FAT_DIRENT_FIS 28
+
+#define PHX_FILESYSTEM_FAT_LFNENT_ORD 0
+#define PHX_FILESYSTEM_FAT_LFNENT_NA1 1
+#define PHX_FILESYSTEM_FAT_LFNENT_ATR 11
+#define PHX_FILESYSTEM_FAT_LFNENT_RES 12
+#define PHX_FILESYSTEM_FAT_LFNENT_CHE 13
+#define PHX_FILESYSTEM_FAT_LFNENT_NA2 14
+#define PHX_FILESYSTEM_FAT_LFNENT_RES16 26
+#define PHX_FILESYSTEM_FAT_LFNENT_NA3 28
+
 #define PHX_FILESYSTEM_FAT_DIRENT_SIZE 32
 
 #define PHX_FILESYSTEM_FAT_ENTRY_FREE         0x00
@@ -357,12 +367,24 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
 PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntry(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_Byte* outEntry);
 PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntry(PHX_Filesystem_FAT_Data* data, PHX_u16 index, const PHX_Byte* entry);
 
+PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
+
 static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
 {
     return (PHX_u64)(cluster - 2) * (PHX_u64)data->sectorsPerCluster + (PHX_u64)data->dataSector;
 }
 
 PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 count, PHX_u32* outFirstCluster);
+
+
+void PHX_Filesystem_FAT_LFN_ExtractChars(const PHX_Byte* lfn, PHX_u16 out[13]);
+PHX_Byte PHX_Filesystem_FAT_LFN_Checksum(const PHX_Byte shortName[11]);
+
+PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b);
+void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13]);
+
+PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, char* out, PHX_u32 maxOut);
+PHX_u32 PHX_Filesystem_FAT_UTF8_To_UTF16(const char* in, PHX_u32 count, PHX_u16* out, PHX_u32 maxOut);
 
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);
