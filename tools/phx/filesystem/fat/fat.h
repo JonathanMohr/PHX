@@ -395,6 +395,8 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
 PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
 void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
 
+PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut);
+
 PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target);
 PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Size* newReferenceCountOut);
 
