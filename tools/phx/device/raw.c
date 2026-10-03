@@ -1,46 +1,22 @@
 #include "raw.h"
+#include "device.h"
 
 #include <base.h>
 #include <zero.h>
 
 #define RAW_Type "RAW-DISK"
 
-static PHX_BlockSize PHX_RAW_Device_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
-{
-    PHX_BlockDevice* parent = (PHX_BlockDevice*)device->data;
-    return parent->read(parent, buffer, block, count);
-}
-
-static PHX_BlockSize PHX_RAW_Device_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
-{
-    PHX_BlockDevice* parent = (PHX_BlockDevice*)device->data;
-    return parent->write(parent, buffer, block, count);
-}
-
-static void PHX_RAW_Device_Close(PHX_BlockDevice* device)
-{
-    PHX_BlockDevice* parent = (PHX_BlockDevice*)device->data;
-    parent->close(parent);
-}
+static const PHX_BlockSize blockSize = 512;
 
 static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
 {
-    (void)context;
-
     if (!readonly && device->readonly)
         return PHX_FALSE;
 
-    out->blockSize = device->blockSize;
-    out->blockCount = device->blockCount;
-    out->data = (void*)device;
+    if (PHX_BlockCountTransformDevice(context, device, blockSize, PHX_TRUE, out) != PHX_TRUE)
+        return PHX_FALSE;
 
-    out->sectorOffset = 0;
-
-    out->read = PHX_RAW_Device_Read;
-    out->write = PHX_RAW_Device_Write;
-    out->close = device->close;
-
-    out->type = RAW_Type;
+    // TODO: Type
 
     out->readonly = readonly;
 
@@ -52,17 +28,8 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
     if (!readonly && device->readonly)
         return PHX_FALSE;
 
-    out->blockSize = device->blockSize;
-    out->blockCount = device->blockCount;
-    out->data = device;
-
-    out->sectorOffset = 0;
-
-    out->read = PHX_RAW_Device_Read;
-    out->write = PHX_RAW_Device_Write;
-    out->close = PHX_RAW_Device_Close;
-
-    out->type = RAW_Type;
+    if (PHX_BlockCountTransformDevice(context, device, blockSize, PHX_TRUE, out) != PHX_TRUE)
+        return PHX_FALSE;
 
     out->readonly = readonly;
 

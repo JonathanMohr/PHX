@@ -86,21 +86,12 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    PHX_BlockDevice realisticFileDevice;
-    puts("Creating realistic file device...");
-    if (PHX_BlockCountTransformDevice(&context, &fileDevice, 512, PHX_TRUE, &realisticFileDevice) != PHX_TRUE)
-    {
-        fputs("Creating realistic file device failed\n", stderr);
-        fileDevice.close(&fileDevice);
-        return 1;
-    }
-
     PHX_BlockDevice diskDevice;
     printf("Formatting image with disk interface %s...\n", diskInterface->name);
-    if (diskInterface->formatDevice(&context, &realisticFileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
+    if (diskInterface->formatDevice(&context, &fileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
     {
         fputs("Formatting failed\n", stderr);
-        realisticFileDevice.close(&realisticFileDevice);
+        fileDevice.close(&fileDevice);
         return 1;
     }
 
