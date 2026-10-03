@@ -12,6 +12,8 @@ typedef PHX_Byte PHX_Result;
 #define PHX_ERROR_FORMAT 4
 #define PHX_ERROR_SIZE 6
 #define PHX_ERROR_PARAMETER 7
+#define PHX_ERROR_PERMISSION 8
+#define PHX_ERROR_NOT_SUPPORTED 9
 
 
 typedef struct

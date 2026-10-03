@@ -96,13 +96,15 @@ struct PHX_Filesystem
 
     PHX_u64 id;
 
+    PHX_Bool readonly;
+
     PHX_Bool caseSensitive;
 };
 
 
 typedef struct PHX_Filesystem_Interface
 {
-    PHX_Result (*openFilesystem)(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs);
+    PHX_Result (*openFilesystem)(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, PHX_Bool readonly);
     PHX_Result (*formatFilesystem)(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector);
 
     const char* type;

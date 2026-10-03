@@ -21,8 +21,8 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
 
     PHX_NULL, // PHX_Filesystem_FAT_CreateNode,
 
-    PHX_NULL, // PHX_Filesystem_FAT_LinkEntry,
-    PHX_NULL, // PHX_Filesystem_FAT_UnlinkEntry,
+    PHX_Filesystem_FAT_LinkEntry,
+    PHX_Filesystem_FAT_UnlinkEntry,
     PHX_NULL, // PHX_Filesystem_FAT_MoveEntry,
 
     PHX_Filesystem_FAT_CreateOpenNode,
@@ -201,6 +201,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector)
 {
+    if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     return PHX_Filesystem_FAT_UpdateBootsector(fs->data, bootsector, fs->id);
 }
 
@@ -209,8 +210,11 @@ void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
 {
     PHX_Filesystem_FAT_Data* data = fs->data;
 
-    PHX_Filesystem_FAT_UpdateFsInfo(data);
-    (void)PHX_Filesystem_FAT_WriteFsInfo(data);
+    if (fs->readonly != PHX_TRUE)
+    {
+        PHX_Filesystem_FAT_UpdateFsInfo(data);
+        (void)PHX_Filesystem_FAT_WriteFsInfo(data);
+    }
 
     if (data->useDevice)
     {
@@ -227,7 +231,7 @@ void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
 // TODO: Check
 static int isPowerOfTwo(PHX_u16 v) { return v && !(v & (v - 1)); }
 
-static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs)
+static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, PHX_Bool readonly)
 {
     PHX_Filesystem_FAT_Data* data = context->allocator.allocate(&context->allocator, sizeof(PHX_Filesystem_FAT_Data));
     if (!data)
@@ -508,6 +512,8 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     outFs->id = (bootSignature == PHX_FILESYSTEM_FAT_BOOT_SIGNATURE_EXTENDED_BOOT_SIGNATURE) ? volumeID : PHX_FILESYSTEM_NO_ID;
 
     outFs->caseSensitive = PHX_FALSE;
+
+    outFs->readonly = readonly;
 
     return PHX_SUCCESS;
 }
