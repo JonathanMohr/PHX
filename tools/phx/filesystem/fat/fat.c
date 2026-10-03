@@ -223,6 +223,7 @@ void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
     }
 
     fs->context->allocator.free(&fs->context->allocator, data->buffer);
+    fs->context->allocator.free(&fs->context->allocator, data->clusterBuffer);
 
     fs->context->allocator.free(&fs->context->allocator, data);
 }
@@ -499,6 +500,20 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
             data->freeClusterCount = 0xFFFFFFFF;
             data->nextFreeCluster = 0xFFFFFFFF;
         }
+    }
+
+
+    data->clusterBuffer = context->allocator.allocate(&context->allocator, data->bytesPerCluster);
+    if (!data->clusterBuffer)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data->buffer);
+        context->allocator.free(&context->allocator, data);
+        return PHX_ERROR_IO;
     }
 
 
@@ -1004,6 +1019,18 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         }
     }
 
+    data->clusterBuffer = context->allocator.allocate(&context->allocator, data->bytesPerCluster);
+    if (!data->clusterBuffer)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data->buffer);
+        context->allocator.free(&context->allocator, data);
+        return PHX_ERROR_IO;
+    }
 
     data->writeWithLFN = PHX_TRUE;
     data->readWithLFN = PHX_TRUE;

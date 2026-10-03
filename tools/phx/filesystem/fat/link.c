@@ -49,7 +49,7 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
             entryIndex = pos;
             entryCluster = 0;
 
-            if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntry(data, (PHX_u16)entryIndex, entry)) != PHX_SUCCESS)
+            if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntries(data, (PHX_u16)entryIndex, 1, entry)) != PHX_SUCCESS)
                 return result;
         }
         else
