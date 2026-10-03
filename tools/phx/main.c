@@ -120,7 +120,7 @@ int main(int argc, const char* argv[])
     partition1->start = partitionTable.startUsable;
     partition1->size = partitionTable.sizeUsable;
     partition1->flags = PHX_PARTITION_BOOTABLE;
-    partition1->type = PHX_PARTITION_UNKNOWN;
+    partition1->type = PHX_PARTITION_FAT32;
     memset(partition1->name, '\0', sizeof(partition1->name));
 
     partitionTable.partitionCount = 1;

@@ -1,4 +1,5 @@
 #include "mbr.h"
+#include "partition/partition.h"
 #include "types.h"
 
 #include <endianness.h>
@@ -69,7 +70,15 @@ static PHX_Partition_Type MBR_ConvertType(PHX_Byte type)
 {
     switch (type)
     {
-        // TODO: Add Stuff
+        case MBR_TYPE_FAT12:
+            return PHX_PARTITION_FAT12;
+
+        case MBR_TYPE_FAT16_BELOW_32MB: case MBR_TYPE_FAT16_ABOVE_32MB:
+        case MBR_TYPE_FAT16_LBA:
+            return PHX_PARTITION_FAT16;
+
+        case MBR_TYPE_FAT32_CHS: case MBR_TYPE_FAT32_LBA:
+            return PHX_PARTITION_FAT32;
         
         default:
             return PHX_PARTITION_UNKNOWN;
@@ -80,7 +89,14 @@ static PHX_Byte MBR_ConvertTypeBack(PHX_Partition_Type type)
 {
     switch (type)
     {
-        // TODO: Add Stuff
+        case PHX_PARTITION_FAT12:
+            return MBR_TYPE_FAT12;
+
+        case PHX_PARTITION_FAT16:
+            return MBR_TYPE_FAT16_LBA;
+
+        case PHX_PARTITION_FAT32:
+            return MBR_TYPE_FAT32_LBA;
 
         default:
             return MBR_TYPE_UNKNOWN;

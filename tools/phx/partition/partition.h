@@ -9,6 +9,9 @@ extern "C" {
 
 typedef PHX_Byte PHX_Partition_Type;
 #define PHX_PARTITION_UNKNOWN 0
+#define PHX_PARTITION_FAT12   1
+#define PHX_PARTITION_FAT16   2
+#define PHX_PARTITION_FAT32   3
 
 typedef PHX_u16 PHX_Partition_Flags;
 #define PHX_PARTITION_BOOTABLE (1 << 0)
