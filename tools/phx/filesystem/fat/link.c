@@ -15,5 +15,9 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     // TODO: Implement
 
+    (void)dir;
+    (void)name;
+    (void)newReferenceCountOut;
+
     return PHX_ERROR_INTERNAL;
 }

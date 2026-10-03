@@ -502,6 +502,10 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     }
 
 
+    data->writeWithLFN = PHX_TRUE;
+    data->readWithLFN = PHX_TRUE;
+
+
     outFs->context = context;
     outFs->device = device;
 
@@ -999,6 +1003,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             }
         }
     }
+
+
+    data->writeWithLFN = PHX_TRUE;
+    data->readWithLFN = PHX_TRUE;
 
 
     outFs->context = context;

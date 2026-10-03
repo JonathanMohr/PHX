@@ -313,6 +313,9 @@ typedef struct PHX_Filesystem_FAT_Data
     PHX_Byte bootsector[512];
     PHX_Byte fsInfo[512];
 
+    PHX_Bool writeWithLFN;
+    PHX_Bool readWithLFN;
+
     PHX_Bool useDevice;
 } PHX_Filesystem_FAT_Data;
 
@@ -358,6 +361,8 @@ static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FA
 {
     return (PHX_u64)(cluster - 2) * (PHX_u64)data->sectorsPerCluster + (PHX_u64)data->dataSector;
 }
+
+PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 count, PHX_u32* outFirstCluster);
 
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);

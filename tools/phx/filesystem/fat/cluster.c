@@ -203,3 +203,88 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
 
     return PHX_SUCCESS;
 }
+
+
+PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 count, PHX_u32* outFirstCluster)
+{
+    if (count == 0)
+        return PHX_ERROR_INTERNAL;
+    PHX_Result result;
+
+    const PHX_u32 maxCluster = data->dataSize / data->sectorsPerCluster + 1;
+
+    PHX_u32 firstCluster = 0;
+    PHX_u32 previousCluster = 0;
+    PHX_u32 found = 0;
+
+    PHX_u32 cluster = (data->nextFreeCluster == 0xFFFFFFFF) ? 0 : data->nextFreeCluster;
+    PHX_u32 startCluster = cluster;
+    PHX_Bool wrapped = PHX_FALSE;
+
+    while (found < count)
+    {
+        if (cluster > maxCluster)
+        {
+            if (wrapped == PHX_TRUE)
+                break;
+            cluster = 2;
+            wrapped = PHX_TRUE;
+            continue;
+        }
+
+        if (wrapped == PHX_TRUE && cluster == startCluster)
+            break;
+
+        PHX_u32 entry;
+        if ((result = PHX_Filesystem_FAT_ReadFAT(data, cluster, &entry)) != PHX_SUCCESS)
+            return result;
+
+        PHX_u32 status = PHX_Filesystem_FAT_Cluster(data->version, entry);
+        if (status == PHX_FILESYSTEM_FAT_CLUSTER_ERROR)
+            return PHX_ERROR_INTERNAL;
+
+        if (status == PHX_FILESYSTEM_FAT_CLUSTER_FREE)
+        {
+            if (found == 0)
+                firstCluster = cluster;
+            else
+            {
+                if ((result = PHX_Filesystem_FAT_WriteFAT(data, previousCluster, cluster)) != PHX_SUCCESS)
+                    return result;
+                data->freeClusterCount--;
+            }
+
+            previousCluster = cluster;
+            found++;
+        }
+
+        cluster++;
+    }
+
+    if (found < count)
+    {
+        PHX_u32 current = firstCluster;
+        for (PHX_u32 index = 1; index < found; index++)
+        {
+            PHX_u32 next;
+            if ((result = PHX_Filesystem_FAT_ReadFAT(data, current, &next)) != PHX_SUCCESS)
+                return result;
+            if ((result = PHX_Filesystem_FAT_WriteFAT(data, current, 0)) != PHX_SUCCESS)
+                return result;
+            data->freeClusterCount++;
+            current = next;
+        }
+
+        return PHX_ERROR_OUT_OF_SPACE;
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteFAT(data, previousCluster, PHX_FILESYSTEM_FAT_CLUSTER_VALUE_EOC)) != PHX_SUCCESS)
+        return result;
+
+    data->nextFreeCluster = previousCluster + 1;
+    if (data->nextFreeCluster > maxCluster)
+        data->nextFreeCluster = 2;
+
+    *outFirstCluster = firstCluster;
+    return PHX_SUCCESS;
+}
