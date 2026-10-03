@@ -8,6 +8,8 @@ extern "C" {
 #define PHX_FILESYSTEM_FAT_TYPE "FAT-FILESYSTEM"
 
 #include <filesystem/filesystem.h>
+#include <base.h>
+#include <endianness.h>
 
 #define PHX_FILESYSTEM_FAT_HEADER_OEM 3
 
@@ -142,6 +144,51 @@ extern "C" {
 
 */
 
+#define PHX_Filesystem_FAT_Read_u8 read_u8
+#define PHX_Filesystem_FAT_Read_u16 read_u16
+#define PHX_Filesystem_FAT_Read_u32 read_u32
+#define PHX_Filesystem_FAT_Write_u8 write_u8
+#define PHX_Filesystem_FAT_Write_u16 write_u16
+#define PHX_Filesystem_FAT_Write_u32 write_u32
+
+static inline PHX_Byte read_u8(const PHX_Byte* buffer)
+{
+    PHX_Byte val;
+    memcpy(&val, buffer, sizeof(val));
+    return val;
+}
+
+static inline PHX_u16 read_u16(const PHX_Byte* buffer)
+{
+    PHX_u16 val;
+    memcpy(&val, buffer, sizeof(val));
+    return Endian_Convert_u16_Le(val);
+}
+
+static inline PHX_u32 read_u32(const PHX_Byte* buffer)
+{
+    PHX_u32 val;
+    memcpy(&val, buffer, sizeof(val));
+    return Endian_Convert_u32_Le(val);
+}
+
+static inline void write_u8(PHX_Byte* buffer, PHX_Byte val)
+{
+    memcpy(buffer, &val, sizeof(val));
+}
+
+static inline void write_u16(PHX_Byte* buffer, PHX_u16 val)
+{
+    PHX_u16 rawVal = Endian_Convert_u16_Le(val);
+    memcpy(buffer, &rawVal, sizeof(rawVal));
+}
+
+static inline void write_u32(PHX_Byte* buffer, PHX_u32 val)
+{
+    PHX_u32 rawVal = Endian_Convert_u32_Le(val);
+    memcpy(buffer, &rawVal, sizeof(rawVal));
+}
+
 typedef enum
 {
     PHX_FILESYSTEM_FAT_12,
@@ -169,6 +216,7 @@ typedef struct PHX_Filesystem_FAT_Data
 
     PHX_u32 bytesPerCluster;
     PHX_u32 totalSectors;
+    PHX_u32 totalClusters;
 
     union
     {
@@ -220,6 +268,18 @@ PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data);
 PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data);
 
 void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data);
+
+#define PHX_FILESYSTEM_FAT_CLUSTER_VALUE_EOC 0xFFFFFFFF
+
+#define PHX_FILESYSTEM_FAT_CLUSTER_NORMAL 0
+#define PHX_FILESYSTEM_FAT_CLUSTER_FREE   1
+#define PHX_FILESYSTEM_FAT_CLUSTER_BAD    2
+#define PHX_FILESYSTEM_FAT_CLUSTER_EOC    3
+#define PHX_FILESYSTEM_FAT_CLUSTER_ERROR  4
+
+PHX_u32 PHX_Filesystem_FAT_Cluster(PHX_Filesystem_FAT_Version version, PHX_u32 cluster);
+PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32* outValue);
+PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32 value);
 
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);

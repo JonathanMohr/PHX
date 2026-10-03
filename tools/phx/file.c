@@ -6,6 +6,7 @@
 #   define _XOPEN_SOURCE 700
 #   define _FILE_OFFSET_BITS 64
 #   include <sys/stat.h>
+#   include <errno.h>
 #endif
 
 #include "file.h"

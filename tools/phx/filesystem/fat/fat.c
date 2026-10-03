@@ -5,6 +5,7 @@
 
 #include <endianness.h>
 #include <base.h>
+#include <zero.h>
 
 #include <embed/fat.h>
 
@@ -77,46 +78,6 @@ PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data)
     if (data->usedDevice->write(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
         return PHX_FALSE;
     return PHX_TRUE;
-}
-
-
-
-static PHX_Byte read_u8(const PHX_Byte* buffer)
-{
-    PHX_Byte val;
-    memcpy(&val, buffer, sizeof(val));
-    return val;
-}
-
-static PHX_u16 read_u16(const PHX_Byte* buffer)
-{
-    PHX_u16 val;
-    memcpy(&val, buffer, sizeof(val));
-    return Endian_Convert_u16_Le(val);
-}
-
-static PHX_u32 read_u32(const PHX_Byte* buffer)
-{
-    PHX_u32 val;
-    memcpy(&val, buffer, sizeof(val));
-    return Endian_Convert_u32_Le(val);
-}
-
-static void write_u8(PHX_Byte* buffer, PHX_Byte val)
-{
-    memcpy(buffer, &val, sizeof(val));
-}
-
-static void write_u16(PHX_Byte* buffer, PHX_u16 val)
-{
-    PHX_u16 rawVal = Endian_Convert_u16_Le(val);
-    memcpy(buffer, &rawVal, sizeof(rawVal));
-}
-
-static void write_u32(PHX_Byte* buffer, PHX_u32 val)
-{
-    PHX_u32 rawVal = Endian_Convert_u32_Le(val);
-    memcpy(buffer, &rawVal, sizeof(rawVal));
 }
 
 
@@ -472,6 +433,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
+    data->totalClusters = (totalSectors - reservedSectors - fatSectors - rootDirSectors);
 
     data->bytesPerCluster = bytesPerSector;
     data->sectorsPerCluster = sectorsPerCluster;
@@ -856,7 +818,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     data->version = version;
 
     data->freeClusterCount = dataSectors / (PHX_u32)sectorsPerCluster;
-    data->nextFreeCluster = 3;
+    data->nextFreeCluster = (version == PHX_FILESYSTEM_FAT_32) ? 3 : 2;
 
     data->fatSector = reservedSectors;
     data->fatSize = fatSectors;
@@ -866,6 +828,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
+    data->totalClusters = (totalSectors - reservedSectors - fatSectors - rootDirSectors);
 
 
     data->bytesPerSector = bytesPerSector;
@@ -909,7 +872,130 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         }
     }
 
-    // TODO: Create FAT and zero root directory
+
+    const PHX_Byte* buffer = zeroBuffer;
+    PHX_Size bufferSize = sizeof(zeroBuffer);
+    if (bytesPerSector > bufferSize)
+    {
+        buffer = data->buffer;
+        bufferSize = bytesPerSector;
+    }
+    const PHX_BlockSize blocksPerCycle = bufferSize / bytesPerSector;
+
+
+    if ((PHX_Size)bytesPerSector > sizeof(zeroBuffer))
+        memset(data->buffer, 0, bytesPerSector);
+    for (PHX_BlockSize i = reservedSectors; i < rootDirEntryStart; i += blocksPerCycle)
+    {
+        const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > rootDirEntryStart) ? (rootDirEntryStart - i) : blocksPerCycle;
+        if (data->usedDevice->write(data->usedDevice, buffer, i, blocksToWrite) != blocksToWrite)
+        {
+            if (data->useDevice)
+            {
+                data->usedDevice->close(data->usedDevice);
+                context->allocator.free(&context->allocator, data->usedDevice);
+            }
+            context->allocator.free(&context->allocator, data->buffer);
+            context->allocator.free(&context->allocator, data);
+            return PHX_ERROR_IO;
+        }
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteFAT(data, 0, (PHX_u32)mediaDescriptor | 0xFFFFFF00)) != PHX_SUCCESS)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data->buffer);
+        context->allocator.free(&context->allocator, data);
+        return result;
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteFAT(data, 1, 0xFFFFFFFF)) != PHX_SUCCESS)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data->buffer);
+        context->allocator.free(&context->allocator, data);
+        return result;
+    }
+
+    if (version == PHX_FILESYSTEM_FAT_32 && (result = PHX_Filesystem_FAT_WriteFAT(data, 2, PHX_FILESYSTEM_FAT_CLUSTER_VALUE_EOC)) != PHX_SUCCESS)
+    {
+        if (data->useDevice)
+        {
+            data->usedDevice->close(data->usedDevice);
+            context->allocator.free(&context->allocator, data->usedDevice);
+        }
+        context->allocator.free(&context->allocator, data->buffer);
+        context->allocator.free(&context->allocator, data);
+        return result;
+    }
+
+
+    if ((PHX_Size)bytesPerSector > sizeof(zeroBuffer))
+        memset(data->buffer, 0, bytesPerSector);
+    if (version == PHX_FILESYSTEM_FAT_12 || version == PHX_FILESYSTEM_FAT_16)
+    {
+        for (PHX_BlockSize i = (PHX_u64)rootDirEntryStart; i < (PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors; i += blocksPerCycle)
+        {
+            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors)) ? (((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors) - i) : blocksPerCycle;
+            if (data->usedDevice->write(data->usedDevice, buffer, i, blocksToWrite) != blocksToWrite)
+            {
+                if (data->useDevice)
+                {
+                    data->usedDevice->close(data->usedDevice);
+                    context->allocator.free(&context->allocator, data->usedDevice);
+                }
+                context->allocator.free(&context->allocator, data->buffer);
+                context->allocator.free(&context->allocator, data);
+                return PHX_ERROR_IO;
+            }
+        }
+    }
+    else if (context->fast == PHX_TRUE)
+    {
+        for (PHX_BlockSize i = 0; i < sectorsPerCluster; i += blocksPerCycle)
+        {
+            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > sectorsPerCluster) ? (sectorsPerCluster - i) : blocksPerCycle;
+            if (data->usedDevice->write(data->usedDevice, buffer, i + nonDataSectors, blocksToWrite) != blocksToWrite)
+            {
+                if (data->useDevice)
+                {
+                    data->usedDevice->close(data->usedDevice);
+                    context->allocator.free(&context->allocator, data->usedDevice);
+                }
+                context->allocator.free(&context->allocator, data->buffer);
+                context->allocator.free(&context->allocator, data);
+                return PHX_ERROR_IO;
+            }
+        }
+    }
+
+    if (context->fast != PHX_TRUE)
+    {
+        for (PHX_BlockSize i = 0; i < (PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters; i += blocksPerCycle)
+        {
+            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters)) ? (((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters) - i) : blocksPerCycle;
+            if (data->usedDevice->write(data->usedDevice, buffer, i + nonDataSectors, blocksToWrite) != blocksToWrite)
+            {
+                if (data->useDevice)
+                {
+                    data->usedDevice->close(data->usedDevice);
+                    context->allocator.free(&context->allocator, data->usedDevice);
+                }
+                context->allocator.free(&context->allocator, data->buffer);
+                context->allocator.free(&context->allocator, data);
+                return PHX_ERROR_IO;
+            }
+        }
+    }
+
 
     outFs->context = context;
     outFs->device = device;
