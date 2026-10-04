@@ -15,7 +15,10 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         namePtr++;
 
     if ((namePtr - name) > 255)
+    {
+        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
         return PHX_ERROR_NAME_TOO_LONG;
+    }
 
     PHX_u16 utf16Name[20 * 13];
     PHX_u32 utf16Count = PHX_Filesystem_FAT_UTF8_To_UTF16(name, (PHX_u32)(namePtr - name), utf16Name, 255);
@@ -42,7 +45,10 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
 
     char shortName[11];
     if ((result = PHX_Filesystem_FAT_GenerateShortName(fs, dir, firstChars, hash, ext, shortName)) != PHX_SUCCESS)
+    {
+        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
         return result;
+    }
 
     
     const PHX_u32 lfnSlotCount = (utf16Count + 13 - 1) / 13;
@@ -57,5 +63,21 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     PHX_u32 entryIndex;
     PHX_u32 mainEntryCluster;
     PHX_u32 mainEntryIndex;
-    // TODO
+    // TODO: FindFreeEntrySlots
+
+    if (isDir)
+    {
+        if ((result = PHX_Filesystem_FAT_FindFreeClusters(data, 1, &cluster)) != PHX_SUCCESS)
+        {
+            if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+            return result;
+        }
+
+        memset(data->clusterBuffer, 0, data->bytesPerCluster);
+
+        PHX_Byte* dot = data->clusterBuffer;
+        PHX_Byte* dotdot = dot + PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+
+        
+    }
 }
