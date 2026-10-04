@@ -55,7 +55,7 @@ PHX_Bool PHX_Filesystem_FAT_WriteBootsector(PHX_Filesystem_FAT_Data* data)
 
 PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data)
 {
-    if (data->version != PHX_FILESYSTEM_FAT_32 || data->specific.fat32.fsInfoSector == 0xFFFF)
+    if (data->version != PHX_FILESYSTEM_FAT_32 || data->specific.fat32.fsInfoSector == 0 || data->specific.fat32.fsInfoSector == 0xFFFF)
         return PHX_FALSE;
     if (data->usedDevice->read(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
         return PHX_FALSE;
@@ -65,7 +65,7 @@ PHX_Bool PHX_Filesystem_FAT_ReadFsInfo(PHX_Filesystem_FAT_Data* data)
 
 PHX_Bool PHX_Filesystem_FAT_WriteFsInfo(PHX_Filesystem_FAT_Data* data)
 {
-    if (data->version != PHX_FILESYSTEM_FAT_32)
+    if (data->version != PHX_FILESYSTEM_FAT_32 || data->specific.fat32.fsInfoSector == 0 || data->specific.fat32.fsInfoSector == 0xFFFF)
         return PHX_FALSE;
     if (data->usedDevice->read(data->usedDevice, data->buffer, data->specific.fat32.fsInfoSector, 1) != 1)
         return PHX_FALSE;
@@ -86,7 +86,7 @@ void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data)
 
     write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_STS, PHX_FILESYSTEM_FAT_FSINFO_STRUCT_SIGNATURE);
 
-    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_FCC, data->freeClusterCount);
+    write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_FCC, (data->freeClusterCountKnown == PHX_TRUE) ? data->freeClusterCount : 0xFFFFFFFF);
     write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_NFC, data->nextFreeCluster);
 
     write_u32(data->fsInfo + PHX_FILESYSTEM_FAT_FSINFO_TRS, PHX_FILESYSTEM_FAT_FSINFO_TRAIL_SIGNATURE);
@@ -229,7 +229,6 @@ void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
 }
 
 
-// TODO: Check
 static int isPowerOfTwo(PHX_u16 v) { return v && !(v & (v - 1)); }
 
 static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, PHX_Bool readonly)
@@ -240,7 +239,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     const PHX_BlockSize blocksForBootsector = (512 + device->blockSize - 1) / device->blockSize;
 
-    PHX_Byte* sectorBuffer = context->allocator.allocate(&context->allocator, blocksForBootsector);
+    PHX_Byte* sectorBuffer = context->allocator.allocate(&context->allocator, blocksForBootsector * device->blockSize);
     if (!sectorBuffer)
     {
         context->allocator.free(&context->allocator, data);
@@ -394,13 +393,13 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         if (!usedDevice)
         {
             context->allocator.free(&context->allocator, data);
-            return PHX_ERROR_INTERNAL;
+            return PHX_ERROR_MEMORY;
         }
         if (PHX_BlockCountTransformDevice(context, device, bytesPerSector, PHX_FALSE, usedDevice) != PHX_TRUE)
         {
             context->allocator.free(&context->allocator, usedDevice);
             context->allocator.free(&context->allocator, data);
-            return PHX_ERROR_INTERNAL;
+            return PHX_ERROR_MEMORY; // TODO: Check
         }
 
         data->usedDevice = usedDevice;
@@ -436,9 +435,9 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
-    data->totalClusters = (totalSectors - reservedSectors - fatSectors - rootDirSectors);
+    data->totalClusters = (dataClusters - reservedSectors - fatSectors - rootDirSectors);
 
-    data->bytesPerCluster = bytesPerSector;
+    data->bytesPerSector = bytesPerSector;
     data->sectorsPerCluster = sectorsPerCluster;
     data->reservedSectors = reservedSectors;
 
@@ -464,7 +463,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         const PHX_u16 backupBootsector = read_u16(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_BBS);
 
         data->specific.fat32.rootDirCluster = rootCluster;
-        data->specific.fat32.fsInfoSector = (fsInfoSector < reservedSectors || fsInfoSector == 0) ? fsInfoSector : 0xFFFF;
+        data->specific.fat32.fsInfoSector = (fsInfoSector != 0 && fsInfoSector < reservedSectors) ? fsInfoSector : 0xFFFF;
         data->specific.fat32.backupBootsector = backupBootsector;
 
         if (extFlags & (1 << 7))
@@ -474,7 +473,8 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         else
             data->activeFat = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
 
-        if (fsInfoSector < reservedSectors && PHX_Filesystem_FAT_ReadFsInfo(data) != PHX_TRUE)
+        memset(data->fsInfo, 0, 512);
+        if (data->specific.fat32.fsInfoSector != 0xFFFF && PHX_Filesystem_FAT_ReadFsInfo(data) != PHX_TRUE)
         {
             if (data->useDevice)
             {
@@ -502,7 +502,6 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         }
     }
 
-
     data->clusterBuffer = context->allocator.allocate(&context->allocator, data->bytesPerCluster);
     if (!data->clusterBuffer)
     {
@@ -513,8 +512,10 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         }
         context->allocator.free(&context->allocator, data->buffer);
         context->allocator.free(&context->allocator, data);
-        return PHX_ERROR_IO;
+        return PHX_ERROR_MEMORY;
     }
+
+    data->freeClusterCountKnown = (data->freeClusterCount != 0xFFFFFFFF && data->freeClusterCount <= dataClusters) ? PHX_TRUE : PHX_FALSE;
 
 
     data->writeWithLFN = PHX_TRUE;
@@ -822,8 +823,6 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         data->specific.fat32.rootDirCluster = 2;
         data->specific.fat32.fsInfoSector = fat32_fsInfoSector;
         data->specific.fat32.backupBootsector = (customBackupBootsector == PHX_TRUE) ? backupBootsector : fat32_backupBootsector;
-
-        // TODO: Set root dir cluster
     }
 
     data->buffer = context->allocator.allocate(&context->allocator, bytesPerSector);
@@ -840,7 +839,8 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     data->version = version;
 
-    data->freeClusterCount = dataSectors / (PHX_u32)sectorsPerCluster;
+    data->freeClusterCount = dataClusters - ((version == PHX_FILESYSTEM_FAT_32) ? 1 : 0);
+    if (version == PHX_FILESYSTEM_FAT_32) data->freeClusterCount--;
     data->nextFreeCluster = (version == PHX_FILESYSTEM_FAT_32) ? 3 : 2;
 
     data->fatSector = reservedSectors;
@@ -851,7 +851,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
-    data->totalClusters = (totalSectors - reservedSectors - fatSectors - rootDirSectors);
+    data->totalClusters = (dataClusters - reservedSectors - fatSectors - rootDirSectors);
 
 
     data->bytesPerSector = bytesPerSector;
@@ -891,7 +891,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             }
             context->allocator.free(&context->allocator, data->buffer);
             context->allocator.free(&context->allocator, data);
-            return PHX_ERROR_PARAMETER;
+            return PHX_ERROR_IO;
         }
     }
 
@@ -1029,8 +1029,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         }
         context->allocator.free(&context->allocator, data->buffer);
         context->allocator.free(&context->allocator, data);
-        return PHX_ERROR_IO;
+        return PHX_ERROR_MEMORY;
     }
+
+    data->freeClusterCountKnown = PHX_TRUE;
 
     data->writeWithLFN = PHX_TRUE;
     data->readWithLFN = PHX_TRUE;
@@ -1044,6 +1046,8 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     outFs->ops = &PHX_Filesystem_FAT_Operations;
 
     outFs->id = volumeId;
+
+    outFs->readonly = PHX_FALSE; // TODO: Think about it
 
     outFs->caseSensitive = PHX_FALSE;
 

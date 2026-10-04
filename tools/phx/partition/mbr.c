@@ -8,7 +8,9 @@
 #include <embed/mbr.h>
 
 /*
-    TODO: Disk signature
+    Disk signature (4 byte)
+
+    reserved (2 bytes)
 
     Partition (16 byte):
         u8 bootFlag
@@ -63,6 +65,8 @@
 #define MBR_TYPE_VMWARE_SWAP            0xFC
 #define MBR_TYPE_LINUX_RAID_AUTODETECT  0xFD
 
+
+// TODO: Maybe save unknown types somewhere so they don't become 0x7F
 
 #define MBR_TYPE "MBR-PARTITION-TABLE"
 

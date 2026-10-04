@@ -7,6 +7,9 @@ PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, ch
 
     while (i < count)
     {
+        if (units[i] == 0)
+            break;
+
         PHX_u32 cp = units[i++];
         PHX_u32 len;
 
@@ -44,13 +47,13 @@ PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, ch
                 break;
 
             case 3:
-                out[written] =     (char)(0xC0 | (cp >> 12));
+                out[written] =     (char)(0xE0 | (cp >> 12));
                 out[written + 1] = (char)(0x80 | ((cp >> 6) & 0x3F));
                 out[written + 2] = (char)(0x80 | (cp & 0x3F));
                 break;
 
             default:
-                out[written] =     (char)(0xC0 | (cp >> 18));
+                out[written] =     (char)(0xF0 | (cp >> 18));
                 out[written + 1] = (char)(0x80 | ((cp >> 12) & 0x3F));
                 out[written + 2] = (char)(0x80 | ((cp >> 6) & 0x3F));
                 out[written + 3] = (char)(0x80 | (cp & 0x3F));

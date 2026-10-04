@@ -314,9 +314,9 @@ PHX_Result PHX_Filesystem_FAT_AppendClusters(PHX_Filesystem_FAT_Data* data, PHX_
         }
     }
 
-    if ((result = PHX_Filesystem_FAT_WriteFAT(data, lastCluster, firstNew)) != PHX_SUCCESS)
+    if (lastCluster != 0 && (result = PHX_Filesystem_FAT_WriteFAT(data, lastCluster, firstNew)) != PHX_SUCCESS)
         return result;
 
     *firstNewClusterOut = firstNew;
-    return PHX_TRUE;
+    return PHX_SUCCESS;
 }

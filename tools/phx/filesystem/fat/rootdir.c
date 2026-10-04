@@ -229,9 +229,12 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesys
                     runStartCluster = cluster;
                     runStartIndex = i;
                     runStarted = PHX_TRUE;
+                    runLength = 0;
                 }
 
-                PHX_u32 offsetToMain = totalEntries - 1;
+                const PHX_u32 needed = totalEntries - runLength;
+
+                PHX_u32 offsetToMain = needed - 1;
                 PHX_u32 remainingInThisCluster = entriesPerCluster - i;
 
                 PHX_Bool mainFound = (offsetToMain < remainingInThisCluster) ? PHX_TRUE : PHX_FALSE;
@@ -242,14 +245,14 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesys
                 PHX_u32 walkCluster = cluster;
                 PHX_u32 chainLast = cluster;
 
-                while (remainingCapacity < totalEntries)
+                while (remainingCapacity < needed)
                 {
                     PHX_u32 nextCluster;
                     if ((result = PHX_Filesystem_FAT_ReadFAT(data, walkCluster, &nextCluster)) != PHX_SUCCESS)
                         return result;
                     PHX_u32 walkStatus = PHX_Filesystem_FAT_Cluster(data->version, nextCluster);
                     if (walkStatus == PHX_FILESYSTEM_FAT_CLUSTER_ERROR)
-                        return false;
+                        return PHX_ERROR_FORMAT;
                     if (walkStatus != PHX_FILESYSTEM_FAT_CLUSTER_NORMAL)
                         break;
 
@@ -270,7 +273,7 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesys
                     remainingCapacity += entriesPerCluster;
                 }
 
-                if (remainingCapacity >= totalEntries)
+                if (remainingCapacity >= needed)
                 {
                     *clusterOut = runStartCluster;
                     *indexOut = runStartIndex;
@@ -279,7 +282,7 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesys
                     return PHX_SUCCESS;
                 }
 
-                PHX_u32 additionalNeeded = totalEntries - remainingCapacity;
+                PHX_u32 additionalNeeded = needed - remainingCapacity;
                 PHX_u32 additionalClusters = (additionalNeeded + entriesPerCluster - 1) / entriesPerCluster;
 
                 PHX_u32 newFirst;
@@ -305,6 +308,7 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesys
                 *indexOut = runStartIndex;
                 *mainClusterOut = mainCluster;
                 *mainIndexOut = mainIndex;
+                return PHX_SUCCESS;
             }
             else if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_DELETED)
             {

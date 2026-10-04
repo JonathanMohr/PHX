@@ -134,6 +134,9 @@ static PHX_Result shortNameExists(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, 
                 *existsOut = PHX_TRUE;
                 return PHX_SUCCESS;
             }
+
+            if ((result = PHX_Filesystem_FAT_ReadFAT(data, cluster, &cluster)) != PHX_SUCCESS)
+                return result;
         }
     }
 

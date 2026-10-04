@@ -14,7 +14,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesyst
     PHX_u32 status;
     PHX_u32 cluster = extra->startCluster;
 
-    if (dir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version == PHX_FILESYSTEM_FAT_32)
+    if (dir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version != PHX_FILESYSTEM_FAT_32)
     {
         PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
@@ -29,6 +29,9 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesyst
             if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_FREE)
                 break;
 
+            if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == '.' && (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1) == ' ' || (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1) == '.' && read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 2) == ' ')))
+                continue;
+
             entryCount++;
         }
 
@@ -37,7 +40,10 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesyst
     }
 
     if (cluster == 0)
-        return 0;
+    {
+        *entryCountOut = 0;
+        return PHX_SUCCESS;
+    }
 
     while ((status = PHX_Filesystem_FAT_Cluster(data->version, cluster)) == PHX_FILESYSTEM_FAT_CLUSTER_NORMAL)
     {
@@ -119,8 +125,18 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem* fs, PHX_Filesystem_N
                 PHX_u32 status = PHX_Filesystem_FAT_Cluster(data->version, openNodeExtra->currentCluster);
                 if (status != PHX_FILESYSTEM_FAT_CLUSTER_NORMAL)
                     return PHX_ERROR_FORMAT;
-                if ((result = PHX_Filesystem_FAT_ReadFAT(data, openNodeExtra->currentCluster, &openNodeExtra->currentCluster)) != PHX_SUCCESS)
+
+                PHX_u32 nextCluster;
+                if ((result = PHX_Filesystem_FAT_ReadFAT(data, openNodeExtra->currentCluster, &nextCluster)) != PHX_SUCCESS)
                     return result;
+
+                PHX_u32 nextStatus = PHX_Filesystem_FAT_Cluster(data->version, nextCluster);
+                if (nextStatus == PHX_FILESYSTEM_FAT_CLUSTER_EOC)
+                    return PHX_ERROR_NOT_FOUND;
+                if (nextStatus != PHX_FILESYSTEM_FAT_CLUSTER_NORMAL)
+                    return PHX_ERROR_FORMAT;
+
+                openNodeExtra->currentCluster = nextCluster;
             }
 
             PHX_u32 status = PHX_Filesystem_FAT_Cluster(data->version, openNodeExtra->currentCluster);
@@ -166,6 +182,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem* fs, PHX_Filesystem_N
 
             if (isLast == PHX_TRUE)
             {
+                memset(lfnChars, 0, sizeof(lfnChars));
                 lfnExpected = sequence;
                 lfnChecksum = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_CHE);
                 haveLfn = PHX_TRUE;
@@ -255,6 +272,8 @@ PHX_Result PHX_Filesystem_FAT_Dir_LookupEntry(PHX_Filesystem* fs, PHX_Filesystem
     }
 
     (void)PHX_Filesystem_FAT_CloseOpenNode(fs, &dirOpenNode);
+
+    if (result != PHX_SUCCESS) return result;
 
     memcpy(entryOut, &entry, sizeof(PHX_Filesystem_Entry));
     return PHX_SUCCESS;

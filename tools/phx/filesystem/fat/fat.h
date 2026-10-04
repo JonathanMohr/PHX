@@ -324,6 +324,8 @@ typedef struct PHX_Filesystem_FAT_Data
     PHX_Byte bootsector[512];
     PHX_Byte fsInfo[512];
 
+    PHX_Bool freeClusterCountKnown;
+
     PHX_Bool writeWithLFN;
     PHX_Bool readWithLFN;
 

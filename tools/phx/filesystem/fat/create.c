@@ -99,7 +99,6 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         write_u16(dot + PHX_FILESYSTEM_FAT_DIRENT_FCL, (PHX_u16)(cluster & 0xFFFF));
         write_u32(dot + PHX_FILESYSTEM_FAT_DIRENT_FIS, 0);
 
-        // TODO: Check
         PHX_u32 parentCluster = dirExtra->startCluster;
         if (data->version == PHX_FILESYSTEM_FAT_32 && parentCluster == data->specific.fat32.rootDirCluster)
             parentCluster = 0;

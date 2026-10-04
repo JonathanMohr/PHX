@@ -56,6 +56,8 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesys
 
 PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer)
 {
+    if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
+
     PHX_Filesystem_FAT_Data* data = fs->data;
     PHX_Filesystem_FAT_Node_Extra* nodeExtra = file->extra;
     PHX_Filesystem_FAT_OpenNode_Extra* extra = openFile->extra;
@@ -226,6 +228,7 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
                         break;
                     if (PHX_Filesystem_FAT_WriteFAT(data, c, 0) != PHX_SUCCESS)
                         break;
+                    data->freeClusterCount++;
                     c = next;
                 }
             }

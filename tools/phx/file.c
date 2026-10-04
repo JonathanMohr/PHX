@@ -34,22 +34,6 @@ static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
     return PHX_TRUE;
 }
 
-static inline PHX_Bool PHX_File_Tell(FILE* file, uint64_t* outPos)
-{
-#ifdef _WIN32
-    const int64_t pos = _ftelli64(file);
-    if (pos < 0)
-        return PHX_FALSE;
-    *outPos = (uint64_t)pos;
-#else
-    const off_t pos = ftello(file);
-    if (pos < 0)
-        return PHX_FALSE;
-    *outPos = (uint64_t)pos;
-#endif
-    return PHX_TRUE;
-}
-
 static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
 {
     if (pos > INT64_MAX)
@@ -69,15 +53,8 @@ static PHX_BlockSize PHX_File_Read(PHX_BlockDevice* device, void* buffer, PHX_Bl
 {
     FILE* file = (FILE*)device->data;
 
-    PHX_BlockSize currentPos;
-    if (PHX_File_Tell(file, &currentPos) != PHX_TRUE)
+    if (PHX_File_Seek(file, block) != PHX_TRUE)
         return 0;
-
-    if (currentPos != block)
-    {
-        if (PHX_File_Seek(file, block) != PHX_TRUE)
-            return 0;
-    }
 
     uint8_t* buf = (uint8_t*)buffer;
     PHX_BlockSize remaining = count;
@@ -101,15 +78,8 @@ static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer,
 
     FILE* file = (FILE*)device->data;
 
-    PHX_BlockSize currentPos;
-    if (PHX_File_Tell(file, &currentPos) != PHX_TRUE)
+    if (PHX_File_Seek(file, block) != PHX_TRUE)
         return 0;
-
-    if (currentPos != block)
-    {
-        if (PHX_File_Seek(file, block) != PHX_TRUE)
-            return 0;
-    }
 
     uint8_t* buf = (uint8_t*)buffer;
     PHX_BlockSize remaining = count;
@@ -162,7 +132,7 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockD
     {
         if (get_file_size(path, &out->blockCount) != PHX_TRUE)
         {
-            fclose((FILE*)out->data);
+            fclose(file);
             result.msg = "Could not get size";
             result.code = PHX_ERROR_IO;
             return result;
@@ -185,8 +155,11 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockD
     out->readonly = readonly;
 
     PHX_Byte zero = 0;
-    (void)PHX_File_Seek(file, size - 1);
-    (void)fwrite(&zero, 1, 1, file);
+    if (size != PHX_FILE_SIZE_NONE)
+    {
+        (void)PHX_File_Seek(file, size - 1);
+        (void)fwrite(&zero, 1, 1, file);
+    }
 
     return result;
 }

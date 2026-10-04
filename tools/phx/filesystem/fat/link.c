@@ -10,7 +10,6 @@ PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node*
     return PHX_ERROR_NOT_SUPPORTED;
 }
 
-// TODO: Check
 PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Size* newReferenceCountOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
@@ -109,6 +108,7 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
 
             if (isLast == PHX_TRUE)
             {
+                memset(lfnChars, 0, sizeof(lfnChars));
                 lfnExpected = sequence;
                 lfnChecksum = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_CHE);
                 haveLfn = PHX_TRUE;
@@ -124,8 +124,6 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
             else
             {
                 lfnExpected = sequence;
-                lfnStartCluster = entryCluster;
-                lfnStartIndex = entryIndex;
                 lfnCount++;
             }
 
