@@ -146,6 +146,21 @@ int main(int argc, const char* argv[])
     }
 
 
+    PHX_Filesystem_Node rootNode;
+    if (filesystem.ops->getNode(&filesystem, filesystem.ops->rootNodeNumber, &rootNode) != PHX_SUCCESS)
+    {
+        fputs("Could not get root node\n", stderr);
+        goto cleanup;
+    }
+
+    if (filesystem.ops->createNode(&filesystem, &rootNode, PHX_FILESYSTEM_ENTRY_FILE, 0, "test.txt", PHX_NULL) != PHX_SUCCESS)
+    {
+        fputs("Could not create test.txt in root\n", stderr);
+        goto cleanup;
+    }
+
+
+cleanup:
     filesystem.ops->destroy(&filesystem);
     partitionDevice.close(&partitionDevice);
     PHX_Partition_CloseTable(&context, &partitionTable);

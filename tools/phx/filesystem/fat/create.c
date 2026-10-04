@@ -1,9 +1,6 @@
 #include "fat.h"
-#include "filesystem/fat/fat.h"
-#include "filesystem/filesystem.h"
-#include "types.h"
 
-// TODO: IMPORTANT: CHECK writeWithLFN
+// TODO: IMPORTANT: CHECK writeWithLFN and check if file already exists
 PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
@@ -32,7 +29,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
 
     namePtr = name;
     const char* lastPoint = PHX_NULL;
-    while (namePtr)
+    while (*namePtr)
     {
         if (*namePtr == '.') lastPoint = namePtr;
         namePtr++;
@@ -173,7 +170,6 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
         return result;
     }
-
 
     if (nodeOut)
     {
