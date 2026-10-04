@@ -15,7 +15,7 @@ PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, ch
 
         if (cp >= 0xD800 && cp <= 0xDBFF)
         {
-            if (i < count && units[i >= 0xDC00 && units[i] <= 0xDFFF])
+            if (i < count && units[i] >= 0xDC00 && units[i] <= 0xDFFF)
             {
                 cp = 0x10000 + ((cp - 0xD800) << 10) + (units[i] - 0xDC00);
                 i++;

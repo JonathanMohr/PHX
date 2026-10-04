@@ -56,7 +56,7 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesys
 
 PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer)
 {
-    if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
+    if (fs->readonly == PHX_TRUE) return 0;
 
     PHX_Filesystem_FAT_Data* data = fs->data;
     PHX_Filesystem_FAT_Node_Extra* nodeExtra = file->extra;

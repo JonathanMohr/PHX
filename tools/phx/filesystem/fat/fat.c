@@ -435,7 +435,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
-    data->totalClusters = (dataClusters - reservedSectors - fatSectors - rootDirSectors);
+    data->totalClusters = dataClusters;
 
     data->bytesPerSector = bytesPerSector;
     data->sectorsPerCluster = sectorsPerCluster;
@@ -624,13 +624,13 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (!usedDevice)
         {
             context->allocator.free(&context->allocator, data);
-            return PHX_ERROR_INTERNAL;
+            return PHX_ERROR_MEMORY;
         }
         if (PHX_BlockCountTransformDevice(context, device, bytesPerSector, PHX_FALSE, usedDevice) != PHX_TRUE)
         {
             context->allocator.free(&context->allocator, usedDevice);
             context->allocator.free(&context->allocator, data);
-            return PHX_ERROR_INTERNAL;
+            return PHX_ERROR_MEMORY; // TODO: Check
         }
 
         data->usedDevice = usedDevice;
@@ -837,10 +837,11 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         return PHX_ERROR_MEMORY;
     }
 
+    data->freeClusterCountKnown = PHX_TRUE;
+
     data->version = version;
 
     data->freeClusterCount = dataClusters - ((version == PHX_FILESYSTEM_FAT_32) ? 1 : 0);
-    if (version == PHX_FILESYSTEM_FAT_32) data->freeClusterCount--;
     data->nextFreeCluster = (version == PHX_FILESYSTEM_FAT_32) ? 3 : 2;
 
     data->fatSector = reservedSectors;
@@ -851,7 +852,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     data->bytesPerCluster = (PHX_u32)bytesPerSector * (PHX_u32)sectorsPerCluster;
     data->totalSectors = totalSectors;
-    data->totalClusters = (dataClusters - reservedSectors - fatSectors - rootDirSectors);
+    data->totalClusters = dataClusters;
 
 
     data->bytesPerSector = bytesPerSector;
@@ -1031,8 +1032,6 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         context->allocator.free(&context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
-
-    data->freeClusterCountKnown = PHX_TRUE;
 
     data->writeWithLFN = PHX_TRUE;
     data->readWithLFN = PHX_TRUE;

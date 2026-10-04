@@ -69,6 +69,9 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesyst
                 break;
             }
 
+            if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == '.' && (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1) == ' ' || (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1) == '.' && read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM + 2) == ' ')))
+                continue;
+
             entryCount++;
         }
 
