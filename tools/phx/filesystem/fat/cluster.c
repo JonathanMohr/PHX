@@ -282,6 +282,8 @@ PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PH
     if ((result = PHX_Filesystem_FAT_WriteFAT(data, previousCluster, PHX_FILESYSTEM_FAT_CLUSTER_VALUE_EOC)) != PHX_SUCCESS)
         return result;
 
+    data->freeClusterCount--;
+
     data->nextFreeCluster = previousCluster + 1;
     if (data->nextFreeCluster > maxCluster)
         data->nextFreeCluster = 2;

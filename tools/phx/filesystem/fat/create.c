@@ -58,7 +58,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     const PHX_u32 totalEntries = lfnSlotCount + 1;
     const PHX_Byte lfnChecksum = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
 
-    const PHX_Bool isDir = (type == PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY) ? PHX_TRUE : PHX_FALSE;
+    const PHX_Bool isDir = (type == PHX_FILESYSTEM_ENTRY_DIRECTORY) ? PHX_TRUE : PHX_FALSE;
     PHX_u32 cluster = 0;
 
 
@@ -72,7 +72,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         return result;
     }
 
-    if (isDir)
+    if (isDir == PHX_TRUE)
     {
         if ((result = PHX_Filesystem_FAT_FindFreeClusters(data, 1, &cluster)) != PHX_SUCCESS)
         {
@@ -97,7 +97,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         write_u16(dot + PHX_FILESYSTEM_FAT_DIRENT_LMT, 0);
         write_u16(dot + PHX_FILESYSTEM_FAT_DIRENT_LMD, 0);
         write_u16(dot + PHX_FILESYSTEM_FAT_DIRENT_FCL, (PHX_u16)(cluster & 0xFFFF));
-        write_u32(dot + PHX_FILESYSTEM_FAT_DIRENT_FCL, 0);
+        write_u32(dot + PHX_FILESYSTEM_FAT_DIRENT_FIS, 0);
 
         // TODO: Check
         PHX_u32 parentCluster = dirExtra->startCluster;
@@ -105,7 +105,8 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
             parentCluster = 0;
 
         *(dotdot + PHX_FILESYSTEM_FAT_DIRENT_NAM) = '.';
-        memset(dotdot + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1, ' ', 10);
+        *(dotdot + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1) = '.';
+        memset(dotdot + PHX_FILESYSTEM_FAT_DIRENT_NAM + 2, ' ', 9);
         write_u8(dotdot + PHX_FILESYSTEM_FAT_DIRENT_ATR, PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY);
         write_u8(dotdot + PHX_FILESYSTEM_FAT_DIRENT_RES, 0);
         write_u8(dotdot + PHX_FILESYSTEM_FAT_DIRENT_CTT, 0);
@@ -116,10 +117,14 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
         write_u16(dotdot + PHX_FILESYSTEM_FAT_DIRENT_LMT, 0);
         write_u16(dotdot + PHX_FILESYSTEM_FAT_DIRENT_LMD, 0);
         write_u16(dotdot + PHX_FILESYSTEM_FAT_DIRENT_FCL, (PHX_u16)(parentCluster & 0xFFFF));
-        write_u32(dotdot + PHX_FILESYSTEM_FAT_DIRENT_FCL, 0);
+        write_u32(dotdot + PHX_FILESYSTEM_FAT_DIRENT_FIS, 0);
 
         if (data->usedDevice->write(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
         {
+            (void)PHX_Filesystem_FAT_WriteFAT(data, cluster, 0);
+            data->freeClusterCount++;
+            if (cluster < data->nextFreeCluster) data->nextFreeCluster = cluster;
+
             if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
             return PHX_ERROR_IO;
         }
@@ -161,12 +166,19 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
             write_u16(entry + PHX_FILESYSTEM_FAT_DIRENT_LMT, 0);
             write_u16(entry + PHX_FILESYSTEM_FAT_DIRENT_LMD, 0);
             write_u16(entry + PHX_FILESYSTEM_FAT_DIRENT_FCL, (PHX_u16)(cluster & 0xFFFF));
-            write_u32(entry + PHX_FILESYSTEM_FAT_DIRENT_FCL, 0);
+            write_u32(entry + PHX_FILESYSTEM_FAT_DIRENT_FIS, 0);
         }
     }
 
     if ((result = PHX_Filesystem_FAT_WriteEntries(fs, entryCluster, entryIndex, entries, totalEntries)) != PHX_SUCCESS)
     {
+        if (isDir == PHX_TRUE)
+        {
+            (void)PHX_Filesystem_FAT_WriteFAT(data, cluster, 0);
+            data->freeClusterCount++;
+            if (cluster < data->nextFreeCluster) data->nextFreeCluster = cluster;
+        }
+
         if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
         return result;
     }
