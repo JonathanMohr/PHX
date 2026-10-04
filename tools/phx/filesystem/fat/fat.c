@@ -19,7 +19,7 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_NULL, // PHX_Filesystem_FAT_File_Write,
     PHX_NULL, // PHX_Filesystem_FAT_File_Seek,
 
-    PHX_NULL, // PHX_Filesystem_FAT_CreateNode,
+    PHX_Filesystem_FAT_CreateNode,
 
     PHX_Filesystem_FAT_LinkEntry,
     PHX_Filesystem_FAT_UnlinkEntry,
