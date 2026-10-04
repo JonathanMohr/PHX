@@ -3,9 +3,12 @@
 #include "filesystem/filesystem.h"
 #include "types.h"
 
+// TODO: IMPORTANT: CHECK writeWithLFN
 PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
 {
+    if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     PHX_Result result;
+
     PHX_Filesystem_FAT_Data* data = fs->data;
 
     PHX_Filesystem_FAT_Node_Extra* dirExtra = dir->extra;

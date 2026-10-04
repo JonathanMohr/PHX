@@ -6,29 +6,29 @@
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_Filesystem_FAT_ChangeBootsector,
     PHX_Filesystem_FAT_Destroy,
-    
+
     PHX_Filesystem_FAT_GetNode,
     PHX_Filesystem_FAT_RemoveNode,
     PHX_Filesystem_FAT_CleanupNode,
 
-    PHX_NULL, // PHX_Filesystem_FAT_Dir_GetEntryCount,
-    PHX_NULL, // PHX_Filesystem_FAT_Dir_ReadEntry,
-    PHX_NULL, // PHX_Filesystem_FAT_Dir_LookupEntry,
+    PHX_Filesystem_FAT_Dir_GetEntryCount,
+    PHX_Filesystem_FAT_Dir_ReadEntry,
+    PHX_Filesystem_FAT_Dir_LookupEntry,
 
-    PHX_NULL, // PHX_Filesystem_FAT_File_Read,
-    PHX_NULL, // PHX_Filesystem_FAT_File_Write,
-    PHX_NULL, // PHX_Filesystem_FAT_File_Seek,
+    PHX_Filesystem_FAT_File_Read,
+    PHX_Filesystem_FAT_File_Write,
+    PHX_Filesystem_FAT_File_Seek,
 
     PHX_Filesystem_FAT_CreateNode,
 
     PHX_Filesystem_FAT_LinkEntry,
     PHX_Filesystem_FAT_UnlinkEntry,
-    PHX_NULL, // PHX_Filesystem_FAT_MoveEntry,
+    PHX_Filesystem_FAT_MoveEntry,
 
     PHX_Filesystem_FAT_CreateOpenNode,
     PHX_Filesystem_FAT_CloseOpenNode,
     PHX_Filesystem_FAT_ResetOpenNode,
-    
+
     PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT
 };
 

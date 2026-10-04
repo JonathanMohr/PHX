@@ -62,13 +62,13 @@ struct PHX_Filesystem_Operations
     void (*cleanupNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
 
     // Directories
-    PHX_Filesystem_Size (*dir_getEntryCount)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir);
+    PHX_Result (*dir_getEntryCount)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u64* entryCountOut);
     PHX_Result (*dir_readEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut);
     PHX_Result (*dir_lookupEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut);
 
     // Files
-    PHX_Result (*file_read)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, void* buffer);
-    PHX_Result (*file_write)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer);
+    PHX_Filesystem_Size (*file_read)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, void* buffer);
+    PHX_Filesystem_Size (*file_write)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer);
     PHX_Result (*file_seek)(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size pos);
 
     // General
@@ -76,7 +76,7 @@ struct PHX_Filesystem_Operations
 
     PHX_Result (*linkEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target);
     PHX_Result (*unlinkEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Size* newReferenceCountOut);
-    PHX_Result (*moveEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName);
+    PHX_Result (*moveEntry)(PHX_Filesystem* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_NodeNumber* newNumberOut);
 
     PHX_Result (*createOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
     PHX_Result (*closeOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);

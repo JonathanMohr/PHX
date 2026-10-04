@@ -1,29 +1,18 @@
 #include "fat.h"
-#include "types.h"
 
-PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target)
-{
-    if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
-    (void)dir;
-    (void)name;
-    (void)target;
-    return PHX_ERROR_NOT_SUPPORTED;
-}
-
-// TODO: Check
-PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Size* newReferenceCountOut)
+PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_NodeNumber* newNumberOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     PHX_Result result;
 
     PHX_Filesystem_FAT_Data* data = fs->data;
-    PHX_Filesystem_FAT_Node_Extra* dirExtra = dir->extra;
+    PHX_Filesystem_FAT_Node_Extra* srcDirExtra = srcDir->extra;
 
-    const PHX_Bool rootDirectory = (dir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version != PHX_FILESYSTEM_FAT_32);
+    const PHX_Bool srcRootDirectory = (srcDir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version != PHX_FILESYSTEM_FAT_32);
 
     const PHX_u32 entriesPerCluster = data->bytesPerCluster / PHX_FILESYSTEM_FAT_DIRENT_SIZE;
 
-    PHX_u32 cluster = dirExtra->startCluster;
+    PHX_u32 cluster = srcDirExtra->startCluster;
     PHX_u32 pos = 0;
 
     PHX_u32 lfnStartCluster = 0;
@@ -35,16 +24,29 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
     PHX_Byte lfnChecksum = 0;
     PHX_Byte haveLfn = PHX_FALSE;
 
+    PHX_Bool found = PHX_FALSE;
+    PHX_Byte mainEntry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u32 srcStartCluster = 0;
+    PHX_u32 srcStartIndex = 0;
+    PHX_u32 srcTotalCount = 0;
+
+    const char* namePtr = dstName;
+    while (*namePtr)
+        namePtr++;
+
+    if ((namePtr - dstName) > 255)
+        return PHX_ERROR_NAME_TOO_LONG;
+
     while (1)
     {
         PHX_u32 entryCluster;
         PHX_u32 entryIndex;
         PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
-        if (rootDirectory)
+        if (srcRootDirectory)
         {
             if (pos >= data->specific.fat12_16.rootDirEntryCount)
-                return PHX_ERROR_NOT_FOUND;
+                break;
 
             entryIndex = pos;
             entryCluster = 0;
@@ -84,7 +86,7 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
         pos++;
 
         if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_FREE)
-            return PHX_ERROR_NOT_FOUND;
+            break;
 
         if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_DELETED)
         {
@@ -155,26 +157,101 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Nod
             PHX_Filesystem_FAT_BuildShortName(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, candidateName);
         }
 
-        if (PHX_Filesystem_FAT_NameEquals(candidateName, name))
+        if (PHX_Filesystem_FAT_NameEquals(candidateName, srcName))
         {
-            const PHX_u32 startCluster = (useLfn == PHX_TRUE) ? lfnStartCluster : entryCluster;
-            const PHX_u32 startIndex = (useLfn == PHX_TRUE) ? lfnStartIndex : entryIndex;
-            const PHX_u32 totalCount = (useLfn == PHX_TRUE) ? (lfnCount + 1) : 1;
+            found = PHX_TRUE;
+            memcpy(mainEntry, entry, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
 
-            PHX_Byte deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
-            for (PHX_u32 i = 0; i < totalCount; i++)
+            if (useLfn == PHX_TRUE)
             {
-                memset(&deletedSlots[i], 0, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
-                *(deletedSlots[i] + PHX_FILESYSTEM_FAT_DIRENT_NAM) = PHX_FILESYSTEM_FAT_ENTRY_DELETED;
+                srcStartCluster = lfnStartCluster;
+                srcStartIndex = lfnStartIndex;
+                srcTotalCount = lfnCount + 1;
+            }
+            else
+            {
+                srcStartCluster = entryCluster;
+                srcStartIndex = entryIndex;
+                srcTotalCount = 1;
             }
 
-            if ((result = PHX_Filesystem_FAT_WriteEntries(fs, startCluster, startIndex, deletedSlots, totalCount)) != PHX_SUCCESS)
-                return result;
-
-            *newReferenceCountOut = 0;
-            return PHX_SUCCESS;
+            break;
         }
 
         haveLfn = PHX_FALSE;
     }
+
+    if (found != PHX_TRUE)
+        return PHX_ERROR_NOT_FOUND;
+
+
+    PHX_u16 utf16Name[20 * 13];
+    PHX_u32 utf16Count = PHX_Filesystem_FAT_UTF8_To_UTF16(dstName, (PHX_u32)(namePtr - dstName), utf16Name, 255);
+    utf16Name[utf16Count++] = 0;
+
+    namePtr = dstName;
+    const char* lastPoint = PHX_NULL;
+    while (namePtr)
+    {
+        if (*namePtr == '.') lastPoint = namePtr;
+        namePtr++;
+    }
+
+    char firstChars[8] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+    char ext[3] = {' ', ' ', ' '};
+
+    PHX_Filesystem_FAT_GetShortNameCharacters(dstName, lastPoint, 8, firstChars);
+    if (lastPoint)
+        PHX_Filesystem_FAT_GetShortNameCharacters(lastPoint + 1, PHX_NULL, 3, ext);
+
+    char hash[4];
+    PHX_u32 rawHash = PHX_Filesystem_FAT_HashName(dstName);
+    PHX_Filesystem_FAT_HashToChars(rawHash, hash);
+
+    char shortName[11];
+    if ((result = PHX_Filesystem_FAT_GenerateShortName(fs, dstDir, firstChars, hash, ext, shortName)) != PHX_SUCCESS)
+        return result;
+
+    const PHX_u32 lfnSlotCount = (utf16Count + 13 - 1) / 13;
+    const PHX_u32 totalEntries = lfnSlotCount + 1;
+    const PHX_Byte lfnChecksumNew = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
+
+    PHX_u32 entryCluster;
+    PHX_u32 entryIndex;
+    PHX_u32 mainEntryCluster;
+    PHX_u32 mainEntryIndex;
+    if ((result = PHX_Filesystem_FAT_FindFreeEntrySlots(fs, dstDir, totalEntries, &entryCluster, &entryIndex, &mainEntryCluster, &mainEntryIndex)) != PHX_SUCCESS)
+        return result;
+
+    PHX_Byte entries[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    for (PHX_u32 i = 0; i < totalEntries; i++)
+    {
+        if (i < totalEntries - 1)
+        {
+            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, utf16Count, lfnSlotCount, i, lfnChecksumNew, entries[i]);
+        }
+        else
+        {
+            PHX_Byte* entry = entries[i];
+            memcpy(entry, mainEntry, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
+            memcpy(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, shortName, 8);
+            memcpy(entry + PHX_FILESYSTEM_FAT_DIRENT_EXT, shortName + 8, 3);
+        }
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteEntries(fs, entryCluster, entryIndex, entries, totalEntries)) != PHX_SUCCESS)
+        return result;
+
+    PHX_Byte deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    for (PHX_u32 i = 0; i < srcTotalCount; i++)
+    {
+        memset(&deletedSlots[i], 0, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
+        *(deletedSlots[i] + PHX_FILESYSTEM_FAT_DIRENT_NAM) = PHX_FILESYSTEM_FAT_ENTRY_DELETED;
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteEntries(fs, srcStartCluster, srcStartIndex, deletedSlots, srcTotalCount)) != PHX_SUCCESS)
+        return result;
+
+    *newNumberOut = ((PHX_u64)mainEntryCluster << 32) | mainEntryIndex;
+    return PHX_SUCCESS;
 }

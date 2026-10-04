@@ -75,7 +75,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
 
     if (cluster == 0)
     {
-        if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntry(data, index, entry)) != PHX_SUCCESS)
+        if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntries(data, index, 1, entry)) != PHX_SUCCESS)
         {
             fs->context->allocator.free(&fs->context->allocator, extra);
             return result;
