@@ -175,6 +175,8 @@ PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem* fs, PHX_Filesyst
     // 1
     memcpy(shortName, firstChars, 8);
     memcpy(shortName + 8, ext, 3);
+    if (shortName[0] == ' ')
+        shortName[0] = '_';
     if ((result = shortNameExists(fs, dir, shortName, &exists)) != PHX_SUCCESS)
         return result;
 
