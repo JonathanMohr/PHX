@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "result.h"
 
 PHX_u32 PHX_Filesystem_FAT_Cluster(PHX_Filesystem_FAT_Version version, PHX_u32 cluster)
 {
@@ -287,4 +288,33 @@ PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PH
 
     *outFirstCluster = firstCluster;
     return PHX_SUCCESS;
+}
+
+PHX_Result PHX_Filesystem_FAT_AppendClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 lastCluster, PHX_u32 count, PHX_u32* firstNewClusterOut)
+{
+    PHX_Result result;
+
+    PHX_u32 firstNew;
+    if ((result = PHX_Filesystem_FAT_FindFreeClusters(data, count, &firstNew)) != PHX_SUCCESS)
+        return result;
+
+    PHX_u32 cluster = firstNew;
+    for (PHX_u32 i = 0; i < count; i++)
+    {
+        memset(data->clusterBuffer, 0, data->bytesPerCluster);
+        if (data->usedDevice->write(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
+            return PHX_ERROR_IO;
+
+        if (i + 1 < count)
+        {
+            if ((result = PHX_Filesystem_FAT_ReadFAT(data, cluster, &cluster)) != PHX_SUCCESS)
+                return result;
+        }
+    }
+
+    if ((result = PHX_Filesystem_FAT_WriteFAT(data, lastCluster, firstNew)) != PHX_SUCCESS)
+        return result;
+
+    *firstNewClusterOut = firstNew;
+    return PHX_TRUE;
 }

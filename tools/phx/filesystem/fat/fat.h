@@ -369,6 +369,7 @@ PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* 
 PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_Byte* entries);
 
 PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
+PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut);
 
 static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
 {
@@ -376,10 +377,12 @@ static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FA
 }
 
 PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 count, PHX_u32* outFirstCluster);
+PHX_Result PHX_Filesystem_FAT_AppendClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 lastCluster, PHX_u32 count, PHX_u32* firstNewClusterOut);
 
 
 void PHX_Filesystem_FAT_LFN_ExtractChars(const PHX_Byte* lfn, PHX_u16 out[13]);
 PHX_Byte PHX_Filesystem_FAT_LFN_Checksum(const PHX_Byte shortName[11]);
+void PHX_Filesystem_FAT_LFN_BuildEntry(const PHX_u16* utf16Name, PHX_u32 totalChars, PHX_u32 totalSlots, PHX_u32 slotIndex, PHX_Byte checksum, PHX_Byte* entryOut);
 
 PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b);
 void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13]);

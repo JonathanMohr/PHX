@@ -66,7 +66,11 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     PHX_u32 entryIndex;
     PHX_u32 mainEntryCluster;
     PHX_u32 mainEntryIndex;
-    // TODO: FindFreeEntrySlots
+    if ((result = PHX_Filesystem_FAT_FindFreeEntrySlots(fs, dir, totalEntries, &entryCluster, &entryIndex, &mainEntryCluster, &mainEntryIndex)) != PHX_SUCCESS)
+    {
+        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+        return result;
+    }
 
     if (isDir)
     {
@@ -127,7 +131,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     {
         if (i < totalEntries - 1)
         {
-            // TODO: Fill LFN entry
+            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, utf16Count, lfnSlotCount, i, lfnChecksum, entries[i]);
         }
         else
         {
