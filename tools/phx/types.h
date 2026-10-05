@@ -16,6 +16,11 @@ typedef size_t PHX_Size;
 typedef uint64_t PHX_BlockSize;
 typedef uint64_t PHX_BlockByteSize;
 typedef uint64_t PHX_PartitionSize;
+typedef uint64_t PHX_AnySize;
+
+#define PHX_BLOCKSIZE_MAX 0xFFFFFFFFFFFFFFFF
+#define PHX_PARTITIONSIZE_MAX 0xFFFFFFFFFFFFFFFF
+
 
 typedef uint8_t PHX_Byte;
 typedef uint16_t PHX_u16;
