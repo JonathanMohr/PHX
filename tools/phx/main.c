@@ -126,6 +126,7 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
         return 0;
     }
 
+    *overflow = PHX_FALSE;
     return result + frac;
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
@@ -222,7 +223,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         const char* sizeStr = args[2];
 
         PHX_Bool overflow;
-        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
+        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
         
         if (overflow == PHX_TRUE)
         {
@@ -592,7 +593,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             table.partitions = newPartitions;
             PHX_Partition* newPartition = &table.partitions[table.partitionCount++];
 
-            newPartition->start = PHX_Size_FromStr(startStr, &overflow, PHX_BlockSize);
+            newPartition->start = PHX_Size_FromStr(startStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of start\n", stderr);
@@ -602,7 +603,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            newPartition->size = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
+            newPartition->size = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of size\n", stderr);
