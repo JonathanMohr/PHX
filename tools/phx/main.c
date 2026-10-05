@@ -147,7 +147,7 @@ static void print_help(const char* name)
     fputs("  > info <image>                       Print information about the disk image\n", stream);
 
 
-    fputs("\nArea \"partition\":\n", stream);
+    fputs("\nArea \"partition\":\n", stream); // TODO: Maybe more like "partition-table"
     fputs("  Commands:\n", stream);
     fputs("  > list                               List supported interfaces\n", stream);
     fputs("  > info <image>                       Print information about the partition table\n", stream);
@@ -155,6 +155,7 @@ static void print_help(const char* name)
     fputs("  > add <image> <type> <start> <size>  Add partition to partition table\n", stream);
     fputs("  > remove <image> <index>             Remove partition from partition table\n", stream);
     fputs("  > bootsector <image> <file>          Set bootsector of partition table\n", stream);
+    // TODO: set bootsector of partition
     // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
     // TODO: read and write on both partition and/or disk
     
