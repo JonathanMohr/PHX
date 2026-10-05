@@ -507,7 +507,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 fprintf(stdout, "      Size: %" PRIu64 "\n", partition->size);
 
                 fputs("      Flags:", stdout);
-                if (partition->flags | PHX_PARTITION_BOOTABLE)
+                if (partition->flags & PHX_PARTITION_BOOTABLE)
                     fputs(" BOOTABLE", stdout);
                 fputc('\n', stdout);
 
