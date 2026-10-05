@@ -103,7 +103,7 @@ static void PHX_File_Close(PHX_BlockDevice* device)
 
 PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size)
 {
-    PHX_DetailedResult result = {PHX_SUCCESS, PHX_NULL};
+    PHX_DetailedResult result = {PHX_SUCCESS, "?"};
 
     const char* mode;
     if (size != PHX_FILE_SIZE_NONE)

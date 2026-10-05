@@ -16,8 +16,8 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
     if (PHX_BlockCountTransformDevice(context, device, blockSize, PHX_TRUE, out) != PHX_TRUE)
         return PHX_FALSE;
 
-    // TODO: Type
-
+    // TODO: That's just ugly...
+    out->type = RAW_Type;
     out->readonly = readonly;
 
     return PHX_TRUE;
@@ -71,6 +71,6 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
 PHX_Disk_Interface PHX_RAW_Interface = {
     PHX_RAW_GetDevice,
     PHX_RAW_FormatDevice,
-    RAW_Type,
-    "RAW-DISK-INTERFACE"
+    "RAW-DISK-INTERFACE",
+    "raw"
 };

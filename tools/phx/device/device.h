@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <types.h>
+#include <result.h>
 
 /*
     List of dynamic container formats:
@@ -43,8 +44,8 @@ typedef struct PHX_Disk_Interface
     PHX_Bool (*getDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
     PHX_Bool (*formatDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
 
-    const char* type;
     const char* name;
+    const char* type;
 } PHX_Disk_Interface;
 
 

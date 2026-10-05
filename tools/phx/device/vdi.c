@@ -21,6 +21,6 @@ static PHX_Bool PHX_VDI_FormatDevice(PHX_Context* context, PHX_BlockDevice* devi
 PHX_Disk_Interface PHX_VDI_Interface = {
     PHX_VDI_GetDevice,
     PHX_VDI_FormatDevice,
-    "VDI-DISK",
-    "VDI-DISK-INTERFACE"
+    "VDI-DISK-INTERFACE",
+    "vdi"
 };

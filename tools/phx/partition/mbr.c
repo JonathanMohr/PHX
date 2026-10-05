@@ -325,16 +325,14 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
 
 static void MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
 {
-    const PHX_BlockSize startUsable = (1048576 + device->blockSize - 1) / device->blockSize; // 1 MiB
-
     outTable->partitions = PHX_NULL;
     outTable->partitionCount = 0;
     outTable->maxPartitionCount = 4;
     outTable->signature = PHX_Context_GetRandomU32(context);
     while (outTable->signature == 0)
         outTable->signature = PHX_Context_GetRandomU32(context);
-    outTable->startUsable = startUsable;
-    outTable->sizeUsable = (device->blockCount > startUsable) ? device->blockCount - startUsable : 0;
+    outTable->startUsable = 1;
+    outTable->sizeUsable = device->blockCount - 1;
     memcpy(outTable->bootsector, binary_file_data, 512);
 }
 
