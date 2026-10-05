@@ -1057,6 +1057,6 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 PHX_Filesystem_Interface PHX_Filesystem_FAT_Interface = {
     PHX_Filesystem_FAT_OpenFilesystem,
     PHX_Filesystem_FAT_FormatFilesystem,
-    PHX_FILESYSTEM_FAT_TYPE,
-    "FAT-FILESYSTEM-INTERFACE"
+    "FAT-FILESYSTEM-INTERFACE",
+    "fat"
 };

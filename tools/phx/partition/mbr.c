@@ -231,14 +231,12 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
         currentPartitionCount++;
     }
 
-    const PHX_BlockSize startUsable = (1048576 + device->blockSize - 1) / device->blockSize; // 1 MiB
-
     outTable->partitions = partitions;
     outTable->partitionCount = partitionCount;
     outTable->maxPartitionCount = 4;
     outTable->signature = diskSignature;
-    outTable->startUsable = startUsable;
-    outTable->sizeUsable = (device->blockCount > startUsable) ? device->blockCount - startUsable : 0;
+    outTable->startUsable = 1;
+    outTable->sizeUsable = device->blockCount - 1;
 
     memcpy(outTable->bootsector, bootsectorBuffer, 512);
 
@@ -341,5 +339,6 @@ PHX_Partition_Interface PHX_Partition_MBR_Interface = {
     MBR_WriteTable,
     MBR_DefaultTable,
     MBR_TYPE,
-    "MBR-PARTITION-TABLE-INTERFACE"
+    "MBR-PARTITION-TABLE-INTERFACE",
+    "mbr"
 };

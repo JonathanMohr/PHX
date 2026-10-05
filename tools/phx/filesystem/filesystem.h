@@ -107,8 +107,8 @@ typedef struct PHX_Filesystem_Interface
     PHX_Result (*openFilesystem)(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, PHX_Bool readonly);
     PHX_Result (*formatFilesystem)(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector);
 
-    const char* type;
     const char* name;
+    const char* type;
 } PHX_Filesystem_Interface;
 
 extern PHX_Filesystem_Interface* PHX_Filesystem_Interfaces[];

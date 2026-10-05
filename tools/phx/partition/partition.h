@@ -49,8 +49,9 @@ typedef struct PHX_Partition_Interface
     PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table);
     void (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
 
-    const char* type;
+    const char* partitionType;
     const char* name;
+    const char* type;
 } PHX_Partition_Interface;
 
 extern PHX_Partition_Interface* PHX_Partition_Interfaces[];
