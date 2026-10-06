@@ -118,6 +118,9 @@ extern PHX_Filesystem_Interface* PHX_Filesystem_Interfaces[];
 extern PHX_Size PHX_Filesystem_InterfaceCount;
 
 
+PHX_Result PHX_Filesystem_GetEntry(PHX_Filesystem* fs, const char* path);
+
+
 #ifdef __cplusplus
 }
 #endif
