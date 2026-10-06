@@ -250,7 +250,7 @@ static void print_help(const char* name)
     fprintf(stream, "Usage:\n  %s <area> <command> [...]\n  %s <direct command> [...]", name, name);
 
     fputs("\nMeanings:\n", stream);
-    fputs("  Image                                  Path referencing a file with any disk image format (or)\n", stream);
+    fputs("  Image                                  Path referencing a file with any disk image format\n", stream);
     fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
     fputs("  Format                                 Type specifier for the interface\n", stream);
     // TODO: Size, file, index
