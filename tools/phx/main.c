@@ -252,11 +252,11 @@ static void print_help(const char* name)
     fputs("\nMeanings:\n", stream);
     fputs("  Image                                  Path referencing a file with any disk image format (or)\n", stream);
     fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)", stream);
-    fputs("  Format                                 Type specifier for interface\n", stream);
+    fputs("  Format                                 Type specifier for the interface\n", stream);
     // TODO: Size, file, index
 
     fputs("\nDirect commands:\n", stream);
-    fputs("\n  > help/-h                            Print this message\n", stream);
+    fputs("  > help/-h                            Print this message\n", stream);
     // TODO: fputs("\n  > version/-v                         Print version message\n", stream);
 
     fputs("\nArea \"disk\":\n", stream);
@@ -274,16 +274,19 @@ static void print_help(const char* name)
     fputs("  > add <image> <type> <start> <size>    Add partition to partition table\n", stream);
     fputs("  > remove <image> <index>               Remove partition from partition table\n", stream);
     fputs("  > bootsector <image> <file>            Set bootsector of partition table\n", stream);
-
-    // TODO: set bootsector of partition
     // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
-    // TODO: read and write on both partition and/or disk
-    
+
     fputs("  Types:\n", stream);
     fputs("  - unknown\n", stream);
     fputs("  - fat12\n", stream);
     fputs("  - fat16\n", stream);
     fputs("  - fat32\n", stream);
+
+
+    fputs("\nArea \"filesystem\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
 
 
     fputs("\nArea \"raw\":\n", stream);
@@ -308,7 +311,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         for (PHX_Size i = 0; i < PHX_Disk_InterfaceCount; i++)
         {
             PHX_Disk_Interface* interface = PHX_Disk_Interfaces[i];
-            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
+            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i + 1, interface->name, interface->type);
         }
 
         return 0;
@@ -461,8 +464,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     {
         for (PHX_Size i = 0; i < PHX_Partition_InterfaceCount; i++)
         {
-            PHX_Partition_Interface* interface =PHX_Partition_Interfaces[i];
-            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
+            PHX_Partition_Interface* interface = PHX_Partition_Interfaces[i];
+            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i + 1, interface->name, interface->type);
         }
 
         return 0;
@@ -576,7 +579,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             PHX_Partition_Interface* interface = PHX_Partition_FindInterfaceByType(format);
             if (!interface)
             {
-                fprintf(stderr, "Could not find disk interface for format \"%s\"\n", format);
+                fprintf(stderr, "Could not find partition interface for format \"%s\"\n", format);
                 
                 diskDevice.close(&diskDevice);
                 return 1;
@@ -798,6 +801,108 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     return 0;
 }
 
+static int filesystem(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
+{
+    PHX_Result result;
+    //PHX_DetailedResult detailedResult;
+
+    int fixedArgCount;
+    enum
+    {
+        PHX_COMMAND_FILESYSTEM_FORMAT,
+    } command;
+
+    if (strcmp(commandStr, "list") == 0)
+    {
+        for (PHX_Size i = 0; i < PHX_Filesystem_InterfaceCount; i++)
+        {
+            PHX_Filesystem_Interface* interface =PHX_Filesystem_Interfaces[i];
+            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i + 1, interface->name, interface->type);
+        }
+
+        return 0;
+    }
+
+    if (strcmp(commandStr, "format") == 0)
+    {
+        fixedArgCount = 1;
+        command = PHX_COMMAND_FILESYSTEM_FORMAT;
+    }
+    else
+    {
+        print_help(executable);
+        return 1;
+    }
+
+    if (argCount < fixedArgCount)
+    {
+        print_help(executable);
+        return 1;
+    }
+
+    const char* deviceStr = args[0];
+
+    PHX_BlockDevice inFileDevice;
+    PHX_BlockDevice diskDevice;
+    PHX_BlockDevice partitionDevice;
+    PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    if (!device) return 1;
+
+    PHX_Filesystem filesystem;
+    if (command == PHX_COMMAND_FILESYSTEM_FORMAT)
+    {
+        const char* format = args[1];
+        PHX_Filesystem_Interface* interface = PHX_Filesystem_FindInterfaceByType(format);
+        if (!interface)
+        {
+            fprintf(stderr, "Could not find filesystem interface for format \"%s\"\n", format);
+            
+            device->close(device);
+            if (device == &partitionDevice)
+                diskDevice.close(&diskDevice);
+            return 1;
+        }
+
+        if ((result = interface->formatFilesystem(context, device, &filesystem, PHX_NULL)) != PHX_SUCCESS)
+        {
+            fputs("Error while formatting filesystem\n", stderr);
+            
+            device->close(device);
+            if (device == &partitionDevice)
+                diskDevice.close(&diskDevice);
+            return 1;
+        }
+    }
+    else
+    {
+        if ((result = PHX_Filesystem_Open(context, device, &filesystem)) != PHX_SUCCESS)
+        {
+            if (result == PHX_ERROR_FORMAT)
+                fputs("Unknown format of filesystem\n", stderr);
+            else
+                fputs("Error while opening filesystem\n", stderr);
+
+            device->close(device);
+            if (device == &partitionDevice)
+                diskDevice.close(&diskDevice);
+            return 1;
+        }
+    }
+
+    switch (command)
+    {
+        case PHX_COMMAND_FILESYSTEM_FORMAT:
+            break;
+    }
+
+    filesystem.ops->destroy(&filesystem);
+    device->close(device);
+    if (device == &partitionDevice)
+        diskDevice.close(&diskDevice);
+
+    return 0;
+}
+
 static int raw(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
 {
     PHX_DetailedResult detailedResult;
@@ -991,6 +1096,8 @@ int main(int argc, const char* argv[])
         return disk(&context, executable, command, argc - 3, argv + 3);
     if (strcmp(area, "partition") == 0)
         return partition(&context, executable, command, argc - 3, argv + 3);
+    if (strcmp(area, "filesystem") == 0)
+        return filesystem(&context, executable, command, argc - 3, argv + 3);
     if (strcmp(area, "raw") == 0)
         return raw(&context, executable, command, argc - 3, argv + 3);
     

@@ -1,4 +1,5 @@
 #include "disk.h"
+#include "filesystem/filesystem.h"
 
 #include <string.h>
 
@@ -51,6 +52,39 @@ PHX_Result PHX_Partition_Open(PHX_Context* context, PHX_BlockDevice* diskDevice,
             *interfaceOut = interface;
             return PHX_SUCCESS;
         }
+    }
+
+    return PHX_ERROR_FORMAT;
+}
+
+
+PHX_Filesystem_Interface* PHX_Filesystem_FindInterfaceByType(const char* type)
+{
+    for (PHX_Size i = 0; i < PHX_Filesystem_InterfaceCount; i++)
+    {
+        PHX_Filesystem_Interface* interface = PHX_Filesystem_Interfaces[i];
+
+        if (strcmp(interface->type, type) == 0)
+            return interface;
+    }
+
+    return PHX_NULL;
+}
+
+PHX_Result PHX_Filesystem_Open(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* filesystemOut)
+{
+    for (PHX_Size i = 0; i < PHX_Filesystem_InterfaceCount; i++)
+    {
+        PHX_Filesystem_Interface* interface = PHX_Filesystem_Interfaces[i];
+
+        PHX_Result result = interface->openFilesystem(context, device, filesystemOut, PHX_FALSE);
+        if (result == PHX_SUCCESS)
+            return PHX_SUCCESS;
+
+        if (result == PHX_ERROR_FORMAT)
+            continue;
+
+        return result;
     }
 
     return PHX_ERROR_FORMAT;
