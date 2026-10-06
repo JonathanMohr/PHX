@@ -4,6 +4,8 @@
 #include <embed/fat.h>
 
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
+    PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT,
+    
     PHX_Filesystem_FAT_ChangeBootsector,
     PHX_Filesystem_FAT_Destroy,
 
@@ -27,9 +29,7 @@ static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
 
     PHX_Filesystem_FAT_CreateOpenNode,
     PHX_Filesystem_FAT_CloseOpenNode,
-    PHX_Filesystem_FAT_ResetOpenNode,
-
-    PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT
+    PHX_Filesystem_FAT_ResetOpenNode
 };
 
 

@@ -251,7 +251,7 @@ static void print_help(const char* name)
 
     fputs("\nMeanings:\n", stream);
     fputs("  Image                                  Path referencing a file with any disk image format (or)\n", stream);
-    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)", stream);
+    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
     fputs("  Format                                 Type specifier for the interface\n", stream);
     // TODO: Size, file, index
 
