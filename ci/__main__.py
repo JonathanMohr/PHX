@@ -434,7 +434,7 @@ def main() -> bool:
                 lto=True, # set
                 pic=False, # set
                 hidden=False, # set
-                optimization=OPTIMIZATION.SPEED,
+                optimization=OPTIMIZATION.NONE,
                 portability=PORTABILITY.PORTABLE,
                 linking=linking,
                 assertions=False, # set
@@ -455,6 +455,7 @@ def main() -> bool:
                 case ARCH.arm64: target_arch_str = "arm64"
 
             match buildMode.optimization:
+                case OPTIMIZATION.NONE: optimization_str = "none"
                 case OPTIMIZATION.SPEED: optimization_str = "speed"
                 case OPTIMIZATION.SIZE: optimization_str = "size"
 

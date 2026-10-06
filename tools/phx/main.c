@@ -131,30 +131,150 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
 
+static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_BlockDevice* fileDevice, PHX_BlockDevice* diskOut, PHX_BlockDevice* partitionOut)
+{
+    PHX_Result result;
+    PHX_DetailedResult detailedResult;
+
+    const char* strPtr = str;
+    const char* lastColon = PHX_NULL;
+    while (*strPtr)
+    {
+        if (*strPtr == ':') lastColon = strPtr;
+        strPtr++;
+    }
+
+    if (lastColon)
+    {
+        strPtr = lastColon + 1;
+        while (*strPtr >= '0' && *strPtr <= '9')
+            strPtr++;
+
+        if (*strPtr || strPtr == lastColon + 1)
+            lastColon = PHX_NULL;
+    }
+
+    const char* name = lastColon ? context->allocator.allocate(&context->allocator, (PHX_Size)(lastColon - str + 1)) : str;
+    if (lastColon && !name)
+    {
+        fputs("Could not allocate memory for name\n", stderr);
+        return PHX_NULL;
+    }
+
+    if (lastColon)
+    {
+        memcpy((char*)name, str, (PHX_Size)(lastColon - str));
+        ((char*)name)[(PHX_Size)(lastColon - str)] = '\0';
+    }
+
+    if ((detailedResult = PHX_File_Open(lastColon ? name : str, PHX_FALSE, fileDevice, PHX_FILE_SIZE_NONE)).code != PHX_SUCCESS)
+    {
+        fprintf(stderr, "Could not open file %s: %s\n", name, detailedResult.msg);
+
+        if (lastColon)
+            context->allocator.free(&context->allocator, (char*)name);
+        return PHX_NULL;
+    }
+
+    if (lastColon)
+        context->allocator.free(&context->allocator, (char*)name);
+    
+    if ((result = PHX_Disk_Open(context, fileDevice, diskOut)) != PHX_SUCCESS)
+    {
+        if (result == PHX_ERROR_FORMAT)
+            fputs("Unknown format of disk image\n", stderr);
+        else
+            fputs("Error while opening\n", stderr);
+
+        fileDevice->close(fileDevice);
+        return PHX_NULL;
+    }
+
+    if (!lastColon)
+        return diskOut;
+
+    PHX_Partition_Interface* interface;
+    PHX_Partition_Table table;
+    if ((result = PHX_Partition_Open(context, diskOut, &interface, &table)) != PHX_SUCCESS)
+    {
+        if (result == PHX_ERROR_FORMAT)
+            fputs("Unknown format of partition table\n", stderr);
+        else
+            fputs("Error while reading partition table\n", stderr);
+
+        diskOut->close(diskOut);
+        return PHX_NULL;
+    }
+
+    const char* indexStr = lastColon + 1;
+    PHX_Bool overflow;
+    PHX_PartitionSize index = PHX_Size_FromStr(indexStr, &overflow, PHX_PartitionSize); // TODO: Better
+
+    if (overflow == PHX_TRUE)
+    {
+        fputs("Overflow while reading index\n", stderr);
+
+        PHX_Partition_CloseTable(context, &table);
+        diskOut->close(diskOut);
+        return PHX_NULL;
+    }
+
+    if (index == 0 || index - 1 >= table.partitionCount)
+    {
+        fputs("Index out of bounds\n", stderr);
+
+        PHX_Partition_CloseTable(context, &table);
+        diskOut->close(diskOut);
+        return PHX_NULL;
+    }
+
+    PHX_Partition* partition = &table.partitions[index - 1];
+    if (PHX_Partition_CreateDevice(context, diskOut, partition, partitionOut) != PHX_TRUE)
+    {
+        fputs("Error while creating partition device", stderr);
+
+        PHX_Partition_CloseTable(context, &table);
+        diskOut->close(diskOut);
+        return PHX_NULL;
+    }
+
+    PHX_Partition_CloseTable(context, &table);
+    return partitionOut;
+}
+
 
 static void print_help(const char* name)
 {
     FILE* stream = stderr;
 
-    fprintf(stream, "Usage: %s <area/\"help\"> <command> [...]\n", name);
+    fprintf(stream, "Usage:\n %s <area> <command> [...]\n %s <direct command> [...]", name, name);
 
+    fputs("\nMeanings:\n", stream);
+    fputs("  Image                                  Path referencing a file with any disk image format (or)\n", stream);
+    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)", stream);
+    fputs("  Format                                 Type specifier for interface\n", stream);
+    // TODO: Size, file, index
+
+    fputs("\nDirect commands:\n", stream);
+    fputs("\n  > help/-h                            Print this message\n", stream);
+    // TODO: fputs("\n  > version/-v                         Print version message\n", stream);
 
     fputs("\nArea \"disk\":\n", stream);
     fputs("  Commands:\n", stream);
-    fputs("  > list                               List supported interfaces\n", stream);
-    fputs("  > create <image> <type> <size>       Create a new disk image\n", stream);
-    fputs("  > extract <image> <out>              Extract a disk image to a binary file\n", stream);
-    fputs("  > info <image>                       Print information about the disk image\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > create <image> <format> <size>       Create a new disk image\n", stream);
+    fputs("  > info <image>                         Print information about the disk image\n", stream);
 
 
     fputs("\nArea \"partition\":\n", stream); // TODO: Maybe more like "partition-table"
     fputs("  Commands:\n", stream);
-    fputs("  > list                               List supported interfaces\n", stream);
-    fputs("  > info <image>                       Print information about the partition table\n", stream);
-    fputs("  > create <image> <format>            Create empty partition table\n", stream);
-    fputs("  > add <image> <type> <start> <size>  Add partition to partition table\n", stream);
-    fputs("  > remove <image> <index>             Remove partition from partition table\n", stream);
-    fputs("  > bootsector <image> <file>          Set bootsector of partition table\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > info <image>                         Print information about the partition table\n", stream);
+    fputs("  > create <image> <format>              Create empty partition table\n", stream);
+    fputs("  > add <image> <type> <start> <size>    Add partition to partition table\n", stream);
+    fputs("  > remove <image> <index>               Remove partition from partition table\n", stream);
+    fputs("  > bootsector <image> <file>            Set bootsector of partition table\n", stream);
+
     // TODO: set bootsector of partition
     // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
     // TODO: read and write on both partition and/or disk
@@ -164,6 +284,12 @@ static void print_help(const char* name)
     fputs("  - fat12\n", stream);
     fputs("  - fat16\n", stream);
     fputs("  - fat32\n", stream);
+
+
+    fputs("\nArea \"raw\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > read <device> <file>                 Read from device to file\n", stream);
+    fputs("  > write <device> <file>                Read from file to device\n", stream);
 }
 
 static int disk(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
@@ -174,7 +300,6 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     enum
     {
         PHX_COMMAND_DISK_CREATE,
-        PHX_COMMAND_DISK_EXTRACT,
         PHX_COMMAND_DISK_INFO
     } command;
 
@@ -183,7 +308,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         for (PHX_Size i = 0; i < PHX_Disk_InterfaceCount; i++)
         {
             PHX_Disk_Interface* interface = PHX_Disk_Interfaces[i];
-            fprintf(stdout, "Interface %" PRIu64 ":\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
+            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
         }
 
         return 0;
@@ -193,11 +318,6 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_DISK_CREATE;
-    }
-    else if (strcmp(commandStr, "extract") == 0)
-    {
-        fixedArgCount = 2;
-        command = PHX_COMMAND_DISK_EXTRACT;
     }
     else if (strcmp(commandStr, "info") == 0)
     {
@@ -273,77 +393,6 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             break;
         }
 
-        case PHX_COMMAND_DISK_EXTRACT:
-        {
-            PHX_Result result;
-
-            const char* outPath = args[1];
-
-            PHX_BlockDevice diskDevice;
-            if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice)) != PHX_SUCCESS)
-            {
-                if (result == PHX_ERROR_FORMAT)
-                    fputs("Unknown format of disk image\n", stderr);
-                else
-                    fputs("Error while opening\n", stderr);
-
-                fileDevice.close(&fileDevice);
-                return 1;
-            }
-
-            PHX_BlockDevice outFileDevice;
-            // TODO: Check for overflow
-            if ((detailedResult = PHX_File_Open(outPath, PHX_FALSE, &outFileDevice, diskDevice.blockCount * diskDevice.blockSize)).code != PHX_SUCCESS)
-            {
-                fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
-
-                diskDevice.close(&diskDevice);
-                return 1;
-            }
-
-            const PHX_Size blocksPerRead = (diskDevice.blockSize >= 16384) ? 1 : (16384 / diskDevice.blockSize);
-            PHX_Byte* buffer = context->allocator.allocate(&context->allocator, diskDevice.blockSize * blocksPerRead);
-            if (!buffer)
-            {
-                fputs("Could not allocate buffer\n", stderr);
-
-                outFileDevice.close(&outFileDevice);
-                diskDevice.close(&diskDevice);
-                return 1;
-            }
-
-            PHX_BlockSize currentBlock = 0;
-            while (currentBlock < diskDevice.blockCount)
-            {
-                PHX_BlockSize chunk = ((currentBlock + blocksPerRead) > diskDevice.blockCount) ? (diskDevice.blockCount - currentBlock) : (blocksPerRead);
-                if (diskDevice.read(&diskDevice, buffer, currentBlock, chunk) != chunk)
-                {
-                    fputs("Read error\n", stderr);
-
-                    context->allocator.free(&context->allocator, buffer);
-                    outFileDevice.close(&outFileDevice);
-                    diskDevice.close(&diskDevice);
-                    return 1;
-                }
-                if (outFileDevice.write(&outFileDevice, buffer, currentBlock * diskDevice.blockSize, diskDevice.blockSize * chunk) != diskDevice.blockSize * chunk)
-                {
-                    fputs("Write error\n", stderr);
-
-                    context->allocator.free(&context->allocator, buffer);
-                    outFileDevice.close(&outFileDevice);
-                    diskDevice.close(&diskDevice);
-                    return 1;
-                }
-                currentBlock += chunk;
-            }
-
-            context->allocator.free(&context->allocator, buffer);
-
-            outFileDevice.close(&outFileDevice);
-            diskDevice.close(&diskDevice);
-            break;
-        }
-
         case PHX_COMMAND_DISK_INFO:
         {
             PHX_Result result;
@@ -413,7 +462,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         for (PHX_Size i = 0; i < PHX_Partition_InterfaceCount; i++)
         {
             PHX_Partition_Interface* interface =PHX_Partition_Interfaces[i];
-            fprintf(stdout, "Interface %" PRIu64 ":\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
+            fprintf(stdout, "Interface %zu:\n  Name: %s\n  Type: %s\n", i, interface->name, interface->type);
         }
 
         return 0;
@@ -749,6 +798,156 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     return 0;
 }
 
+static int raw(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
+{
+    PHX_DetailedResult detailedResult;
+
+    int fixedArgCount;
+    enum
+    {
+        PHX_COMMAND_RAW_READ,
+        PHX_COMMAND_RAW_WRITE,
+    } command;
+
+    if (strcmp(commandStr, "read") == 0)
+    {
+        fixedArgCount = 2;
+        command = PHX_COMMAND_RAW_READ;
+    }
+    else if (strcmp(commandStr, "write") == 0)
+    {
+        fixedArgCount = 2;
+        command = PHX_COMMAND_RAW_WRITE;
+    }
+    else
+    {
+        print_help(executable);
+        return 1;
+    }
+
+    if (argCount < fixedArgCount)
+    {
+        print_help(executable);
+        return 1;
+    }
+
+    const char* deviceStr = args[0];
+
+    PHX_BlockDevice inFileDevice;
+    PHX_BlockDevice diskDevice;
+    PHX_BlockDevice partitionDevice;
+    PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    if (!device) return 1;
+
+    switch (command)
+    {
+        case PHX_COMMAND_RAW_READ: case PHX_COMMAND_RAW_WRITE:
+        {
+            PHX_BlockSize fileSize = PHX_FILE_SIZE_NONE;
+            if (command == PHX_COMMAND_RAW_READ)
+            {
+                // TODO: Overflow
+                fileSize = device->blockSize * device->blockCount;
+            }
+
+            const char* file = args[1];
+            PHX_BlockDevice fileDevice;
+            if ((detailedResult = PHX_File_Open(file, PHX_FALSE, &fileDevice, fileSize)).code != PHX_SUCCESS)
+            {
+                fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg);
+
+                device->close(device);
+                if (device == &partitionDevice)
+                    diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            const PHX_Size blocksPerRead = (device->blockSize >= 16384) ? 1 : (16384 / device->blockSize);
+            PHX_Byte* buffer = context->allocator.allocate(&context->allocator, device->blockSize * blocksPerRead);
+            if (!buffer)
+            {
+                fputs("Could not allocate buffer\n", stderr);
+
+                fileDevice.close(&fileDevice);
+                device->close(device);
+                if (device == &partitionDevice)
+                    diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            PHX_BlockSize currentBlock = 0;
+            while (currentBlock < device->blockCount)
+            {
+                const PHX_BlockSize chunk = ((currentBlock + blocksPerRead) > device->blockCount) ? (device->blockCount - currentBlock) : (blocksPerRead);
+
+                if (command == PHX_COMMAND_RAW_READ)
+                {
+                    if (device->read(device, buffer, currentBlock, chunk) != chunk)
+                    {
+                        fputs("Could not read chunk from device\n", stderr);
+
+                        context->allocator.free(&context->allocator, buffer);
+                        fileDevice.close(&fileDevice);
+                        device->close(device);
+                        if (device == &partitionDevice)
+                            diskDevice.close(&diskDevice);
+                        return 1;
+                    }
+                    if (fileDevice.write(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    {
+                        fputs("Could not write chunk to file\n", stderr);
+
+                        context->allocator.free(&context->allocator, buffer);
+                        fileDevice.close(&fileDevice);
+                        device->close(device);
+                        if (device == &partitionDevice)
+                            diskDevice.close(&diskDevice);
+                        return 1;
+                    }
+                }
+                else // write
+                {
+                    if (fileDevice.read(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    {
+                        fputs("Could not read chunk from file\n", stderr);
+
+                        context->allocator.free(&context->allocator, buffer);
+                        fileDevice.close(&fileDevice);
+                        device->close(device);
+                        if (device == &partitionDevice)
+                            diskDevice.close(&diskDevice);
+                        return 1;
+                    }
+                    if (device->write(device, buffer, currentBlock, chunk) != chunk)
+                    {
+                        printf("device->write(device, buffer, %llu, %llu)\n", currentBlock, chunk);
+                        fputs("Could not write chunk to device\n", stderr);
+
+                        context->allocator.free(&context->allocator, buffer);
+                        fileDevice.close(&fileDevice);
+                        device->close(device);
+                        if (device == &partitionDevice)
+                            diskDevice.close(&diskDevice);
+                        return 1;
+                    }
+                }
+
+                currentBlock += chunk;
+            }
+
+            context->allocator.free(&context->allocator, buffer);
+            fileDevice.close(&fileDevice);
+            break;
+        }
+    }
+
+    device->close(device);
+    if (device == &partitionDevice)
+        diskDevice.close(&diskDevice);
+
+    return 0;
+}
+
 int main(int argc, const char* argv[])
 {
     const char* executable = argv[0];
@@ -787,11 +986,13 @@ int main(int argc, const char* argv[])
         PHX_TRUE,
         allocator
     };
-    
+
     if (strcmp(area, "disk") == 0)
         return disk(&context, executable, command, argc - 3, argv + 3);
     if (strcmp(area, "partition") == 0)
         return partition(&context, executable, command, argc - 3, argv + 3);
+    if (strcmp(area, "raw") == 0)
+        return raw(&context, executable, command, argc - 3, argv + 3);
     
     print_help(executable);
     return 1;

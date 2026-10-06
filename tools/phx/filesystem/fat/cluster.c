@@ -284,7 +284,9 @@ PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PH
     return PHX_SUCCESS;
 
 rollback:
-    PHX_u32 current = firstCluster;
+    (void)0;
+    
+    PHX_u32 current = firstCluster;;
     for (PHX_u32 index = 1; index < found; index++)
     {
         PHX_u32 next;

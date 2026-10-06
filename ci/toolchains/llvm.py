@@ -129,7 +129,7 @@ def Get_Compile_Flags(mode: BuildMode) -> list[str]:
         flags.extend([
             "-ftrapv",
             "-fstack-protector-all",
-            "-D_FORTIFY_SOURCE=2"
+            "-fsanitize=address,undefined"
         ])
     else:
         flags.extend([
@@ -274,6 +274,14 @@ def Get_Link_Flags(mode: BuildMode) -> list[str]:
     # Assertions
 
     # Sanitizers
+    if mode.sanitizers: # TODO: Those require libraries
+        flags.extend([
+            "-fsanitize=address,undefined"
+        ])
+    else:
+        flags.extend([
+
+        ])
 
     # Debug information
     if mode.debuginfo:
