@@ -247,7 +247,7 @@ static void print_help(const char* name)
 {
     FILE* stream = stderr;
 
-    fprintf(stream, "Usage:\n %s <area> <command> [...]\n %s <direct command> [...]", name, name);
+    fprintf(stream, "Usage:\n  %s <area> <command> [...]\n  %s <direct command> [...]", name, name);
 
     fputs("\nMeanings:\n", stream);
     fputs("  Image                                  Path referencing a file with any disk image format (or)\n", stream);
