@@ -53,6 +53,9 @@ typedef struct PHX_Filesystem PHX_Filesystem;
 
 struct PHX_Filesystem_Operations
 {
+    PHX_u64 rootNodeNumber;
+
+    // General (TODO: Don't keep two general areas here...)
     PHX_Result (*changeBootsector)(PHX_Filesystem* fs, const PHX_Byte* bootsector);
     void (*destroy)(PHX_Filesystem* fs);
 
@@ -82,7 +85,7 @@ struct PHX_Filesystem_Operations
     PHX_Result (*closeOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
     PHX_Result (*resetOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
 
-    PHX_u64 rootNodeNumber;
+    // TODO: Info
 };
 
 struct PHX_Filesystem

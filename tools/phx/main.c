@@ -287,6 +287,7 @@ static void print_help(const char* name)
     fputs("  Commands:\n", stream);
     fputs("  > list                                 List supported interfaces\n", stream);
     fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
+    // TODO: info, list, read, write, extract, insert, mkdir, touch, remove, move
 
 
     fputs("\nArea \"raw\":\n", stream);
@@ -812,7 +813,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         PHX_COMMAND_FILESYSTEM_FORMAT,
     } command;
 
-    if (strcmp(commandStr, "list") == 0)
+    if (argCount == 0 && strcmp(commandStr, "list") == 0)
     {
         for (PHX_Size i = 0; i < PHX_Filesystem_InterfaceCount; i++)
         {
