@@ -287,7 +287,7 @@ static void print_help(const char* name)
     fputs("  Commands:\n", stream);
     fputs("  > list                                 List supported interfaces\n", stream);
     fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
-    // TODO: info, list, read, write, extract, insert, mkdir, touch, remove, move
+    // TODO: info, list, read, write, extract, insert, mkdir, touch, remove, move, bootsector
 
 
     fputs("\nArea \"raw\":\n", stream);
