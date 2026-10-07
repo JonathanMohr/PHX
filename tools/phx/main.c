@@ -1123,6 +1123,22 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
     // TODO: Attributes
     PHX_Filesystem_Entry_Attribute attributes = 0;
 
+    // TODO: Allow if types match, but clear file
+    PHX_Filesystem_Entry tmpEntry;
+    result = filesystem->ops->dir_lookupEntry(filesystem, parentDir, name, &tmpEntry);
+    if (result != PHX_ERROR_NOT_FOUND)
+    {
+        if (result == PHX_SUCCESS)
+        {
+            fputs("Entry ", stderr);
+            printSafe(stderr, name);
+            fputs(" already exists\n", stderr);
+        }
+        else
+            fputs("Could not look if entry already exists", stderr);
+        return 1;
+    }
+
     switch (type)
     {
         case PHX_NATIVE_FILE:
