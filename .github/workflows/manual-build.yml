@@ -105,19 +105,19 @@ jobs:
       - name: Init on Linux
         if: ${{ matrix.os_name == 'linux' }}
         run: |
-          echo "No init on Linux :)"
+          echo apt install nasm
           
       - name: Init on macOS
         if: ${{ matrix.os_name == 'macos' }}
         run: |
-          brew install llvm lld
+          brew install llvm lld nasm
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
 
       - name: Init on Windows
         if: ${{ matrix.os_name == 'windows' }}
         run: |
-          choco install llvm -y --no-progress
+          choco install llvm nasm -y --no-progress
           echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
         shell: pwsh
 
