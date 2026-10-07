@@ -1972,7 +1972,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             const char* bootsectorFileStr = args[1];
 
             PHX_BlockDevice bootsectorFileDevice;
-            if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_COMMAND_FILESYSTEM_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
+            if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
 
