@@ -3,6 +3,10 @@
 #include <zero.h>
 #include <embed/fat.h>
 
+#define FAT12_TYPE "FAT-12-FILESYSTEM"
+#define FAT16_TYPE "FAT-16-FILESYSTEM"
+#define FAT32_TYPE "FAT-32-FILESYSTEM"
+
 static struct PHX_Filesystem_Operations PHX_Filesystem_FAT_Operations = {
     PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT,
     
@@ -529,6 +533,13 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     outFs->ops = &PHX_Filesystem_FAT_Operations;
 
+    switch (version)
+    {
+        case PHX_FILESYSTEM_FAT_12: outFs->type = FAT12_TYPE; break;
+        case PHX_FILESYSTEM_FAT_16: outFs->type = FAT16_TYPE; break;
+        case PHX_FILESYSTEM_FAT_32: outFs->type = FAT32_TYPE; break;
+    }
+
     outFs->id = (bootSignature == PHX_FILESYSTEM_FAT_BOOT_SIGNATURE_EXTENDED_BOOT_SIGNATURE) ? volumeID : PHX_FILESYSTEM_NO_ID;
 
     outFs->caseSensitive = PHX_FALSE;
@@ -1043,6 +1054,13 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     outFs->data = data;
 
     outFs->ops = &PHX_Filesystem_FAT_Operations;
+
+    switch (version)
+    {
+        case PHX_FILESYSTEM_FAT_12: outFs->type = FAT12_TYPE; break;
+        case PHX_FILESYSTEM_FAT_16: outFs->type = FAT16_TYPE; break;
+        case PHX_FILESYSTEM_FAT_32: outFs->type = FAT32_TYPE; break;
+    }
 
     outFs->id = volumeId;
 

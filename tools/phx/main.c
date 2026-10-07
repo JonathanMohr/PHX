@@ -286,8 +286,10 @@ static void print_help(const char* name)
     fputs("\nArea \"filesystem\":\n", stream);
     fputs("  Commands:\n", stream);
     fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > info <image>                         Print information about the filesystem\n", stream);
+    fputs("  > list <image> <path>                  List entries of a directory\n", stream);
     fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
-    // TODO: info, list, read, write, extract, insert, mkdir, touch, remove, move, bootsector
+    // TODO: extract, insert, mkdir, touch, remove, move, bootsector
 
 
     fputs("\nArea \"raw\":\n", stream);
@@ -802,6 +804,37 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     return 0;
 }
 
+
+struct PHX_Entry_Info
+{
+    PHX_Filesystem_Entry entry;
+    PHX_Filesystem_Node node;
+};
+
+static int entry_type_rank(PHX_Filesystem_Entry_Type type)
+{
+    switch (type)
+    {
+        case PHX_FILESYSTEM_ENTRY_DIRECTORY: return 0;
+        case PHX_FILESYSTEM_ENTRY_FILE: return 1;
+        default: return 2;
+    }
+}
+
+static int compareEntryInfo(const void* a, const void* b)
+{
+    const struct PHX_Entry_Info* entryA = a;
+    const struct PHX_Entry_Info* entryB = b;
+
+    int ra = entry_type_rank(entryA->node.type);
+    int rb = entry_type_rank(entryB->node.type);
+
+    if (ra != rb)
+        return (ra > rb) - (ra < rb);
+
+    return strcmp(entryA->entry.name, entryB->entry.name);
+}
+
 static int filesystem(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
 {
     PHX_Result result;
@@ -810,6 +843,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     int fixedArgCount;
     enum
     {
+        PHX_COMMAND_FILESYSTEM_INFO,
+        PHX_COMMAND_FILESYSTEM_LIST,
         PHX_COMMAND_FILESYSTEM_FORMAT,
     } command;
 
@@ -824,9 +859,19 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         return 0;
     }
 
-    if (strcmp(commandStr, "format") == 0)
+    if (strcmp(commandStr, "info") == 0)
     {
         fixedArgCount = 1;
+        command = PHX_COMMAND_FILESYSTEM_INFO;
+    }
+    else if (strcmp(commandStr, "list") == 0)
+    {
+        fixedArgCount = 2;
+        command = PHX_COMMAND_FILESYSTEM_LIST;
+    }
+    else if (strcmp(commandStr, "format") == 0)
+    {
+        fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_FORMAT;
     }
     else
@@ -890,18 +935,143 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         }
     }
 
+    int returnCode = 0;
     switch (command)
     {
+        case PHX_COMMAND_FILESYSTEM_INFO:
+            fprintf(stdout, "%s (%s):\n", deviceStr, filesystem.type);
+            fprintf(stdout, "  Id: %" PRIu64 "\n", filesystem.id);
+            fprintf(stdout, "  Case-sensitive: %s\n", (filesystem.caseSensitive == PHX_TRUE) ? "Yes" : "No");
+            break;
+
+        case PHX_COMMAND_FILESYSTEM_LIST:
+        {
+            const char* directoryPath = args[1];
+            PHX_Filesystem_Node directoryNode;
+            if ((result = PHX_Filesystem_GetEntry(&filesystem, directoryPath, PHX_NULL, &directoryNode)) != PHX_SUCCESS)
+            {
+                if (result == PHX_ERROR_NOT_FOUND)
+                    fputs("Could not find directory\n", stderr);
+                else
+                    fputs("Error while trying to find directory\n", stderr);
+
+                returnCode = 1;
+                goto cleanup;
+            }
+
+            PHX_u64 entryCount;
+            if ((result = filesystem.ops->dir_getEntryCount(&filesystem, &directoryNode, &entryCount)) != PHX_SUCCESS)
+            {
+                fputs("Could not get count of children\n", stderr);
+
+                returnCode = 1;
+                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
+                goto cleanup;
+            }
+
+            struct PHX_Entry_Info* entries = context->allocator.allocate(&context->allocator, sizeof(struct PHX_Entry_Info) * entryCount);
+            if (!entries)
+            {
+                fputs("Could not allocate memory for entries\n", stderr);
+
+                returnCode = 1;
+                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
+                goto cleanup;
+            }
+
+            PHX_Filesystem_OpenNode openNode;
+            if ((result = filesystem.ops->createOpenNode(&filesystem, &directoryNode, &openNode)) != PHX_SUCCESS)
+            {
+                fputs("Could not create open node\n", stderr);
+
+                returnCode = 1;
+                context->allocator.free(&context->allocator, entries);
+                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
+                goto cleanup;
+            }
+
+            PHX_Size currentEntry = 0;
+            while(currentEntry < entryCount && (result = filesystem.ops->dir_readEntry(&filesystem, &directoryNode, &openNode, &entries[currentEntry].entry)) == PHX_SUCCESS)
+            {
+                if ((result = filesystem.ops->getNode(&filesystem, entries[currentEntry].entry.node, &entries[currentEntry].node)) != PHX_SUCCESS)
+                    break;
+                currentEntry++;
+            }
+
+            if (result != PHX_ERROR_NOT_FOUND)
+            {
+                fputs("Error while reading directory entries\n", stderr);
+                returnCode = 1;
+            }
+
+            qsort(entries, currentEntry, sizeof(entries[0]), compareEntryInfo);
+
+            for (PHX_Size i = 0; i < currentEntry; i++)
+            {
+                PHX_Filesystem_Entry* entry = &entries[i].entry;
+                PHX_Filesystem_Node* node = &entries[i].node;
+
+                switch (node->type)
+                {
+                    case PHX_FILESYSTEM_ENTRY_FILE:
+                        fputs("fil", stdout);
+                        break;
+
+                    case PHX_FILESYSTEM_ENTRY_DIRECTORY:
+                        fputs("dir", stdout);
+                        break;
+
+                    default:
+                        fputs("inv", stdout);
+                        break;
+                }
+
+                fputs(" (", stdout);
+
+                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_READONLY)
+                    fputs("ro | ", stdout);
+                else
+                    fputs("-- | ", stdout);
+                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_EXECUTABLE)
+                    fputs("exec | ", stdout);
+                else
+                    fputs("---- | ", stdout);
+                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_HIDDEN)
+                    fputs("hid | ", stdout);
+                else
+                    fputs("--- | ", stdout);
+                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_SYSTEM)
+                    fputs("sys", stdout);
+                else
+                    fputs("---", stdout);
+
+                fputs(") ", stdout);
+
+                fprintf(stdout, "[%" PRIu64 "] ", node->size);
+
+                fputs(entry->name, stdout);
+
+                fputc('\n', stdout);
+            }
+
+            (void)filesystem.ops->closeOpenNode(&filesystem, &openNode);
+            context->allocator.free(&context->allocator, entries);
+            filesystem.ops->cleanupNode(&filesystem, &directoryNode);
+
+            break;
+        }
+
         case PHX_COMMAND_FILESYSTEM_FORMAT:
             break;
     }
 
+cleanup:
     filesystem.ops->destroy(&filesystem);
     device->close(device);
     if (device == &partitionDevice)
         diskDevice.close(&diskDevice);
 
-    return 0;
+    return returnCode;
 }
 
 static int raw(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)

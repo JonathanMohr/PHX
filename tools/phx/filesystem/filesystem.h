@@ -97,6 +97,8 @@ struct PHX_Filesystem
     
     const struct PHX_Filesystem_Operations* ops;
 
+    const char* type;
+
     PHX_u64 id;
 
     PHX_Bool readonly;
@@ -118,7 +120,7 @@ extern PHX_Filesystem_Interface* PHX_Filesystem_Interfaces[];
 extern PHX_Size PHX_Filesystem_InterfaceCount;
 
 
-PHX_Result PHX_Filesystem_GetEntry(PHX_Filesystem* fs, const char* path);
+PHX_Result PHX_Filesystem_GetEntry(PHX_Filesystem* fs, const char* path, PHX_Filesystem_Node* wd, PHX_Filesystem_Node* nodeOut);
 
 
 #ifdef __cplusplus
