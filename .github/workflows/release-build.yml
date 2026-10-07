@@ -42,7 +42,8 @@ jobs:
       - name: Init on Linux
         if: ${{ matrix.os_name == 'linux' }}
         run: |
-          apt install nasm
+          sudo apt-get update
+          sudo apt-get install -y nasm
           
       - name: Init on macOS
         if: ${{ matrix.os_name == 'macos' }}
