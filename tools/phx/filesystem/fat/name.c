@@ -32,7 +32,7 @@ void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nam
     while (*name && charIndex < outCount && (!nameEnd || name < nameEnd))
     {
         if (*name >= 'a' && *name <= 'z')
-            out[charIndex++] = *name + ('A' - 'a');
+            out[charIndex++] = *name + (char)('A' - 'a');
         else if (*name >= 'A' && *name <= 'Z')
             out[charIndex++] = *name;
         else if (*name >= '0' && *name <= '9')
@@ -58,9 +58,9 @@ PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b)
         char cb = *b;
 
         if (ca >= 'A' && ca <= 'Z')
-            ca += 'a' - 'A';
+            ca += (char)('a' - 'A');
         if (cb >= 'A' && cb <= 'Z')
-            cb += 'a' - 'A';
+            cb += (char)('a' - 'A');
 
         if (ca != cb)
             return PHX_FALSE;
