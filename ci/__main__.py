@@ -273,6 +273,13 @@ def main() -> bool:
     )
 
     argparser.add_argument(
+        "-d",
+        dest="debug",
+        action="store_true",
+        help="Build with debug mode"
+    )
+
+    argparser.add_argument(
         "--os",
         dest="os",
         type=str,
@@ -329,8 +336,7 @@ def main() -> bool:
     if args.version:
         version = args.version
     else:
-        # TODO: Should be that: version = get_version()
-        version = "placeholder"
+        version = get_version()
 
     archive_name = args.archive_name or "phx"
 
@@ -427,23 +433,42 @@ def main() -> bool:
             # debuginfo = False except specific library
             # host = specific per lib
 
-            buildMode = BuildMode(
-                target_os=target_os,
-                target_arch=target_arch,
-                werror=True, # set
-                lto=True, # set
-                pic=False, # set
-                hidden=False, # set
-                optimization=OPTIMIZATION.NONE,
-                portability=PORTABILITY.PORTABLE,
-                linking=linking,
-                assertions=False, # set
-                sanitizers=False, # set
-                debuginfo=False, # set
-                host=HOST.FREESTANDING, # set
-                sysroot=sysroot_path,
-                project_root=str(project_dir.resolve())
-            )
+            if args.debug:
+                buildMode = BuildMode(
+                    target_os=target_os,
+                    target_arch=target_arch,
+                    werror=True, # set
+                    lto=False, # set
+                    pic=False, # set
+                    hidden=False, # set
+                    optimization=OPTIMIZATION.NONE,
+                    portability=PORTABILITY.PORTABLE,
+                    linking=linking,
+                    assertions=True, # set
+                    sanitizers=True, # set
+                    debuginfo=True, # set
+                    host=HOST.FREESTANDING, # set
+                    sysroot=sysroot_path,
+                    project_root=str(project_dir.resolve())
+                )
+            else:
+                buildMode = BuildMode(
+                    target_os=target_os,
+                    target_arch=target_arch,
+                    werror=True, # set
+                    lto=True, # set
+                    pic=False, # set
+                    hidden=False, # set
+                    optimization=OPTIMIZATION.SPEED,
+                    portability=PORTABILITY.PORTABLE,
+                    linking=linking,
+                    assertions=False, # set
+                    sanitizers=False, # set
+                    debuginfo=False, # set
+                    host=HOST.FREESTANDING, # set
+                    sysroot=sysroot_path,
+                    project_root=str(project_dir.resolve())
+                )
 
             match buildMode.target_os:
                 case OS.Windows: target_os_str = "windows"
@@ -467,11 +492,10 @@ def main() -> bool:
                 case LINKING.STATIC: linking_str = "static"
                 case LINKING.DYNAMIC: linking_str = "dynamic"
 
-            build_dir = specific_build_dir / target_os_str / target_arch_str / optimization_str / portability_str / linking_str
-            log_dir = specific_log_dir / target_os_str / target_arch_str / optimization_str / portability_str / linking_str
+            build_dir = specific_build_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
+            log_dir = specific_log_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
 
             toolchain.Add_Define("PHX_BUILD")
-
 
             # Embed
             embed_build_dir = build_dir / "embed"
