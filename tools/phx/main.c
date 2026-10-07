@@ -1275,6 +1275,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     PHX_Result result;
     PHX_DetailedResult detailedResult;
 
+    // TODO: Check for every single command if the targeted file already exists
+
     int fixedArgCount;
     enum
     {
