@@ -510,7 +510,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 PHX_Partition* partition = &table.partitions[i];
                 fprintf(stdout, "    Partition %" PRIu64 "%s%s%s:\n", i + 1, (partition->name[0] != '\0') ? " (" : "", partition->name, (partition->name[0] != '\0') ? ")" : "");
                 fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.blockSize, partition->start);
-                fprintf(stdout, "      Size: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->size * diskDevice.blockSize, partition->size);
+                fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.blockSize, partition->size);
 
                 fputs("      Flags:", stdout);
                 if (partition->flags & PHX_PARTITION_BOOTABLE)
