@@ -34,6 +34,9 @@ static void PHX_Free(struct PHX_Allocator* allocator, void* ptr)
 }
 
 
+static void print_help(const char* name);
+
+
 static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_AnySize max)
 {
     if (!str) return 0;
@@ -240,83 +243,6 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
 
     PHX_Partition_CloseTable(context, &table);
     return partitionOut;
-}
-
-
-static void print_help(const char* name)
-{
-    FILE* stream = stderr;
-
-    fprintf(stream, "Usage:\n  %s <area> <command> [...]\n  %s <direct command> [...]", name, name);
-
-    fputs("\nMeanings:\n", stream);
-    fputs("  Image                                  Path referencing a file with any disk image format\n", stream);
-    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
-    fputs("  Format                                 Type specifier for the interface\n", stream);
-    fputs("  Start/Size                             Size specifier in bytes\n", stream);
-
-    fputs(
-        "\nSize specifier:\n"
-        "  You can use the power-suffixes 'k' (p=1), 'm' (p=2), 'g' (p=3) and 't' (p=4).\n"
-        "  The default base is 1024, if you use 'd' after the power-suffix, the base\n"
-        "  will be 1000. Write any decimal number with '.' as decimal point (for example\n"
-        "  100, 0.5, 32, 83.29), then the power-suffix and then the base-suffix.\n"
-        "  The value will be calculated by 'n * b^p' (n = entered number, p = power,\n"
-        "  b = base) and will be rounded to the nearest integer.\n",
-        stream
-    );
-
-    fputs("\nDirect commands:\n", stream);
-    fputs("  > help/-h                            Print this message\n", stream);
-    // TODO: fputs("\n  > version/-v                         Print version message\n", stream);
-
-    fputs("\nArea \"disk\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > create <image> <format> <size>       Create a new disk image\n", stream);
-    fputs("  > info <image>                         Print information about the disk image\n", stream);
-
-
-    fputs("\nArea \"partition\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > info <image>                         Print information about the partition table\n", stream);
-    fputs("  > create <image> <format>              Create empty partition table\n", stream);
-    fputs("  > add <image> <type> <start> <size>    Add partition to partition table\n", stream);
-    fputs("  > remove <image> <index>               Remove partition from partition table\n", stream);
-    fputs("  > bootsector <image> <file>            Set bootsector of partition table\n", stream);
-    // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
-
-    fputs("  Types:\n", stream);
-    fputs("  - unknown\n", stream);
-    fputs("  - fat12\n", stream);
-    fputs("  - fat16\n", stream);
-    fputs("  - fat32\n", stream);
-
-
-    fputs("\nArea \"filesystem\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > info <image>                         Print information about the filesystem\n", stream);
-    fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
-    fputs("  > extract <image <path> <host-path>    Extract entry to host entry\n", stream);
-    fputs("  > insert <image <path> <host-path>     Insert entry from host entry\n", stream);
-    fputs("  > mkdir <image> <path>                 Create a new directory\n", stream);
-    fputs("  > touch <image> <path>                 Create a new empty file\n", stream);
-    fputs("  > list <image> <path>                  List entries of a directory\n", stream);
-    fputs("  > tree <image> <path>                  List entries of a directory recursively\n", stream);
-    fputs("  > cat <image> <path>                   Print content of a file\n", stream);
-    fputs("  > write <image> <path> <host-file>     Write content from a host file to a device file\n", stream);
-    fputs("  > read <image> <path> <host-file>      Read content from a device file to a host file\n", stream);
-    fputs("  > remove <image> <path>                Remove an entry\n", stream);
-    fputs("  > move <image> <src-path> <dst-path>   Move an entry\n", stream);
-    fputs("  > bootsector <image> <file>            Set bootsector of filesystem\n", stream);
-
-
-    fputs("\nArea \"raw\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > read <device> <file>                 Read from device to file\n", stream);
-    fputs("  > write <device> <file>                Read from file to device\n", stream);
 }
 
 static int disk(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
@@ -1833,6 +1759,93 @@ static int raw(PHX_Context* context, const char* executable, const char* command
     return 0;
 }
 
+
+static void print_help(const char* name)
+{
+    FILE* const stream = stderr;
+
+    fprintf(stream, "Usage:\n  %s <area> <command> [...]\n  %s <direct command> [...]", name, name);
+
+    fputs("\nMeanings:\n", stream);
+    fputs("  Image                                  Path referencing a file with any disk image format\n", stream);
+    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
+    fputs("  Format                                 Type specifier for the interface\n", stream);
+    fputs("  Start/Size                             Size specifier in bytes\n", stream);
+
+    fputs(
+        "\nSize specifier:\n"
+        "  You can use the power-suffixes 'k' (p=1), 'm' (p=2), 'g' (p=3) and 't' (p=4).\n"
+        "  The default base is 1024, if you use 'd' after the power-suffix, the base\n"
+        "  will be 1000. Write any decimal number with '.' as decimal point (for example\n"
+        "  100, 0.5, 32, 83.29), then the power-suffix and then the base-suffix.\n"
+        "  The value will be calculated by 'n * b^p' (n = entered number, p = power,\n"
+        "  b = base) and will be rounded to the nearest integer.\n",
+        stream
+    );
+
+    fputs("\nDirect commands:\n", stream);
+    fputs("  > help/-h                            Print this message\n", stream);
+    // TODO: fputs("\n  > version/-v                         Print version message\n", stream);
+
+    fputs("\nArea \"disk\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > create <image> <format> <size>       Create a new disk image\n", stream);
+    fputs("  > info <image>                         Print information about the disk image\n", stream);
+
+
+    fputs("\nArea \"partition\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > info <image>                         Print information about the partition table\n", stream);
+    fputs("  > create <image> <format>              Create empty partition table\n", stream);
+    fputs("  > add <image> <type> <start> <size>    Add partition to partition table\n", stream);
+    fputs("  > remove <image> <index>               Remove partition from partition table\n", stream);
+    fputs("  > bootsector <image> <file>            Set bootsector of partition table\n", stream);
+    // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
+
+    fputs("  Types:\n", stream);
+    fputs("  - unknown\n", stream);
+    fputs("  - fat12\n", stream);
+    fputs("  - fat16\n", stream);
+    fputs("  - fat32\n", stream);
+
+
+    fputs("\nArea \"filesystem\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > list                                 List supported interfaces\n", stream);
+    fputs("  > info <image>                         Print information about the filesystem\n", stream);
+    fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
+    fputs("  > extract <image <path> <host-path>    Extract entry to host entry\n", stream);
+    fputs("  > insert <image <path> <host-path>     Insert entry from host entry\n", stream);
+    fputs("  > mkdir <image> <path>                 Create a new directory\n", stream);
+    fputs("  > touch <image> <path>                 Create a new empty file\n", stream);
+    fputs("  > list <image> <path>                  List entries of a directory\n", stream);
+    fputs("  > tree <image> <path>                  List entries of a directory recursively\n", stream);
+    fputs("  > cat <image> <path>                   Print content of a file\n", stream);
+    fputs("  > write <image> <path> <host-file>     Write content from a host file to a device file\n", stream);
+    fputs("  > read <image> <path> <host-file>      Read content from a device file to a host file\n", stream);
+    fputs("  > remove <image> <path>                Remove an entry\n", stream);
+    fputs("  > move <image> <src-path> <dst-path>   Move an entry\n", stream);
+    fputs("  > bootsector <image> <file>            Set bootsector of filesystem\n", stream);
+
+
+    fputs("\nArea \"raw\":\n", stream);
+    fputs("  Commands:\n", stream);
+    fputs("  > read <device> <file>                 Read from device to file\n", stream);
+    fputs("  > write <device> <file>                Read from file to device\n", stream);
+}
+
+
+static void print_version(void)
+{
+    FILE* const stream = stdout;
+
+    fputs("PHX version " VERSION " (https://github.com/JonathanMohr/PHX)\n", stream);
+    fputs("Compiled on " __DATE__ "\n", stream);
+}
+
+
 int main(int argc, const char* argv[])
 {
     const char* executable = argv[0];
@@ -1848,6 +1861,12 @@ int main(int argc, const char* argv[])
     if (strcmp(area, "help") == 0 || strcmp(area, "-h") == 0)
     {
         print_help(executable);
+        return 0;
+    }
+
+    if (strcmp(area, "version") == 0 || strcmp(area, "-v") == 0)
+    {
+        print_version();
         return 0;
     }
 
