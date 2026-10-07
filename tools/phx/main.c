@@ -1836,8 +1836,12 @@ int main(int argc, const char* argv[])
     };
 
     PHX_Context context = {
+        (PHX_Time)time(NULL),
+        
         (PHX_u32)time(NULL),
+
         PHX_TRUE,
+
         allocator
     };
 

@@ -27,6 +27,8 @@ typedef uint16_t PHX_u16;
 typedef uint32_t PHX_u32;
 typedef uint64_t PHX_u64;
 
+typedef int64_t PHX_Time;
+
 typedef bool PHX_Bool;
 #define PHX_TRUE true
 #define PHX_FALSE false
@@ -43,9 +45,12 @@ struct PHX_Allocator
 
 typedef struct PHX_Context
 {
+    PHX_Time currentTime;
+
     PHX_u32 seed;
 
     PHX_Bool fast;
+
     struct PHX_Allocator allocator;
 } PHX_Context;
 
