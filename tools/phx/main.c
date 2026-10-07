@@ -288,10 +288,10 @@ static void print_help(const char* name)
     fputs("  > list                                 List supported interfaces\n", stream);
     fputs("  > info <image>                         Print information about the filesystem\n", stream);
     fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
-    fputs("  > extract <image <path> <host-path>    Extract entry to host entry", stream);
-    fputs("  > insert <image <path> <host-path>     Insert entry from host entry", stream);
-    fputs("  > mkdir <image> <path>                 Create a new directory", stream);
-    fputs("  > touch <image> <path>                 Create a new empty file", stream);
+    fputs("  > extract <image <path> <host-path>    Extract entry to host entry\n", stream);
+    fputs("  > insert <image <path> <host-path>     Insert entry from host entry\n", stream);
+    fputs("  > mkdir <image> <path>                 Create a new directory\n", stream);
+    fputs("  > touch <image> <path>                 Create a new empty file\n", stream);
     fputs("  > list <image> <path>                  List entries of a directory\n", stream);
     fputs("  > tree <image> <path>                  List entries of a directory recursively\n", stream);
     fputs("  > cat <image> <path>                   Print content of a file\n", stream);
@@ -845,6 +845,131 @@ static int compareEntryInfo(const void* a, const void* b)
     return strcmp(entryA->entry.name, entryB->entry.name);
 }
 
+static void printEntry(const struct PHX_Entry_Info* entryInfo, FILE* stream)
+{
+    const PHX_Filesystem_Entry* entry = &entryInfo->entry;
+    const PHX_Filesystem_Node* node = &entryInfo->node;
+
+    switch (node->type)
+    {
+        case PHX_FILESYSTEM_ENTRY_FILE:
+            fputs("fil", stream);
+            break;
+
+        case PHX_FILESYSTEM_ENTRY_DIRECTORY:
+            fputs("dir", stream);
+            break;
+
+        default:
+            fputs("inv", stream);
+            break;
+    }
+
+    fputs(" (", stream);
+
+    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_READONLY)
+        fputs("ro | ", stream);
+    else
+        fputs("-- | ", stream);
+    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_EXECUTABLE)
+        fputs("exec | ", stream);
+    else
+        fputs("---- | ", stream);
+    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_HIDDEN)
+        fputs("hid | ", stream);
+    else
+        fputs("--- | ", stream);
+    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_SYSTEM)
+        fputs("sys", stream);
+    else
+        fputs("---", stream);
+
+    fputs(") ", stream);
+
+    fprintf(stream, "[%" PRIu64 "] ", node->size);
+
+    fputs(entry->name, stream);
+
+    fputc('\n', stream);
+}
+
+static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_Bool recursive)
+{
+    // TODO: Make recursive look nicer and more like tree
+
+    PHX_Result result;
+
+    PHX_u64 entryCount;
+    if ((result = filesystem->ops->dir_getEntryCount(filesystem, dir, &entryCount)) != PHX_SUCCESS)
+    {
+        fputs("Could not get count of children\n", stderr);
+        return 1;
+    }
+
+    if (entryCount == 0)
+        return 0;
+
+    struct PHX_Entry_Info* entries = filesystem->context->allocator.allocate(&filesystem->context->allocator, sizeof(struct PHX_Entry_Info) * entryCount);
+    if (!entries)
+    {
+        fputs("Could not allocate memory for entries\n", stderr);
+        return 1;
+    }
+
+    PHX_Filesystem_OpenNode openNode;
+    if ((result = filesystem->ops->createOpenNode(filesystem, dir, &openNode)) != PHX_SUCCESS)
+    {
+        fputs("Could not create open node\n", stderr);
+        filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+        return 1;
+    }
+
+
+    PHX_Size currentEntry = 0;
+    while(currentEntry < entryCount && (result = filesystem->ops->dir_readEntry(filesystem, dir, &openNode, &entries[currentEntry].entry)) == PHX_SUCCESS)
+    {
+        if ((result = filesystem->ops->getNode(filesystem, entries[currentEntry].entry.node, &entries[currentEntry].node)) != PHX_SUCCESS)
+            break;
+        currentEntry++;
+    }
+
+    if (result != PHX_SUCCESS && result != PHX_ERROR_NOT_FOUND)
+    {
+        fputs("Error while reading directory entries\n", stderr);
+        for (PHX_Size i = 0; i < currentEntry; i++)
+            filesystem->ops->cleanupNode(filesystem, &entries[i].node);
+        filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+        return 1;
+    }
+
+    qsort(entries, currentEntry, sizeof(entries[0]), compareEntryInfo);
+
+    for (PHX_Size i = 0; i < currentEntry; i++)
+        printEntry(&entries[i], stdout);
+
+    if (recursive == PHX_TRUE)
+    {
+        for (PHX_Size i = 0; i < currentEntry; i++)
+        {
+            struct PHX_Entry_Info* entryInfo = &entries[i];
+            if (entryInfo->node.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+                continue;
+
+            fprintf(stdout, "\n%s:\n", entryInfo->entry.name);
+            const int returnCode = printNode(filesystem, &entryInfo->node, PHX_TRUE);
+            if (returnCode != 0)
+                return returnCode;
+        }
+    }
+
+    for (PHX_Size i = 0; i < currentEntry; i++)
+        filesystem->ops->cleanupNode(filesystem, &entries[i].node);
+    (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
+    filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+
+    return 0;
+}
+
 static int filesystem(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
 {
     PHX_Result result;
@@ -896,9 +1021,19 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_FORMAT;
     }
-    else if (strcmp(commandStr, "mkdir") == 0)
+    else if (strcmp(commandStr, "extract") == 0)
     {
         fixedArgCount = 2;
+        command = PHX_COMMAND_FILESYSTEM_EXTRACT;
+    }
+    else if (strcmp(commandStr, "insert") == 0)
+    {
+        fixedArgCount = 3;
+        command = PHX_COMMAND_FILESYSTEM_INSERT;
+    }
+    else if (strcmp(commandStr, "mkdir") == 0)
+    {
+        fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_MKDIR;
     }
     else if (strcmp(commandStr, "touch") == 0)
@@ -911,6 +1046,11 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_LIST;
     }
+    else if (strcmp(commandStr, "tree") == 0)
+    {
+        fixedArgCount = 2;
+        command = PHX_COMMAND_FILESYSTEM_TREE;
+    }
     else if (strcmp(commandStr, "cat") == 0)
     {
         fixedArgCount = 2;
@@ -918,22 +1058,22 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     }
     else if (strcmp(commandStr, "write") == 0)
     {
-        fixedArgCount = 2;
+        fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_WRITE;
     }
     else if (strcmp(commandStr, "read") == 0)
     {
-        fixedArgCount = 2;
+        fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_READ;
     }
     else if (strcmp(commandStr, "remove") == 0)
     {
-        fixedArgCount = 1;
+        fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_REMOVE;
     }
     else if (strcmp(commandStr, "move") == 0)
     {
-        fixedArgCount = 2;
+        fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_MOVE;
     }
     else if (strcmp(commandStr, "bootsector") == 0)
@@ -1117,113 +1257,38 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            PHX_u64 entryCount;
-            if ((result = filesystem.ops->dir_getEntryCount(&filesystem, &directoryNode, &entryCount)) != PHX_SUCCESS)
-            {
-                fputs("Could not get count of children\n", stderr);
-
-                returnCode = 1;
-                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                goto cleanup;
-            }
-
-            struct PHX_Entry_Info* entries = context->allocator.allocate(&context->allocator, sizeof(struct PHX_Entry_Info) * entryCount);
-            if (!entries)
-            {
-                fputs("Could not allocate memory for entries\n", stderr);
-
-                returnCode = 1;
-                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                goto cleanup;
-            }
-
-            PHX_Filesystem_OpenNode openNode;
-            if ((result = filesystem.ops->createOpenNode(&filesystem, &directoryNode, &openNode)) != PHX_SUCCESS)
-            {
-                fputs("Could not create open node\n", stderr);
-
-                returnCode = 1;
-                context->allocator.free(&context->allocator, entries);
-                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                goto cleanup;
-            }
-
-            PHX_Size currentEntry = 0;
-            while(currentEntry < entryCount && (result = filesystem.ops->dir_readEntry(&filesystem, &directoryNode, &openNode, &entries[currentEntry].entry)) == PHX_SUCCESS)
-            {
-                if ((result = filesystem.ops->getNode(&filesystem, entries[currentEntry].entry.node, &entries[currentEntry].node)) != PHX_SUCCESS)
-                    break;
-                currentEntry++;
-            }
-
-            if (result != PHX_SUCCESS && result != PHX_ERROR_NOT_FOUND)
-            {
-                fputs("Error while reading directory entries\n", stderr);
-                returnCode = 1;
-            }
-
-            qsort(entries, currentEntry, sizeof(entries[0]), compareEntryInfo);
-
-            for (PHX_Size i = 0; i < currentEntry; i++)
-            {
-                PHX_Filesystem_Entry* entry = &entries[i].entry;
-                PHX_Filesystem_Node* node = &entries[i].node;
-
-                switch (node->type)
-                {
-                    case PHX_FILESYSTEM_ENTRY_FILE:
-                        fputs("fil", stdout);
-                        break;
-
-                    case PHX_FILESYSTEM_ENTRY_DIRECTORY:
-                        fputs("dir", stdout);
-                        break;
-
-                    default:
-                        fputs("inv", stdout);
-                        break;
-                }
-
-                fputs(" (", stdout);
-
-                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_READONLY)
-                    fputs("ro | ", stdout);
-                else
-                    fputs("-- | ", stdout);
-                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_EXECUTABLE)
-                    fputs("exec | ", stdout);
-                else
-                    fputs("---- | ", stdout);
-                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_HIDDEN)
-                    fputs("hid | ", stdout);
-                else
-                    fputs("--- | ", stdout);
-                if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_SYSTEM)
-                    fputs("sys", stdout);
-                else
-                    fputs("---", stdout);
-
-                fputs(") ", stdout);
-
-                fprintf(stdout, "[%" PRIu64 "] ", node->size);
-
-                fputs(entry->name, stdout);
-
-                fputc('\n', stdout);
-            }
-
-            (void)filesystem.ops->closeOpenNode(&filesystem, &openNode);
-            context->allocator.free(&context->allocator, entries);
+            returnCode = printNode(&filesystem, &directoryNode, PHX_FALSE);
             filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-
             break;
         }
 
         case PHX_COMMAND_FILESYSTEM_TREE:
         {
-            // TODO: Implement
-            fputs("filesystem tree is not implemented yet\n", stderr);
-            returnCode = 1;
+            const char* path = args[1];
+            PHX_Filesystem_Node directoryNode;
+            if ((result = PHX_Filesystem_GetEntry(&filesystem, path, PHX_NULL, &directoryNode)) != PHX_SUCCESS)
+            {
+                if (result == PHX_ERROR_NOT_FOUND)
+                    fputs("Could not find directory\n", stderr);
+                else
+                    fputs("Error while trying to find directory\n", stderr);
+
+                returnCode = 1;
+                goto cleanup;
+            }
+
+            if (directoryNode.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            {
+                fputs("Entry is not a directory\n", stderr);
+
+                returnCode = 1;
+                filesystem.ops->cleanupNode(&filesystem, &directoryNode);
+                goto cleanup;
+            }
+
+            fprintf(stdout, "%s:\n", path);
+            returnCode = printNode(&filesystem, &directoryNode, PHX_TRUE);
+            filesystem.ops->cleanupNode(&filesystem, &directoryNode);
             break;
         }
 
