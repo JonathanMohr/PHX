@@ -107,7 +107,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y nasm
-          
+
       - name: Init on macOS
         if: ${{ matrix.os_name == 'macos' }}
         run: |
