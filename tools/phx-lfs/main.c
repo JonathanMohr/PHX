@@ -71,7 +71,7 @@ typedef unsigned char Subcommand;
 
 int main(int argc, const char* argv[])
 {
-    fputs("Warning: phx-lfs is a direct lazy port\n", stderr);
+    fputs("Warning: This tool is legacy and has some (not that minor) bugs. Use phx instead.\n", stderr);
 
     if (argc < 2) {
         print_help(argv[0], stderr);
