@@ -121,6 +121,7 @@ extern PHX_Size PHX_Filesystem_InterfaceCount;
 
 
 PHX_Result PHX_Filesystem_GetEntry(PHX_Filesystem* fs, const char* path, PHX_Filesystem_Node* wd, PHX_Filesystem_Node* nodeOut);
+PHX_Result PHX_Filesystem_SeparateParent(PHX_Context* context, const char* path, char nameOut[PHX_NAME_LEN + 1], char** parentPathOut);
 
 
 #ifdef __cplusplus

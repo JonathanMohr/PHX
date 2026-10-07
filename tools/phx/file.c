@@ -61,14 +61,15 @@ static PHX_BlockSize PHX_File_Read(PHX_BlockDevice* device, void* buffer, PHX_Bl
     while (remaining > 0)
     {
         const size_t toRead = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
-        if (fread(buf, toRead, 1, file) != 1)
-            return count - remaining;
+        size_t read = fread(buf, 1, toRead, file);
+        if (read == 0)
+            break;
 
-        remaining -= toRead;
-        buf += toRead;
+        remaining -= read;
+        buf += read;
     }
 
-    return count;
+    return count - remaining;
 }
 
 static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
@@ -86,14 +87,15 @@ static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer,
     while (remaining > 0)
     {
         const size_t toWrite = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
-        if (fwrite(buf, toWrite, 1, file) != 1)
-            return count - remaining;
+        size_t written = fwrite(buf, 1, toWrite, file);
+        if (written == 0)
+            break;
 
-        remaining -= toWrite;
-        buf += toWrite;
+        remaining -= written;
+        buf += written;
     }
 
-    return count;
+    return count - remaining;
 }
 
 static void PHX_File_Close(PHX_BlockDevice* device)

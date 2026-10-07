@@ -93,3 +93,40 @@ PHX_Result PHX_Filesystem_GetEntry(PHX_Filesystem* fs, const char* path, PHX_Fil
 
     return PHX_SUCCESS;
 }
+
+PHX_Result PHX_Filesystem_SeparateParent(PHX_Context* context, const char* path, char nameOut[PHX_NAME_LEN + 1], char** parentPathOut)
+{
+    const char* pathPtr = path;
+    const char* lastDivider = PHX_NULL;
+    while (*pathPtr)
+    {
+        if (*pathPtr == '/' && *(pathPtr + 1) != '/' && *(pathPtr + 1) != '\0')
+            lastDivider = pathPtr;
+        pathPtr++;
+    }
+
+    const char* namePtr = lastDivider ? lastDivider + 1 : path;
+    const char* nameEnd = namePtr;
+    while (*nameEnd) nameEnd++;
+
+    const PHX_Size parentLen = lastDivider ? ((lastDivider == path ) ? 1 : (PHX_Size)(lastDivider - path)) : 0;
+    const PHX_Size nameLen = (PHX_Size)(nameEnd - namePtr);
+
+    if (nameLen == 0)
+        return PHX_ERROR_INVALID_PATH;
+
+    if (nameLen > PHX_NAME_LEN)
+        return PHX_ERROR_NAME_TOO_LONG;
+
+    char* parentPath = context->allocator.allocate(&context->allocator, parentLen + 1);
+    if (!parentPath)
+        return PHX_ERROR_MEMORY;
+
+    memcpy(parentPath, path, parentLen);
+    parentPath[parentLen] = '\0';
+
+    memcpy(nameOut, namePtr, nameLen + 1);
+
+    *parentPathOut = parentPath;
+    return PHX_SUCCESS;
+}

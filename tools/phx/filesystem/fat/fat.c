@@ -167,6 +167,9 @@ static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
         memcpy(bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXTSTART + 4, volumeLabel, 11);
         memcpy(bootsector + PHX_FILESYSTEM_FAT32_HEADER_EXTSTART + 15, filesystemType, 8);
     }
+
+    *(bootsector + 510) = 0x55;
+    *(bootsector + 511) = 0xAA;
 }
 
 static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u64 id)

@@ -18,6 +18,7 @@ typedef PHX_Byte PHX_Result;
 #define PHX_ERROR_NOT_FOUND 11
 #define PHX_ERROR_NAME_TOO_LONG 12
 #define PHX_ERROR_DIRECTORY 13
+#define PHX_ERROR_INVALID_PATH 14
 
 
 typedef struct
