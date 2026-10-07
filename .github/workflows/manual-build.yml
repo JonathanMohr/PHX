@@ -118,6 +118,7 @@ jobs:
         if: ${{ matrix.os_name == 'windows' }}
         run: |
           choco install llvm -y --no-progress
+          echo "C:\Program Files\NASM" >> $env:GITHUB_PATH
           echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
         shell: pwsh
 
