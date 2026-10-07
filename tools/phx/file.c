@@ -1,38 +1,27 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #ifdef _WIN32
+#   define WIN32_LEAN_AND_MEAN
 #   include <windows.h>
 #else
-#   define _XOPEN_SOURCE 700
-#   define _FILE_OFFSET_BITS 64
+#   ifndef _XOPEN_SOURCE
+#       define _XOPEN_SOURCE 700
+#   endif
+#   ifndef _FILE_OFFSET_BITS
+#       define _FILE_OFFSET_BITS 64
+#   endif
+#   include <sys/types.h>
 #   include <sys/stat.h>
-#   include <errno.h>
 #endif
 
 #include "file.h"
 #include "types.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <errno.h>
 #include <base.h>
-
-static PHX_Bool get_file_size(const char* path, PHX_BlockSize* out)
-{
-#ifdef _WIN32
-    WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad))
-        return PHX_FALSE;
-    const uint64_t size = (uint64_t)fad.nFileSizeHigh << 32 | (uint64_t)fad.nFileSizeLow;
-#else
-    struct stat st;
-    if (stat(path, &st) != 0)
-        return PHX_FALSE;
-    const uint64_t size = (uint64_t)st.st_size;
-#endif
-
-    *out = size;
-
-    return PHX_TRUE;
-}
 
 static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
 {
@@ -45,6 +34,26 @@ static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
     if (fseeko(file, (int64_t)pos, SEEK_SET) != 0)
         return PHX_FALSE;
 #endif
+    return PHX_TRUE;
+}
+
+static PHX_Bool PHX_File_GetSize(FILE* file, PHX_BlockSize* out)
+{
+#ifdef _WIN32
+    if (_fseeki64(file, 0, SEEK_END) != 0)
+        return PHX_FALSE;
+    const int64_t size = _ftelli64(file);
+#else
+    if (fseeko(file, 0, SEEK_END) != 0)
+        return PHX_FALSE;
+    const int64_t size = (int64_t)ftello(file);
+#endif
+    if (size < 0)
+        return PHX_FALSE;
+    if (PHX_File_Seek(file, 0) != PHX_TRUE)
+        return PHX_FALSE;
+
+    *out = (PHX_BlockSize)size;
     return PHX_TRUE;
 }
 
@@ -103,36 +112,93 @@ static void PHX_File_Close(PHX_BlockDevice* device)
     fclose((FILE*)device->data);
 }
 
-PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockDevice* out, PHX_BlockSize size)
+PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_BlockDevice* out, PHX_BlockSize size)
 {
     PHX_DetailedResult result = {PHX_SUCCESS, "?"};
 
-    const char* mode;
-    if (size != PHX_FILE_SIZE_NONE)
-        mode = "w+b";
-    else if (readonly)
-        mode = "rb";
-    else
-        mode = "r+b";
+    const char* cMode;
+    switch (mode)
+    {
+        case PHX_FILE_MODE_READ:       cMode = "rb";  break;
+        case PHX_FILE_MODE_READ_WRITE: cMode = "r+b"; break;
+        case PHX_FILE_MODE_CREATE:     cMode = "w+b"; break;
+        default:
+            result.msg = "Invalid file mode";
+            result.code = PHX_ERROR_INTERNAL;
+            return result;
+    }
+
+    FILE* file;
 
 #ifdef _MSC_VER
-    FILE* file;
-    errno_t fileError = fopen_s(&file, path, mode);
-    if (fileError != 0)
-#else
-    FILE* file = fopen(path, mode);
-    int fileError = errno;
-    if (!file)
-#endif
+    const int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+    if (wlen <= 0)
     {
-        result.msg = strerror(fileError);
+        result.msg = "Invalid UTF-8 in path";
         result.code = PHX_ERROR_IO;
         return result;
     }
 
-    if (size == PHX_FILE_SIZE_NONE)
+    wchar_t* wpath = (wchar_t*)malloc((size_t)wlen * sizeof(wchar_t));
+    if (!wpath)
     {
-        if (get_file_size(path, &out->blockCount) != PHX_TRUE)
+        result.msg = "Out of memory";
+        result.code = PHX_ERROR_MEMORY;
+        return result;
+    }
+
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wpath, wlen) <= 0)
+    {
+        free(wpath);
+        result.msg = "Invalid UTF-8 in path";
+        result.code = PHX_ERROR_IO;
+        return result;
+    }
+
+    wchar_t wMode[4];
+    {
+        size_t i = 0;
+        for (; cMode[i] && i < 3; i++)
+            wMode[i] = (wchar_t)cMode[i];
+        wMode[i] = L'\0';
+    }
+
+    file = _wfopen(wpath, wMode);
+    free(wpath);
+#else
+    file = fopen(path, cMode);
+#endif
+
+    if (!file)
+    {
+        result.msg = strerror(errno);
+        result.code = PHX_ERROR_IO;
+        return result;
+    }
+
+    PHX_BlockSize blockCount;
+    if (mode == PHX_FILE_MODE_CREATE)
+    {
+        blockCount = size;
+
+        if (size != 0)
+        {
+            const PHX_Byte zero = 0;
+            if (PHX_File_Seek(file, size - 1) != PHX_TRUE ||
+                fwrite(&zero, 1, 1, file) != 1 ||
+                fflush(file) != 0 ||
+                PHX_File_Seek(file, 0) != PHX_TRUE)
+            {
+                fclose(file);
+                result.msg = "Could not preallocate file";
+                result.code = PHX_ERROR_IO;
+                return result;
+            }
+        }
+    }
+    else
+    {
+        if (PHX_File_GetSize(file, &blockCount) != PHX_TRUE)
         {
             fclose(file);
             result.msg = "Could not get size";
@@ -140,9 +206,8 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockD
             return result;
         }
     }
-    else
-        out->blockCount = size;
 
+    out->blockCount = blockCount;
     out->blockSize = 1;
     out->data = (void*)file;
 
@@ -154,14 +219,7 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_Bool readonly, PHX_BlockD
 
     out->type = "FILE";
 
-    out->readonly = readonly;
-
-    PHX_Byte zero = 0;
-    if (size != PHX_FILE_SIZE_NONE)
-    {
-        (void)PHX_File_Seek(file, size - 1);
-        (void)fwrite(&zero, 1, 1, file);
-    }
+    out->readonly = (mode == PHX_FILE_MODE_READ) ? PHX_TRUE : PHX_FALSE;
 
     return result;
 }
