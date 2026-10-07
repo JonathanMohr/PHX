@@ -10,18 +10,45 @@ import shutil
 def Parse_Dependency_File(dep_file: Path) -> list[str]:
     if not dep_file.exists():
         return []
-        
-    # TODO: Handle '\ '
 
     content = dep_file.read_text()
-    content = content.replace('\\\n', ' ')
 
-    parts = content.split()
+    content = content.replace('\\\r\n', ' ').replace('\\\n', ' ')
 
-    if not parts:
+    tokens: list[str] = []
+    current: list[str] = []
+    i, n = 0, len(content)
+
+    while i < n:
+        c = content[i]
+
+        if c == '\\' and i + 1 < n and content[i + 1] in (' ', '\\', '#'):
+            current.append(content[i + 1])
+            i += 2
+            continue
+
+        if c == '$' and i + 1 < n and content[i + 1] == '$':
+            current.append('$')
+            i += 2
+            continue
+
+        if c.isspace():
+            if current:
+                tokens.append(''.join(current))
+                current = []
+            i += 1
+            continue
+
+        current.append(c)
+        i += 1
+
+    if current:
+        tokens.append(''.join(current))
+
+    if not tokens:
         return []
-        
-    return parts[1:]
+
+    return tokens[1:]
 
 def Get_Compile_Flags(mode: BuildMode) -> list[str]:
     flags = []

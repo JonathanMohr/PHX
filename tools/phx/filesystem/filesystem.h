@@ -85,7 +85,7 @@ struct PHX_Filesystem_Operations
     PHX_Result (*closeOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
     PHX_Result (*resetOpenNode)(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
 
-    // TODO: Info
+    // TODO: Info, update node
 };
 
 struct PHX_Filesystem

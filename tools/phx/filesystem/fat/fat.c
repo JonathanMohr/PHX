@@ -1067,7 +1067,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     outFs->id = volumeId;
 
-    outFs->readonly = PHX_FALSE; // TODO: Think about it
+    outFs->readonly = PHX_FALSE;
 
     outFs->caseSensitive = PHX_FALSE;
 

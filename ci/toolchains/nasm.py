@@ -17,7 +17,19 @@ def Compile_Assembly_Source(self: toolchain.Toolchain, mode: BuildMode, src: Pat
 
     args: list[str] = []
 
-    # TODO: defines, includeDirs
+    flags: list[str] = []
+    if mode.debuginfo:
+        flags.extend(["-g", "-F", "dwarf"])
+
+    args.extend(flags)
+
+    for define in self.defines:
+        k, v = define
+        if v: args.extend(["-D", f"{k}={v}"])
+        else: args.extend(["-D", k])
+
+    for include in self.includeDirectories:
+        args.extend(["-I", str(include)])
 
     match mode.target_os:
         case OS.Windows:

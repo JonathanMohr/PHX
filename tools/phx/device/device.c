@@ -345,7 +345,7 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* de
     outDevice->blockCount = outBlockCount;
     outDevice->data = t;
 
-    outDevice->sectorOffset = device->sectorOffset; // TODO: Think about it
+    outDevice->sectorOffset = device->sectorOffset;
 
     outDevice->read = BST_Read;
     outDevice->write = BST_Write;

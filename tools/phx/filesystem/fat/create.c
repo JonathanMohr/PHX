@@ -1,6 +1,6 @@
 #include "fat.h"
 
-// TODO: IMPORTANT: CHECK writeWithLFN and check if file already exists
+// TODO: IMPORTANT: CHECK writeWithLFN
 PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;

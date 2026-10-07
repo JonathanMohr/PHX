@@ -253,7 +253,18 @@ static void print_help(const char* name)
     fputs("  Image                                  Path referencing a file with any disk image format\n", stream);
     fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
     fputs("  Format                                 Type specifier for the interface\n", stream);
-    // TODO: Size, file, index
+    fputs("  Start/Size                             Size specifier in bytes\n", stream);
+
+    fputs(
+        "\nSize specifier:\n"
+        "  You can use the power-suffixes 'k' (p=1), 'm' (p=2), 'g' (p=3) and 't' (p=4).\n"
+        "  The default base is 1024, if you use 'd' after the power-suffix, the base\n"
+        "  will be 1000. Write any decimal number with '.' as decimal point (for example\n"
+        "  100, 0.5, 32, 83.29), then the power-suffix and then the base-suffix.\n"
+        "  The value will be calculated by 'n * b^p' (n = entered number, p = power,\n"
+        "  b = base) and will be rounded to the nearest integer.\n",
+        stream
+    );
 
     fputs("\nDirect commands:\n", stream);
     fputs("  > help/-h                            Print this message\n", stream);
@@ -266,7 +277,7 @@ static void print_help(const char* name)
     fputs("  > info <image>                         Print information about the disk image\n", stream);
 
 
-    fputs("\nArea \"partition\":\n", stream); // TODO: Maybe more like "partition-table"
+    fputs("\nArea \"partition\":\n", stream);
     fputs("  Commands:\n", stream);
     fputs("  > list                                 List supported interfaces\n", stream);
     fputs("  > info <image>                         Print information about the partition table\n", stream);
@@ -360,7 +371,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         const char* sizeStr = args[2];
 
         PHX_Bool overflow;
-        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
+        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
         
         if (overflow == PHX_TRUE)
         {
@@ -559,8 +570,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             fprintf(stdout, "%s (%s):\n", imagePath, interface->partitionType);
-            fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable);
-            fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable);
+            fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.blockSize);
+            fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.blockSize);
             fprintf(stdout, "  Signature: 0x%" PRIx32 "\n", table.signature);
             fprintf(stdout, "  Max Partition Count: %" PRIu64 "\n", table.maxPartitionCount);
             fprintf(stdout, "  Partition Count: %" PRIu64 "\n", table.partitionCount);
@@ -569,8 +580,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 PHX_Partition* partition = &table.partitions[i];
                 fprintf(stdout, "    Partition %" PRIu64 "%s%s%s:\n", i + 1, (partition->name[0] != '\0') ? " (" : "", partition->name, (partition->name[0] != '\0') ? ")" : "");
-                fprintf(stdout, "      Start: %" PRIu64 "\n", partition->start);
-                fprintf(stdout, "      Size: %" PRIu64 "\n", partition->size);
+                fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.blockSize, partition->size);
+                fprintf(stdout, "      Size: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->size * diskDevice.blockSize, partition->size);
 
                 fputs("      Flags:", stdout);
                 if (partition->flags & PHX_PARTITION_BOOTABLE)
@@ -659,7 +670,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             table.partitions = newPartitions;
             PHX_Partition* newPartition = &table.partitions[table.partitionCount++];
 
-            newPartition->start = PHX_Size_FromStr(startStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
+            PHX_BlockSize start = PHX_Size_FromStr(startStr, &overflow, PHX_BlockSize);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of start\n", stderr);
@@ -669,7 +680,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            newPartition->size = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize); // TODO: Interpret as bytes
+            PHX_BlockSize size = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of size\n", stderr);
@@ -678,6 +689,26 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 diskDevice.close(&diskDevice);
                 return 1;
             }
+
+            if (start % diskDevice.blockSize)
+            {
+                fputs("Start not aligned to sector size\n", stderr);
+
+                PHX_Partition_CloseTable(context, &table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+            if (size % diskDevice.blockSize)
+            {
+                fputs("Size not aligned to sector size\n", stderr);
+
+                PHX_Partition_CloseTable(context, &table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            newPartition->start = start / diskDevice.blockSize;
+            newPartition->size = size / diskDevice.blockSize;
 
             newPartition->flags = 0;
 
