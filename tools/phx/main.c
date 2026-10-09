@@ -462,6 +462,20 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
     const char* imagePath = args[0];
 
+    // Flags
+    PHX_Bool flags_bootable = PHX_FALSE;
+    for (int i = fixedArgCount; i < argCount; i++)
+    {
+        if (strcmp(args[i], "--bootable") == 0)
+            flags_bootable = PHX_TRUE;
+        else
+        {
+            fputs("Warning: Invalid argument: ", stderr);
+            fputs(args[i], stderr);
+            fputc('\n', stderr);
+        }
+    }
+
     PHX_BlockDevice fileDevice;
     if ((detailedResult = PHX_File_Open(imagePath, PHX_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
     {
@@ -640,6 +654,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             newPartition->size = size / diskDevice.blockSize;
 
             newPartition->flags = 0;
+            if (flags_bootable == PHX_TRUE)
+                newPartition->flags |= PHX_PARTITION_BOOTABLE;
 
             newPartition->type = partitionGetType(typeStr);
 
@@ -2255,15 +2271,19 @@ static void print_help(const char* name)
     fputs("  > info <image>                         Print information about the disk image\n", stream);
 
 
-    fputs("\nArea \"partition\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > info <image>                         Print information about the partition table\n", stream);
-    fputs("  > create <image> <format>              Create empty partition table\n", stream);
-    fputs("  > add <image> <type> <start> <size>    Add partition to partition table\n", stream);
-    fputs("  > remove <image> <index>               Remove partition from partition table\n", stream);
-    fputs("  > bootsector <image> <file>            Set bootsector of partition table\n", stream);
-    // TODO: fputs("  > signature <image> <signature>      Set signature of partition table\n", stream);
+    fputs(
+        "\nArea \"partition\":\n"
+        "  Commands:\n"
+        "  > list                                 List supported interfaces\n"
+        "  > info <image>                         Print information about the partition table\n"
+        "  > create <image> <format>              Create empty partition table\n"
+        "  > add <image> <type> <start> <size> [--bootable]\n"
+        "  -> Add partition to partition table\n"
+        "  > remove <image> <index>               Remove partition from partition table\n"
+        "  > bootsector <image> <file>            Set bootsector of partition table\n",
+        stderr
+    );
+    // TODO: "  > signature <image> <signature>      Set signature of partition table\n"
 
     fputs("  Types:\n", stream);
     fputs("  - unknown\n", stream);
@@ -2307,6 +2327,21 @@ static void print_version(void)
 }
 
 
+static void printWarning(PHX_Warning warning)
+{
+    const char* f = "Unknown warning: ";
+    switch (warning.code)
+    {
+        case PHX_WARNING_FORMAT: f = "Format warning: "; break;
+        default: break;
+    }
+
+    fputs(f, stderr);
+    fputs(warning.msg, stderr);
+    fputc('\n', stderr);
+}
+
+
 int main(int argc, const char* argv[])
 {
     const char* executable = argv[0];
@@ -2347,6 +2382,8 @@ int main(int argc, const char* argv[])
     };
 
     PHX_Context context = {
+        printWarning,
+
         (PHX_Time)time(NULL),
         
         (PHX_u32)time(NULL),

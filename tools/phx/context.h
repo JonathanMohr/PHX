@@ -19,6 +19,8 @@ struct PHX_Allocator
 
 typedef struct PHX_Context
 {
+    void (*printWarning)(PHX_Warning warning);
+
     PHX_Time currentTime;
 
     PHX_u32 seed;

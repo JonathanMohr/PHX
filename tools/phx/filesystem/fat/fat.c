@@ -172,7 +172,7 @@ static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
     *(bootsector + 511) = 0xAA;
 }
 
-static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u64 id)
+static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u64 id)
 {
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
@@ -187,7 +187,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
 
     if (jmpCorrect != PHX_TRUE)
     {
-        // TODO
+        context->printWarning(PHX_Warning(PHX_WARNING_FORMAT, "Invalid FAT bootsector jmp"));
     }
 
     const char* filesystemType;
@@ -220,7 +220,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
-    return PHX_Filesystem_FAT_UpdateBootsector(fs->data, bootsector, fs->id);
+    return PHX_Filesystem_FAT_UpdateBootsector(fs->context, fs->data, bootsector, fs->id);
 }
 
 
@@ -892,7 +892,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     const PHX_u32 volumeId = PHX_Context_GetRandomU32(context);
 
-    if ((result = PHX_Filesystem_FAT_UpdateBootsector(data, bootsector, volumeId)) != PHX_SUCCESS)
+    if ((result = PHX_Filesystem_FAT_UpdateBootsector(context, data, bootsector, volumeId)) != PHX_SUCCESS)
     {
         if (data->useDevice)
         {
