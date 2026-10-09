@@ -1125,17 +1125,21 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
 
     // TODO: Allow if types match, but clear file
     PHX_Filesystem_Entry tmpEntry;
-    result = filesystem->ops->dir_lookupEntry(filesystem, parentDir, name, &tmpEntry);
-    if (result != PHX_ERROR_NOT_FOUND)
+    PHX_Filesystem_Node tmpNode;
+    PHX_Bool exists = PHX_FALSE;
+    result = (name[0] == '\0') ? PHX_SUCCESS : filesystem->ops->dir_lookupEntry(filesystem, parentDir, name, &tmpEntry);
+    if (result == PHX_SUCCESS)
     {
-        if (result == PHX_SUCCESS)
+        if (filesystem->ops->getNode(filesystem, (name[0] == '\0') ? filesystem->ops->rootNodeNumber : tmpEntry.node, &tmpNode) != PHX_SUCCESS)
         {
-            fputs("Entry ", stderr);
-            printSafe(stderr, name);
-            fputs(" already exists\n", stderr);
+            fputs("Could not get node of entry\n", stderr);
+            return 1;
         }
-        else
-            fputs("Could not look if entry already exists", stderr);
+        exists = PHX_TRUE;
+    }
+    else if (result != PHX_ERROR_NOT_FOUND)
+    {
+        fputs("Could not look if entry already exists\n", stderr);
         return 1;
     }
 
@@ -1143,12 +1147,22 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
     {
         case PHX_NATIVE_FILE:
         {
+            if (exists == PHX_TRUE)
+            {
+                fprintf(stderr, "Entry for file %s already exists\n", hostPath);
+
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
+                return 1;
+            }
+
             PHX_BlockDevice fileDevice;
             if ((detailedResult = PHX_File_Open(queryPath, PHX_FILE_MODE_READ, &fileDevice, 0)).code != PHX_SUCCESS)
             {
                 fputs("Could not open host file ", stderr);
                 printSafe(stderr, queryPath);
                 fprintf(stderr, ": %s\n", detailedResult.msg);
+
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
             const PHX_Size size = fileDevice.blockCount;
@@ -1158,7 +1172,9 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 fputs("Could not create file in filesystem: ", stderr);
                 printSafe(stderr, name);
                 fputc('\n', stderr);
+
                 fileDevice.close(&fileDevice);
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
 
@@ -1166,8 +1182,10 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             if ((result = filesystem->ops->createOpenNode(filesystem, &newNode, &openNode)) != PHX_SUCCESS)
             {
                 fputs("Could not create open node\n", stderr);
+
                 fileDevice.close(&fileDevice);
                 filesystem->ops->cleanupNode(filesystem, &newNode);
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
 
@@ -1195,6 +1213,8 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             if (done < size)
             {
                 fputs("Error while reading host file and writing it to the filesystem\n", stderr);
+
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
 
@@ -1203,16 +1223,28 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
 
         case PHX_NATIVE_DIRECTORY:
         {
+            if (exists == PHX_TRUE && tmpNode.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            {
+                fprintf(stderr, "Entry for directory %s already exists as a file\n", hostPath);
+
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
+                return 1;
+            }
+
             const PHX_Bool intoParent = (name[0] == '\0') ? PHX_TRUE : PHX_FALSE;
             PHX_Filesystem_Node* dirNode = &newNode;
 
-            if (intoParent == PHX_TRUE)
+            if (exists == PHX_TRUE)
+                dirNode = &tmpNode;
+            else if (intoParent == PHX_TRUE)
                 dirNode = parentDir;
             else if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_ENTRY_DIRECTORY, attributes, name, &newNode)) != PHX_SUCCESS)
             {
                 fputs("Could not create directory in filesystem: ", stderr);
                 printSafe(stderr, name);
                 fputc('\n', stderr);
+
+                if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
 
@@ -1228,7 +1260,9 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                     fputs("Could not open host directory ", stderr);
                     printSafe(stderr, queryPath);
                     fputc('\n', stderr);
-                    if (intoParent != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+
+                    if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+                    if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                     return 1;
                 }
 
@@ -1243,9 +1277,11 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                     if (!childPath)
                     {
                         fputs("Could not allocate memory for child path\n", stderr);
+
                         PHX_Native_CleanupEntry(&entry);
                         PHX_Native_CloseDir(&dir);
-                        if (intoParent != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+                        if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+                        if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                         return 1;
                     }
 
@@ -1263,7 +1299,8 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                     if (failed)
                     {
                         PHX_Native_CloseDir(&dir);
-                        if (intoParent != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+                        if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+                        if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                         return 1;
                     }
                 }
@@ -1271,7 +1308,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 PHX_Native_CloseDir(&dir);
             }
 
-            if (intoParent != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
+            if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
 
             break;
         }
@@ -1280,8 +1317,12 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             fputs("Invalid host entry type: ", stderr);
             printSafe(stderr, hostPath);
             fputc('\n', stderr);
+
+            if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
             break;
     }
+
+    if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
 
     return 0;
 }
