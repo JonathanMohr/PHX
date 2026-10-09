@@ -5,8 +5,7 @@
 extern "C" {
 #endif
 
-#include <types.h>
-#include <result.h>
+#include <context.h>
 
 /*
     List of dynamic container formats:

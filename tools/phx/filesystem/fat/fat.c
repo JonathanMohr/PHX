@@ -179,11 +179,16 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Filesystem_FAT_Data* d
     else
         memcpy(data->bootsector, binary_file_data, 512);
 
-    // TODO: Maybe check first 3 jmp bytes
-    /*
-        0xEB 0x?? 0x90
-        0xE9 0x?? 0x??
-    */
+    PHX_Bool jmpCorrect = PHX_FALSE;
+    if (data->bootsector[0] == 0xEB && data->bootsector[2] == 0x90)
+        jmpCorrect = PHX_TRUE;
+    else if (data->bootsector[0] == 0xE9)
+        jmpCorrect = PHX_TRUE;
+
+    if (jmpCorrect != PHX_TRUE)
+    {
+        // TODO
+    }
 
     const char* filesystemType;
     if (data->version == PHX_FILESYSTEM_FAT_12)

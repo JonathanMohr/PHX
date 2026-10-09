@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include <result.h>
+#include <context.h>
 
 #include <device/device.h>
 
