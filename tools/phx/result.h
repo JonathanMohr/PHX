@@ -1,6 +1,10 @@
 #ifndef PHX_RESULT_H
 #define PHX_RESULT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <types.h>
 
 typedef PHX_Byte PHX_Result;
@@ -27,5 +31,30 @@ typedef struct
     const char* msg;
 } PHX_DetailedResult;
 
+
+typedef PHX_Byte PHX_Warning_Code;
+
+#define PHX_WARNING_FORMAT 0
+
+typedef struct
+{
+    PHX_Warning_Code code;
+    const char* msg;
+} PHX_Warning;
+
+static inline PHX_Warning PHX_CreateWarning(PHX_Warning_Code code, const char* msg)
+{
+    PHX_Warning warning = {0};
+    warning.code = code;
+    warning.msg = msg;
+    return warning;
+}
+
+#define PHX_Warning(code, msg) PHX_CreateWarning(code, msg)
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
