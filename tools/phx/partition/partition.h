@@ -18,6 +18,8 @@ typedef PHX_u16 PHX_Partition_Flags;
 
 typedef struct PHX_Partition
 {
+    // TODO: id
+
     PHX_BlockSize start;
     PHX_BlockSize size;
 
