@@ -1,7 +1,7 @@
-import ci.toolchains.toolchain as toolchain
-import ci.cache as cache
-import ci.compileCommands as compileCommands
-from ci.defs import BuildMode, ARCH, OS, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext
+import build.toolchain.toolchain as toolchain
+import build.cache as cache
+import build.compileCommands as compileCommands
+from build.defs import BuildMode, ARCH, OS, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext
 
 from pathlib import Path
 import subprocess

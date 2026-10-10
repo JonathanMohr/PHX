@@ -2,8 +2,8 @@ from enum import Enum
 from dataclasses import dataclass
 import logging
 
-from ci.cache import BuildCache
-from ci.compileCommands import CompileCommands
+from build.cache import BuildCache
+from build.compileCommands import CompileCommands
 
 class OS(Enum):
     Windows = 1
@@ -32,6 +32,7 @@ class LINKING(Enum):
 class HOST(Enum):
     HOSTED = 1
     FREESTANDING = 2
+
 
 @dataclass()
 class BuildMode:
@@ -64,3 +65,10 @@ class BuildContext:
     logger: logging.Logger
     buildCache: BuildCache
     compileCommands: CompileCommands
+
+
+class TESTCLASS(Enum):
+    NONE = 1
+    MINIMAL = 2
+    MEDIUM = 3
+    FULL = 4

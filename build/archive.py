@@ -1,4 +1,4 @@
-from ci.defs import OS, ARCH
+from build.defs import OS, ARCH
 
 from pathlib import Path
 import shutil

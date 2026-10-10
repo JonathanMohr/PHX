@@ -1,14 +1,16 @@
-from ci.defs import OS, ARCH, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext, BuildMode
+from build.defs import OS, ARCH, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext, BuildMode, TESTCLASS
 
-from ci.toolchains.toolchain import Toolchain
-from ci.toolchains.get import Get_LLVM_Toolchain
+from build.toolchain.toolchain import Toolchain
+from build.toolchain.get import Get_LLVM_Toolchain
 
-from ci.compileCommands import CompileCommands
-import ci.cache as cacheModule
-import ci.logger as loggerModule
-import ci.archive as archiveModule
+from build.compileCommands import CompileCommands
+import build.cache as cacheModule
+import build.logger as loggerModule
+import build.archive as archiveModule
 
-from ci.toolchains.nasm import Compile_Assembly_To_Binary
+from build.toolchain.nasm import Compile_Assembly_To_Binary
+
+from build.test import test
 
 from pathlib import Path
 import sys
@@ -324,6 +326,8 @@ def main() -> bool:
 
     args = argparser.parse_args()
 
+    test_class = TESTCLASS.FULL # TODO: Arg
+
     logger = logging.getLogger("ci")
     logger.setLevel(logging.DEBUG)
 
@@ -578,6 +582,8 @@ def main() -> bool:
 
         buildCache.save()
         return False
+
+    test(logger, test_class, phx_lfs_executable)
 
     compileCommands.write(compileCommandsPath)
     buildCache.save()

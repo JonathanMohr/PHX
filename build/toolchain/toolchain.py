@@ -1,4 +1,4 @@
-from ci.defs import BuildContext, BuildMode
+from build.defs import BuildContext, BuildMode
 
 from typing import Callable, TypeAlias
 from pathlib import Path
