@@ -109,6 +109,8 @@ def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path, test_dir: Pat
     if test_class == TESTCLASS.NONE:
         return True
 
+    logger.info("Starting disk tests")
+
     formats = [Format.RAW]
 
     files = [p for p in disk_dir.rglob("*") if p.is_file()]
@@ -172,5 +174,7 @@ def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path, test_dir: Pat
 
     with image_map_path.open("w", encoding="utf-8") as f:
         json.dump(files_map, f, indent=4, ensure_ascii=False)
+
+    logger.info("Finished disk tests")
 
     return not failed
