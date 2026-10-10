@@ -235,7 +235,7 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
     PHX_Partition* partition = &table.partitions[index - 1];
     if (PHX_Partition_CreateDevice(context, diskOut, partition, partitionOut) != PHX_TRUE)
     {
-        fputs("Error while creating partition device", stderr);
+        fputs("Error while creating partition device\n", stderr);
 
         PHX_Partition_CloseTable(context, &table);
         diskOut->close(diskOut);

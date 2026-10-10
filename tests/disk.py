@@ -72,8 +72,8 @@ def same_first_n_bytes(path1: Path, path2: Path, n: int, chunk_size: int = 65536
     return True
 
 
-def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
-    build_dir = test_dir / ".build" / "disk"
+def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path, test_build_dir: Path) -> bool:
+    build_dir = test_build_dir / "disk"
     disk_dir = test_dir / "disk"
 
     image_map_path = build_dir / "image.json"
@@ -92,11 +92,17 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
     files_map: dict[str, int] = {}
 
-    failed: bool = False
-    for i, file in enumerate(files):
-        files_map[str(file.relative_to(disk_dir).as_posix())] = i + 1
+    in_file = build_dir / f"tmp-in.bin"
+    out_file = build_dir / f"tmp-out.bin"
 
-        image_name = f"disk{i + 1}"
+    if context.cleanup_artifacts:
+        tmp_image = build_dir / "tmp-image.img"
+
+    failed: bool = False
+    for i, file in enumerate(files, start=1):
+        files_map[str(file.relative_to(disk_dir).as_posix())] = i
+
+        image_name = f"disk{i}"
 
         for format in formats:
             BLOCK_SIZE = 512
@@ -106,9 +112,6 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
             format_ext = format_ext_map.get(format)
             if not format_ext: format_ext = "idk"
-
-            in_file = build_dir / f"{image_name}-{format_str}-in.bin"
-            out_file = build_dir / f"{image_name}-{format_str}-out.bin"
 
             in_size = get_in_file(file, in_file)
             if in_size == 0:
@@ -120,7 +123,11 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
             if in_size % BLOCK_SIZE > 0:
                 logger.warning(f"Size of {file} ({in_size}) will be rounded down to {in_blocks * BLOCK_SIZE}")
 
-            image = build_dir / f"{image_name}-{format_str}.{format_ext}"
+            if context.cleanup_artifacts:
+                image = tmp_image
+            else:
+                image = build_dir / f"{image_name}-{format_str}.{format_ext}"
+            
             if not create_image(logger, phx, image, format, in_blocks * BLOCK_SIZE):
                 logger.error(f"Could not create image for {file}")
                 failed = True
@@ -143,11 +150,17 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 failed = True
                 continue
 
-    files_map_list = sorted(files_map.items(), key=lambda item: item[1])
-    files_map = dict(files_map_list)
+    in_file.unlink(missing_ok=True)
+    out_file.unlink(missing_ok=True)
 
-    with image_map_path.open("w", encoding="utf-8") as f:
-        json.dump(files_map, f, indent=4, ensure_ascii=False)
+    if context.cleanup_artifacts:
+        tmp_image.unlink(missing_ok=True)
+    else:
+        files_map_list = sorted(files_map.items(), key=lambda item: item[1])
+        files_map = dict(files_map_list)
+        
+        with image_map_path.open("w", encoding="utf-8") as f:
+            json.dump(files_map, f, indent=4, ensure_ascii=False)
 
     logger.info("Finished disk tests")
 

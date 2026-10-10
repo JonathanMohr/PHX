@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import random
 
 def get_in_file(src_file: Path, out_file: Path, chunk_size: int = 65536) -> int:
     match src_file.suffix:
@@ -27,3 +28,12 @@ def get_in_file(src_file: Path, out_file: Path, chunk_size: int = 65536) -> int:
 
         case _:
             return 0
+
+def get_random_file(out_file: Path, n, chunk_size: int = 65536):
+    rng = random.Random()
+    with out_file.open("wb") as f:
+        remaining = n
+        while remaining > 0:
+            size = min(chunk_size, remaining)
+            f.write(rng.randbytes(size))
+            remaining -= size

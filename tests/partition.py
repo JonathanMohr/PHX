@@ -1,7 +1,7 @@
 from build.defs import TESTCLASS
 from tests.context import TestContext
 
-from tests.files import get_in_file
+from tests.files import get_in_file, get_random_file
 
 from enum import Enum
 from pathlib import Path
@@ -10,6 +10,7 @@ import logging
 import subprocess
 import json
 import tomllib
+import filecmp
 
 class Format(Enum):
     MBR = 1
@@ -74,9 +75,29 @@ def add_partition(logger: logging.Logger, phx: Path, image: Path, type: str, sta
 
     return True
 
+def write_partition(logger: logging.Logger, phx: Path, image: Path, index: int, file: Path) -> bool:
+    try:
+        subprocess.run([str(phx), "raw", "write", f"{image}:{index}", str(file)], check=True)
 
-def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
-    build_dir = test_dir / ".build" / "partition"
+    except Exception as e:
+        logger.error(f"Running PHX failed: {e}")
+        return False
+
+    return True
+
+def read_partition(logger: logging.Logger, phx: Path, image: Path, index: int, file: Path) -> bool:
+    try:
+        subprocess.run([str(phx), "raw", "read", f"{image}:{index}", str(file)], check=True)
+
+    except Exception as e:
+        logger.error(f"Running PHX failed: {e}")
+        return False
+
+    return True
+
+
+def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path, test_build_dir: Path) -> bool:
+    build_dir = test_build_dir / "partition"
     partition_dir = test_dir / "partition"
 
     image_map_path = build_dir / "image_map.json"
@@ -94,8 +115,15 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
     image_configs = [p for p in partition_dir.rglob("*.toml") if p.is_file()]
     image_map: dict[str, int] = {}
 
+    data_in_file = build_dir / f"tmp-in.bin"
+    data_out_file = build_dir / f"tmp-out.bin"
+    bootsector_file = build_dir / f"tmp-bootsector.bin"
+
+    if context.cleanup_artifacts:
+        tmp_image = build_dir / "tmp-image.img"
+
     failed: bool = False
-    for i, config_file in enumerate(image_configs):
+    for i, config_file in enumerate(image_configs, start=1):
         try:
             with config_file.open("rb") as f:
                 config_data = tomllib.load(f)
@@ -173,22 +201,25 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
         if skip: continue
 
-        image_map[str(config_file.relative_to(partition_dir).as_posix())] = i + 1
+        image_map[str(config_file.relative_to(partition_dir).as_posix())] = i
 
-        image_name = f"image{i + 1}"
+        image_name = f"image{i}"
 
         for format in formats:
             format_str = format_str_map.get(format)
             if not format_str: format_str = "invalid"
 
-            image = build_dir / f"{image_name}-{format_str}.img"
+            if context.cleanup_artifacts:
+                image = tmp_image
+            else:
+                image = build_dir / f"{image_name}-{format_str}.img"
+            
             if not create_image(logger, phx, image, format, config.size):
                 logger.error(f"Could not create image for {config_file}")
                 failed = True
                 continue
 
             if config.bootsector is not None:
-                bootsector_file = build_dir / f"{image_name}-{format_str}-bootsector.bin"
                 bootsector_size = get_in_file(config_file.parent / config.bootsector, bootsector_file)
 
                 if bootsector_size < 512:
@@ -204,7 +235,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                     failed = True
                     continue
 
-            for partition in config.partitions:
+            for i, partition in enumerate(config.partitions, start=1):
                 if not add_partition(
                     logger,
                     phx,
@@ -218,17 +249,43 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                     failed = True
                     break
 
+                get_random_file(data_in_file, partition.size)
+
+                if not write_partition(logger, phx, image, i, data_in_file):
+                    logger.error(f"Could not write data to partition for {config_file}")
+                    failed = True
+                    continue
+
+                if not read_partition(logger, phx, image, i, data_out_file):
+                    logger.error(f"Could not read data from partition for {config_file}")
+                    failed = True
+                    continue
+
+                if filecmp.cmp(str(data_in_file), str(data_out_file), shallow=False):
+                    logger.debug(f"Round trip for partition {i} of {config_file} successful")
+                else:
+                    logger.error(f"Round trip for partition {i} of {config_file} failed")
+                    failed = True
+                    continue
+
             if failed: continue
 
             # TODO: Read and Write
 
             # TODO: Check with pytsk3
 
-    image_map_list = sorted(image_map.items(), key=lambda item: item[1])
-    image_map = dict(image_map_list)
+    bootsector_file.unlink(missing_ok=True)
+    data_in_file.unlink(missing_ok=True)
+    data_out_file.unlink(missing_ok=True)
 
-    with image_map_path.open("w", encoding="utf-8") as f:
-        json.dump(image_map, f, indent=4, ensure_ascii=False)
+    if context.cleanup_artifacts:
+        tmp_image.unlink(missing_ok=True)
+    else:
+        image_map_list = sorted(image_map.items(), key=lambda item: item[1])
+        image_map = dict(image_map_list)
+
+        with image_map_path.open("w", encoding="utf-8") as f:
+            json.dump(image_map, f, indent=4, ensure_ascii=False)
 
     logger.info("Finished partition tests")
 

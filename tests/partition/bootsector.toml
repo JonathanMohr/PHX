@@ -17,5 +17,5 @@ bootable = false
 [[partitions]]
 type = "fat32"
 start = 17826304
-size = 519045120    # 495 MiB
+size = 519044608    # 494 MiB
 bootable = true

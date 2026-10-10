@@ -393,6 +393,7 @@ def main() -> bool:
 
     dist_dir = project_dir / ".dist"
     general_build_dir = project_dir / ".build"
+
     general_log_dir = project_dir / "logs"
 
     specific_build_dir = general_build_dir / ("dist_build" if dist_build else "local_build")
@@ -400,182 +401,155 @@ def main() -> bool:
 
     compileCommandsPath = project_dir / "compile_commands.json"
 
+    sysroot_path: str | None = args.sysroot
+    if sysroot_path:
+        sysroot_path = str(Path(sysroot_path).resolve())
 
-    buildCache = cacheModule.BuildCache(general_build_dir / "cache.json", logger)
+    if args.debug:
+        buildMode = BuildMode(
+            target_os=target_os,
+            target_arch=target_arch,
+            werror=True,
+            lto=False,
+            pic=False,
+            hidden=False,
+            optimization=OPTIMIZATION.NONE,
+            portability=PORTABILITY.PORTABLE,
+            linking=LINKING.STATIC,
+            assertions=True,
+            sanitizers=True,
+            debuginfo=True,
+            host=HOST.FREESTANDING,
+            sysroot=sysroot_path,
+            project_root=str(project_dir.resolve())
+        )
+    else:
+        buildMode = BuildMode(
+            target_os=target_os,
+            target_arch=target_arch,
+            werror=True,
+            lto=True,
+            pic=False,
+            hidden=False,
+            optimization=OPTIMIZATION.SPEED,
+            portability=PORTABILITY.PORTABLE,
+            linking=LINKING.STATIC,
+            assertions=False,
+            sanitizers=False,
+            debuginfo=False,
+            host=HOST.FREESTANDING,
+            sysroot=sysroot_path,
+            project_root=str(project_dir.resolve())
+        )
+
+    match buildMode.target_os:
+        case OS.Windows: target_os_str = "windows"
+        case OS.macOS: target_os_str = "macos"
+        case OS.Linux: target_os_str = "linux"
+
+    match buildMode.target_arch:
+        case ARCH.x86_64: target_arch_str = "x86_64"
+        case ARCH.arm64: target_arch_str = "arm64"
+
+    match buildMode.optimization:
+        case OPTIMIZATION.NONE: optimization_str = "none"
+        case OPTIMIZATION.SPEED: optimization_str = "speed"
+        case OPTIMIZATION.SIZE: optimization_str = "size"
+
+    match buildMode.portability:
+        case PORTABILITY.PORTABLE: portability_str = "portable"
+        case PORTABILITY.MACHINE: portability_str = "machine"
+
+    match buildMode.linking:
+        case LINKING.STATIC: linking_str = "static"
+        case LINKING.DYNAMIC: linking_str = "dynamic"
+
+    build_dir = specific_build_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
+    log_dir = specific_log_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
+
+    buildCache = cacheModule.BuildCache(build_dir / "cache.json", logger)
     compileCommands = CompileCommands()
-
 
     buildContext = BuildContext(logger, buildCache, compileCommands)
     toolchain = Get_LLVM_Toolchain(buildContext)
     toolchain.Set_STDC("c99")
     toolchain.Set_STDCPP("c++98")
     toolchain.Add_Define("VERSION", f"\"{version}\"")
-    
-    sysroot_path: str | None = args.sysroot
-    if sysroot_path:
-        sysroot_path = str(Path(sysroot_path).resolve())
-
-    match target_os:
-        case OS.Windows: linking = LINKING.DYNAMIC
-        case OS.Linux: linking = LINKING.DYNAMIC
-        case OS.macOS: linking = LINKING.DYNAMIC
-        case _: linking = LINKING.STATIC
+    toolchain.Add_Define("PHX_BUILD")
 
     try:
-        if dist_dir.exists(): shutil.rmtree(str(dist_dir))
+        # Embed
+        embed_build_dir = build_dir / "embed"
+        embed_include_dir = build_dir / "embed-include"
 
-        if dist_build:
-            # werror = True
-            # lto = True except static library
-            # pic = True on dynamic library
-            # hidden = True on library
-            # optimization = SPEED or SIZE
-            # portability = MACHINE or PORTABLE
-            # linking = static or dynamic
-            # assertions = off
-            # sanitizers = off
-            # debuginfo = False except specific library
-            # host = specific per lib
+        if embed_include_dir.exists():
+            shutil.rmtree(str(embed_include_dir))
 
-            if args.debug:
-                buildMode = BuildMode(
-                    target_os=target_os,
-                    target_arch=target_arch,
-                    werror=True, # set
-                    lto=False, # set
-                    pic=False, # set
-                    hidden=False, # set
-                    optimization=OPTIMIZATION.NONE,
-                    portability=PORTABILITY.PORTABLE,
-                    linking=linking,
-                    assertions=True, # set
-                    sanitizers=True, # set
-                    debuginfo=True, # set
-                    host=HOST.FREESTANDING, # set
-                    sysroot=sysroot_path,
-                    project_root=str(project_dir.resolve())
-                )
-            else:
-                buildMode = BuildMode(
-                    target_os=target_os,
-                    target_arch=target_arch,
-                    werror=True, # set
-                    lto=True, # set
-                    pic=False, # set
-                    hidden=False, # set
-                    optimization=OPTIMIZATION.SPEED,
-                    portability=PORTABILITY.PORTABLE,
-                    linking=linking,
-                    assertions=False, # set
-                    sanitizers=False, # set
-                    debuginfo=False, # set
-                    host=HOST.FREESTANDING, # set
-                    sysroot=sysroot_path,
-                    project_root=str(project_dir.resolve())
-                )
+        embed_files = embed_dir.rglob("*.asm")
+        for embed_file in embed_files:
+            binary = embed_build_dir / f"{embed_file.relative_to(embed_dir)}.bin"
+            Compile_Assembly_To_Binary(buildContext, embed_file, binary)
 
-            match buildMode.target_os:
-                case OS.Windows: target_os_str = "windows"
-                case OS.macOS: target_os_str = "macos"
-                case OS.Linux: target_os_str = "linux"
-
-            match buildMode.target_arch:
-                case ARCH.x86_64: target_arch_str = "x86_64"
-                case ARCH.arm64: target_arch_str = "arm64"
-
-            match buildMode.optimization:
-                case OPTIMIZATION.NONE: optimization_str = "none"
-                case OPTIMIZATION.SPEED: optimization_str = "speed"
-                case OPTIMIZATION.SIZE: optimization_str = "size"
-
-            match buildMode.portability:
-                case PORTABILITY.PORTABLE: portability_str = "portable"
-                case PORTABILITY.MACHINE: portability_str = "machine"
-
-            match buildMode.linking:
-                case LINKING.STATIC: linking_str = "static"
-                case LINKING.DYNAMIC: linking_str = "dynamic"
-
-            build_dir = specific_build_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
-            log_dir = specific_log_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
-
-            toolchain.Add_Define("PHX_BUILD")
-
-            # Embed
-            embed_build_dir = build_dir / "embed"
-            embed_include_dir = build_dir / "embed-include"
-
-            if embed_include_dir.exists():
-                shutil.rmtree(str(embed_include_dir))
-
-            embed_files = embed_dir.rglob("*.asm")
-            for embed_file in embed_files:
-                binary = embed_build_dir / f"{embed_file.relative_to(embed_dir)}.bin"
-                Compile_Assembly_To_Binary(buildContext, embed_file, binary)
-
-                header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
-                header.parent.mkdir(parents=True, exist_ok=True)
-                generate_header(str(binary), str(header), "binary_file")
+            header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
+            header.parent.mkdir(parents=True, exist_ok=True)
+            generate_header(str(binary), str(header), "binary_file")
 
 
-            # PHX
-            phxToolchain = copy.copy(toolchain)
-            phxToolchain.Add_Include_Directory(tools_dir / "phx")
-            phxToolchain.Add_Include_Directory(embed_include_dir)
+        # PHX
+        phxToolchain = copy.copy(toolchain)
+        phxToolchain.Add_Include_Directory(tools_dir / "phx")
+        phxToolchain.Add_Include_Directory(embed_include_dir)
 
-            phxBuildMode = copy.copy(buildMode)
-            phxBuildMode.host = HOST.HOSTED
+        phxBuildMode = copy.copy(buildMode)
+        phxBuildMode.host = HOST.HOSTED
 
-            phx = Build_Executable(logger, phxToolchain, phxBuildMode, [], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
-
-
-            # PHX-LFS
-            phx_lfsToolchain = copy.copy(toolchain)
-            phx_lfsToolchain.Add_Include_Directory(tools_dir / "phx-lfs")
-
-            phx_lfsBuildMode = copy.copy(buildMode)
-            phx_lfsBuildMode.werror = False
-            phx_lfsBuildMode.host = HOST.HOSTED
-
-            phx_lfs = Build_Executable(logger, phx_lfsToolchain, phx_lfsBuildMode, [], [], tools_dir / "phx-lfs", build_dir / "tools" / "phx-lfs", "phx-lfs")
+        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
-            # dist
-            dist_extra = project_dir / "dist-extra"
-            if dist_dir.exists():
-                shutil.rmtree(str(dist_dir))
-            Copy_Path(logger, dist_extra, dist_dir)
+        # PHX-LFS
+        phx_lfsToolchain = copy.copy(toolchain)
+        phx_lfsToolchain.Add_Include_Directory(tools_dir / "phx-lfs")
 
-            ## README
-            readme = project_dir / "README.md"
-            dist_doc_readme = dist_dir / "README.md"
-            Copy_Path(logger, readme, dist_doc_readme)
+        phx_lfsBuildMode = copy.copy(buildMode)
+        phx_lfsBuildMode.werror = False
+        phx_lfsBuildMode.host = HOST.HOSTED
 
-            ## LICENSES
-            license = project_dir / "LICENSES"
-            dist_license = dist_dir / "LICENSES"
-            Copy_Path(logger, license, dist_license)
+        phx_lfs = Build_Executable(logger, phx_lfsToolchain, phx_lfsBuildMode, [], [], tools_dir / "phx-lfs", build_dir / "tools" / "phx-lfs", "phx-lfs")
 
-            ## docs
-            docs = project_dir / "docs"
-            dist_docs = dist_dir / "docs"
-            Copy_Path(logger, docs, dist_docs)
 
-            ## bin
-            bin_dir = dist_dir / "bin"
-            bin_dir.mkdir(parents=True, exist_ok=True)
+        # dist
+        dist_extra = project_dir / "dist-extra"
+        if dist_dir.exists():
+            shutil.rmtree(str(dist_dir))
+        Copy_Path(logger, dist_extra, dist_dir)
+
+        ## README
+        readme = project_dir / "README.md"
+        dist_doc_readme = dist_dir / "README.md"
+        Copy_Path(logger, readme, dist_doc_readme)
+
+        ## LICENSES
+        license = project_dir / "LICENSES"
+        dist_license = dist_dir / "LICENSES"
+        Copy_Path(logger, license, dist_license)
+
+        ## docs
+        docs = project_dir / "docs"
+        dist_docs = dist_dir / "docs"
+        Copy_Path(logger, docs, dist_docs)
+
+        ## bin
+        bin_dir = dist_dir / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
             
-            ### phx
-            phx_executable, phx_executable_debug_info = phx
-            bin_phx = bin_dir / phx_executable.name
-            Copy_Path(logger, phx_executable, bin_phx)
+        ### phx
+        phx_executable, phx_executable_debug_info = phx
+        bin_phx = bin_dir / phx_executable.name
+        Copy_Path(logger, phx_executable, bin_phx)
 
-            phx_lfs_executable, phx_lfs_executable_debug_info = phx_lfs
-            bin_phx_lfs = bin_dir / phx_lfs_executable.name
-            Copy_Path(logger, phx_lfs_executable, bin_phx_lfs)
-
-        else:
-            pass
+        phx_lfs_executable, phx_lfs_executable_debug_info = phx_lfs
+        bin_phx_lfs = bin_dir / phx_lfs_executable.name
+        Copy_Path(logger, phx_lfs_executable, bin_phx_lfs)
 
     except Exception as e:
         logger.error(f"Build failed: {e}")
@@ -583,7 +557,7 @@ def main() -> bool:
         buildCache.save()
         return False
 
-    test(logger, test_class, phx_executable)
+    test(logger, project_dir, build_dir, test_class, bin_phx)
 
     compileCommands.write(compileCommandsPath)
     buildCache.save()

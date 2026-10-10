@@ -8,21 +8,22 @@ import tests.disk as disk
 import tests.partition as partition
 import tests.filesystem as filesystem
 
-def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path) -> bool:
-    project_dir = Path(".")
+def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class: TESTCLASS, phx: Path) -> bool:
+    test_build_dir = build_dir / "tests"
     test_dir = project_dir / "tests"
 
     context = TestContext(
-        use_tsk=True
+        use_tsk=True,
+        cleanup_artifacts=True
     )
 
-    if not disk.test(logger, context, test_class, phx, test_dir):
+    if not disk.test(logger, context, test_class, phx, test_dir, test_build_dir):
         return False
 
-    if not partition.test(logger, context, test_class, phx, test_dir):
+    if not partition.test(logger, context, test_class, phx, test_dir, test_build_dir):
         return False
 
-    if not filesystem.test(logger, context, test_class, phx, test_dir):
+    if not filesystem.test(logger, context, test_class, phx, test_dir, test_build_dir):
         return False
 
     return True
