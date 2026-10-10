@@ -1,0 +1,9 @@
+[image]
+size = 1024 # 1 KiB
+bootsector = "bootsector.hex"
+
+[[partitions]]
+type = "unknown"
+start = 512
+size = 512          # 1 KiB
+bootable = false

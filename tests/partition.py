@@ -118,6 +118,10 @@ def check_with_tsk(logger: logging.Logger, image_path: Path, config: Config, for
     try:
         volume_info = pytsk3.Volume_Info(image)
     except IOError as error:
+        # It throws an error for empty MBR partition tables
+        if format == Format.MBR and len(config.partitions) == 0:
+            return True
+        
         logger.error(f"Could not find partition table {name}: {error}")
         return False
 
@@ -169,6 +173,9 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
     image_map_path = build_dir / "image_map.json"
 
     build_dir.mkdir(parents=True, exist_ok=True)
+
+    # TODO: Add tests for reading images
+    # TODO: Add tests for removing partitions
 
     # TODO: Actually do different tests depending on test class
     if test_class == TESTCLASS.NONE:

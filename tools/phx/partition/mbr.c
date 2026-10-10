@@ -262,6 +262,10 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
         return PHX_FALSE;
     }
 
+    // TODO: Warn about multiple bootable partitions
+    // TODO: Maybe warn if start + size overflow 32-bit
+    // TODO: Warn about images above 2T
+
     memset(bootsectorBuffer, 0, 512);
 
     // Bootsector code

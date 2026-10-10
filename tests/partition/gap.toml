@@ -1,0 +1,17 @@
+[image]
+size = 536870912    # 512 MiB
+bootsector = "bootsector.hex"
+
+[[partitions]]
+type = "fat12"
+start = 512
+size = 1048576      # 1 MiB
+bootable = false
+
+# 1 MiB gap
+
+[[partitions]]
+type = "fat32"
+start = 2097664
+size = 534773248    # 509 MiB
+bootable = true

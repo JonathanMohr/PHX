@@ -14,7 +14,7 @@ def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class:
 
     context = TestContext(
         use_tsk=True,
-        cleanup_artifacts=True
+        cleanup_artifacts=False
     )
 
     if not disk.test(logger, context, test_class, phx, test_dir, test_build_dir):
