@@ -2,7 +2,6 @@
 
 /.dist/
 /logs/
-/tmp/
 /sysroots/
 
 /compile_commands.json
