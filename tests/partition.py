@@ -96,6 +96,72 @@ def read_partition(logger: logging.Logger, phx: Path, image: Path, index: int, f
     return True
 
 
+def check_with_tsk(logger: logging.Logger, image_path: Path, config: Config, format: Format, name: str) -> bool:
+    import pytsk3
+
+    match format:
+        case Format.MBR: expected_vstype = pytsk3.TSK_VS_TYPE_DOS
+        case _:
+            logger.error(f"Invalid format for tests: {format}")
+            return False
+
+    try:
+        image = pytsk3.Img_Info(str(image_path))
+    except IOError as error:
+        logger.error(f"Could not open image {name}: {error}")
+        return False
+
+    if image.get_size() != config.size:
+        logger.error(f"Size of image {name} does not match")
+        return False
+
+    try:
+        volume_info = pytsk3.Volume_Info(image)
+    except IOError as error:
+        logger.error(f"Could not find partition table {name}: {error}")
+        return False
+
+    vstype = volume_info.info.vstype
+    if vstype != expected_vstype:
+        logger.error(f"Expected type and found type of partition table do not match for {name}. Expected: {expected_vstype}; Found: {vstype}")
+
+    sector_size = volume_info.info.block_size
+
+    index: int = 0
+    for partition in volume_info:
+        if not (partition.flags & pytsk3.TSK_VS_PART_FLAG_ALLOC):
+            continue
+
+        if index >= len(config.partitions):
+            continue
+
+        config_partition = config.partitions[index]
+
+        pstart = partition.start * sector_size
+        if pstart != config_partition.start:
+            logger.error(f"Start of partition {index} does not match. Expected: {config_partition.start}; Found: {pstart}")
+            return False
+
+        psize = partition.len * sector_size
+        if psize != config_partition.size:
+            logger.error(f"Size of partition {index} does not match. Expected: {config_partition.size}; Found: {psize}")
+            return False
+
+        # TODO: Type and bootable
+
+        index += 1
+
+    if index > len(config.partitions):
+        logger.error(f"More partitions found than expected. Expected: {len(config.partitions)}, Found: {index}")
+        return False
+
+    if index < len(config.partitions):
+        logger.error(f"Less partitions found than expected. Expected: {len(config.partitions)}, Found: {index}")
+        return False
+
+    return True
+
+
 def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path, test_build_dir: Path) -> bool:
     build_dir = test_build_dir / "partition"
     partition_dir = test_dir / "partition"
@@ -270,7 +336,12 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
             if failed: continue
 
-            # TODO: Check with pytsk3
+            if context.use_tsk:
+                logger.debug("Checking with TSK")
+                if not check_with_tsk(logger, image, config, format, str(config_file)):
+                    logger.error(f"TSK check failed for {config_file}")
+                    failed = True
+                    continue
 
     bootsector_file.unlink(missing_ok=True)
     data_in_file.unlink(missing_ok=True)
