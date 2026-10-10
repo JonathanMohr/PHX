@@ -1,18 +1,16 @@
-build/
+/.build/
+/.dist/
+/logs/
+/tmp/
+/sysroots/
 
-compile_commands.json
-.cache
+/compile_commands.json
 
-dist/
-
-logs/
-
-tmp/
-sysroots/
 
 __pycache__/
 *.pyc
 *.pyo
+
 
 .DS_Store
 .AppleDouble

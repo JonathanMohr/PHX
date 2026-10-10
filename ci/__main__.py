@@ -387,8 +387,8 @@ def main() -> bool:
 
     archives_path = project_dir / "archives"
 
-    dist_dir = project_dir / "dist"
-    general_build_dir = project_dir / "build"
+    dist_dir = project_dir / ".dist"
+    general_build_dir = project_dir / ".build"
     general_log_dir = project_dir / "logs"
 
     specific_build_dir = general_build_dir / ("dist_build" if dist_build else "local_build")
@@ -537,18 +537,19 @@ def main() -> bool:
 
 
             # dist
+            dist_extra = project_dir / "dist-extra"
             if dist_dir.exists():
                 shutil.rmtree(str(dist_dir))
-            dist_dir.mkdir(parents=True, exist_ok=True)
+            Copy_Path(logger, dist_extra, dist_dir)
 
             ## README
             readme = project_dir / "README.md"
             dist_doc_readme = dist_dir / "README.md"
             Copy_Path(logger, readme, dist_doc_readme)
 
-            ## LICENSE
-            license = project_dir / "LICENSE"
-            dist_license = dist_dir / "LICENSE"
+            ## LICENSES
+            license = project_dir / "LICENSES"
+            dist_license = dist_dir / "LICENSES"
             Copy_Path(logger, license, dist_license)
 
             ## docs
