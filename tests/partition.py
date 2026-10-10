@@ -174,6 +174,8 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
     build_dir.mkdir(parents=True, exist_ok=True)
 
+    # TODO: On Linux also check fdisk, sfdisk, etc. or similar on other OS
+
     # TODO: Add tests for reading images
     # TODO: Add tests for removing partitions
 
