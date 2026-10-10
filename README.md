@@ -58,9 +58,9 @@ git clone https://github.com/JonathanMohr/phx
 cd phx
 
 # Build
-python3 -m ci
+python3 -m build
 # or
-python -m ci
+python -m build
 ```
 
 After building, `./.dist` will contain the install prefix (`/bin`, etc.). Copy its contents to a location of your choice (e.g. `~/.local/phx`), then either add its directories to you `PATH` (and possibly `MANPATH`, etc.), or link the necessary files and directories into a directory that's already on it.
