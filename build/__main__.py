@@ -583,7 +583,7 @@ def main() -> bool:
         buildCache.save()
         return False
 
-    test(logger, test_class, phx_lfs_executable)
+    test(logger, test_class, phx_executable)
 
     compileCommands.write(compileCommandsPath)
     buildCache.save()
@@ -594,5 +594,9 @@ def main() -> bool:
         
     return True
 
-if not main():
+try:
+    if not main():
+        sys.exit(1)
+except Exception as e:
+    print(f"Error: {e}")
     sys.exit(1)
