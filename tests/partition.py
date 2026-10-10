@@ -270,8 +270,6 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
             if failed: continue
 
-            # TODO: Read and Write
-
             # TODO: Check with pytsk3
 
     bootsector_file.unlink(missing_ok=True)
