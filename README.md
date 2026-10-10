@@ -47,7 +47,7 @@ scoop install phx
 
 If you decide to build manually, you will need the following tools available in your PATH:
 
-- Python 3.10+
+- Python 3.11+
 - clang, clang++
 - lld, llvm-ar
 - llvm-dsymutil or dsymutil (only required when targeting macOS)

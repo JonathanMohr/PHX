@@ -1,4 +1,7 @@
 from build.defs import TESTCLASS
+from tests.context import TestContext
+
+from tests.files import get_in_file
 
 from enum import Enum
 from pathlib import Path
@@ -69,35 +72,7 @@ def same_first_n_bytes(path1: Path, path2: Path, n: int, chunk_size: int = 65536
     return True
 
 
-def get_in_file(src_file: Path, out_file: Path, chunk_size: int = 65536) -> int:
-    match src_file.suffix:
-        case ".txt":
-            written = 0
-            with open(src_file, "r", encoding="utf-8") as src, open(out_file, "wb") as dst:
-                while chunk := src.read(chunk_size):
-                    written += dst.write(chunk.encode("utf-8"))
-            return written
-
-        case ".hex":
-            _NON_HEX = re.compile(r"[^0-9a-fA-F]")
-
-            written = 0
-            with open(src_file, "r", encoding="utf-8", errors="ignore") as src, open(out_file, "wb") as dst:
-                carry = ""
-                while chunk := src.read(chunk_size):
-                    data = carry + _NON_HEX.sub("", chunk)
-                    if len(data) % 2:
-                        carry, data = data[-1], data[:-1]
-                    else:
-                        carry = ""
-                    written += dst.write(bytes.fromhex(data))
-            return written
-
-        case _:
-            return 0
-
-
-def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
+def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
     build_dir = test_dir / ".build" / "disk"
     disk_dir = test_dir / "disk"
 
@@ -114,7 +89,6 @@ def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path, test_dir: Pat
     formats = [Format.RAW]
 
     files = [p for p in disk_dir.rglob("*") if p.is_file()]
-    files.sort()
 
     files_map: dict[str, int] = {}
 

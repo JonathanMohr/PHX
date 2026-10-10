@@ -1,14 +1,235 @@
 from build.defs import TESTCLASS
+from tests.context import TestContext
 
+from tests.files import get_in_file
+
+from enum import Enum
 from pathlib import Path
+from dataclasses import dataclass
 import logging
+import subprocess
+import json
+import tomllib
 
-def test(logger: logging.Logger, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
-    build_dir = test_dir / ".build" / "partition"
-    partition_dir = test_dir / "partition"
-    
-    build_dir.mkdir(parents=True, exist_ok=True)
+class Format(Enum):
+    MBR = 1
 
-    # TODO
+format_str_map = {
+    Format.MBR: "mbr"
+}
+
+types = ["unknown", "fat12", "fat16", "fat32"]
+
+
+@dataclass
+class Config_Partition:
+    type: str
+    start: int
+    size: int
+    bootable: bool
+
+@dataclass
+class Config:
+    size: int
+    bootsector: Path | None
+
+    partitions: list[Config_Partition]
+
+
+def create_image(logger: logging.Logger, phx: Path, image: Path, format: Format, size: int) -> bool:
+    format_str = format_str_map.get(format)
+    if not format_str:
+        logger.error("Invalid partition format")
+        return False
+
+    try:
+        subprocess.run([str(phx), "disk", "create", str(image), "raw", str(size)], check=True)
+        subprocess.run([str(phx), "partition", "create", str(image), format_str], check=True)
+
+    except Exception as e:
+        logger.error(f"Running PHX failed: {e}")
+        return False
 
     return True
+
+def set_bootsector(logger: logging.Logger, phx: Path, image: Path, bootsector: Path) -> bool:
+    try:
+        subprocess.run([str(phx), "partition", "bootsector", str(image), str(bootsector)], check=True)
+
+    except Exception as e:
+        logger.error(f"Running PHX failed: {e}")
+        return False
+
+    return True
+
+def add_partition(logger: logging.Logger, phx: Path, image: Path, type: str, start: int, size: int, bootable: bool) -> bool:
+    try:
+        args = ["partition", "add", str(image), type, str(start), str(size)]
+        if bootable: args.append("--bootable")
+        subprocess.run([str(phx), *args], check=True)
+
+    except Exception as e:
+        logger.error(f"Running PHX failed: {e}")
+        return False
+
+    return True
+
+
+def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, phx: Path, test_dir: Path) -> bool:
+    build_dir = test_dir / ".build" / "partition"
+    partition_dir = test_dir / "partition"
+
+    image_map_path = build_dir / "image_map.json"
+
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # TODO: Actually do different tests depending on test class
+    if test_class == TESTCLASS.NONE:
+        return True
+
+    logger.info("Starting partition tests")
+
+    formats = [Format.MBR]
+
+    image_configs = [p for p in partition_dir.rglob("*.toml") if p.is_file()]
+    image_map: dict[str, int] = {}
+
+    failed: bool = False
+    for i, config_file in enumerate(image_configs):
+        try:
+            with config_file.open("rb") as f:
+                config_data = tomllib.load(f)
+        except Exception as e:
+            logger.warning(f"Could not read {config_file}: {e}")
+            continue
+
+        config_data_image = config_data.get("image")
+        if not isinstance(config_data_image, dict):
+            logger.warning(f"{'No' if config_data_image is None else 'Invalid'} 'image' field in {config_file}")
+            continue
+
+        size = config_data_image.get("size")
+        if not isinstance(size, int) or isinstance(size, bool):
+            logger.warning(f"{'No' if size is None else 'Invalid'} size specified in {config_file}")
+            continue
+
+        bootsector = config_data_image.get("bootsector")
+        if isinstance(bootsector, str):
+            bootsector = Path(bootsector)
+        elif bootsector is not None:
+            logger.warning(f"Invalid bootsector specified in {config_file}")
+            continue
+
+
+        config = Config(size, bootsector, [])
+
+
+        config_partitions = config_data.get("partitions")
+        if config_partitions is None: config_partitions = []
+        if not isinstance(config_partitions, list):
+            logger.warning(f"Invalid partitions specified in {config_file}")
+            continue
+
+        skip = False
+        for config_partition in config_partitions:
+            if not isinstance(config_partition, dict):
+                logger.warning(f"Invalid partitions specified in {config_file}")
+                skip = True
+                break
+
+            config_partition_type = config_partition.get("type", "unknown")
+            if not isinstance(config_partition_type, str) or not config_partition_type in types:
+                if not isinstance(config_partition_type, str):
+                    logger.warning(f"Invalid type of partition specified in {config_file}")
+                else:
+                    logger.warning(f"Invalid type of partition specified in {config_file}: {config_partition_type}")
+                skip = True
+                break
+
+            config_partition_start = config_partition.get("start")
+            if not isinstance(config_partition_start, int) or isinstance(config_partition_start, bool):
+                logger.warning(f"{'No' if config_partition_start is None else 'Invalid'} start of partition specified in {config_file}")
+                skip = True
+                break
+
+            config_partition_size = config_partition.get("size")
+            if not isinstance(config_partition_size, int) or isinstance(config_partition_size, bool):
+                logger.warning(f"{'No' if config_partition_size is None else 'Invalid'} size of partition specified in {config_file}")
+                skip = True
+                break
+
+            config_partition_bootable = config_partition.get("bootable", False)
+            if not isinstance(config_partition_bootable, bool):
+                logger.warning(f"Invalid bootable field of partition specified in {config_file}")
+                skip = True
+                break
+
+            config.partitions.append(Config_Partition(
+                config_partition_type,
+                config_partition_start,
+                config_partition_size,
+                config_partition_bootable
+            ))
+
+        if skip: continue
+
+        image_map[str(config_file.relative_to(partition_dir).as_posix())] = i + 1
+
+        image_name = f"image{i + 1}"
+
+        for format in formats:
+            format_str = format_str_map.get(format)
+            if not format_str: format_str = "invalid"
+
+            image = build_dir / f"{image_name}-{format_str}.img"
+            if not create_image(logger, phx, image, format, config.size):
+                logger.error(f"Could not create image for {config_file}")
+                failed = True
+                continue
+
+            if config.bootsector is not None:
+                bootsector_file = build_dir / f"{image_name}-{format_str}-bootsector.bin"
+                bootsector_size = get_in_file(config_file.parent / config.bootsector, bootsector_file)
+
+                if bootsector_size < 512:
+                    logger.error(f"Bootsector file ({bootsector_size}) too small")
+                    failed = True
+                    continue
+
+                if bootsector_size > 512:
+                    logger.warning(f"Bootsector file ({bootsector_size}) too big")
+
+                if not set_bootsector(logger, phx, image, bootsector_file):
+                    logger.error(f"Could not set bootsector of image for {config_file}")
+                    failed = True
+                    continue
+
+            for partition in config.partitions:
+                if not add_partition(
+                    logger,
+                    phx,
+                    image,
+                    partition.type,
+                    partition.start,
+                    partition.size,
+                    partition.bootable
+                ):
+                    logger.error(f"Could not add partition to image for {config_file}")
+                    failed = True
+                    break
+
+            if failed: continue
+
+            # TODO: Read and Write
+
+            # TODO: Check with pytsk3
+
+    image_map_list = sorted(image_map.items(), key=lambda item: item[1])
+    image_map = dict(image_map_list)
+
+    with image_map_path.open("w", encoding="utf-8") as f:
+        json.dump(image_map, f, indent=4, ensure_ascii=False)
+
+    logger.info("Finished partition tests")
+
+    return not failed
