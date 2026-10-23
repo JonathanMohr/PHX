@@ -12,8 +12,18 @@ def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class:
     test_build_dir = build_dir / "tests"
     test_dir = project_dir / "tests"
 
+    try:
+        import pytsk3
+
+        logger.debug("Using TSK")
+        use_tsk = True
+    except ImportError:
+        logger.debug("Not using TSK")
+        logger.debug("Install python module pytsk3 to test with TSK")
+        use_tsk = False
+
     context = TestContext(
-        use_tsk=True,
+        use_tsk=use_tsk,
         cleanup_artifacts=False
     )
 

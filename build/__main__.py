@@ -311,6 +311,17 @@ def main() -> bool:
     )
 
     argparser.add_argument(
+        "--tests", "-t",
+        dest="tests",
+        type=str,
+        choices=[
+            "none", "minimal", "medium", "full"
+        ],
+        default="minimal",
+        help="Set test class"
+    )
+
+    argparser.add_argument(
         "-a", "--archive",
         dest="archive",
         action="store_true",
@@ -325,8 +336,6 @@ def main() -> bool:
     )
 
     args = argparser.parse_args()
-
-    test_class = TESTCLASS.FULL # TODO: Arg
 
     logger = logging.getLogger("ci")
     logger.setLevel(logging.DEBUG)
@@ -343,6 +352,15 @@ def main() -> bool:
         version = get_version()
 
     archive_name = args.archive_name or "phx"
+
+    match args.tests:
+        case "none": test_class = TESTCLASS.NONE
+        case "minimal": test_class = TESTCLASS.MINIMAL
+        case "medium": test_class = TESTCLASS.MEDIUM
+        case "full": test_class = TESTCLASS.FULL
+        case _:
+            logger.error("Invalid test class")
+            return False
 
     host_os = False
     host_arch = False
