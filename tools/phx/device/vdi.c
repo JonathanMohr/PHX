@@ -1,6 +1,6 @@
 #include "vdi.h"
 
-static PHX_Bool PHX_VDI_GetDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
+static PHX_Bool PHX_VDI_GetDevice(PHX_Context* context, PHX_FileDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
 {
     (void)context;
     (void)device;
@@ -9,7 +9,7 @@ static PHX_Bool PHX_VDI_GetDevice(PHX_Context* context, PHX_BlockDevice* device,
     return PHX_FALSE;
 }
 
-static PHX_Bool PHX_VDI_FormatDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
+static PHX_Bool PHX_VDI_FormatDevice(PHX_Context* context, PHX_FileDevice* device, PHX_Bool readonly, PHX_BlockDevice* out)
 {
     (void)context;
     (void)device;

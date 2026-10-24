@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+#include <file.h>
 #include <context.h>
 
 /*
@@ -19,29 +20,38 @@ extern "C" {
 */
 
 
-typedef struct PHX_BlockDevice
+typedef struct PHX_DiskDevice
 {
+    // PHX_BlockSize sectorSize;
+    // PHX_BlockSize totalSectors;
+
     PHX_BlockSize blockSize;
     PHX_BlockSize blockCount;
-    void* data;
 
     PHX_BlockSize sectorOffset;
+    void* data;
 
-    PHX_BlockSize (*read)(struct PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count);
-    PHX_BlockSize (*write)(struct PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count);
+    PHX_BlockSize (*read)(struct PHX_DiskDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count);
+    PHX_BlockSize (*write)(struct PHX_DiskDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count);
 
-    void (*close)(struct PHX_BlockDevice* device);
+    void (*close)(struct PHX_DiskDevice* device);
 
     const char* type;
 
+    // PHX_u16 totalCylinders;
+    // PHX_u8 totalHeads;
+    // PHX_u8 sectorsPerTrack;
+
     PHX_Bool readonly;
-} PHX_BlockDevice;
+} PHX_DiskDevice;
+
+#define PHX_BlockDevice PHX_DiskDevice
 
 
 typedef struct PHX_Disk_Interface
 {
-    PHX_Bool (*getDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
-    PHX_Bool (*formatDevice)(PHX_Context* context, PHX_BlockDevice* device, PHX_Bool readonly, PHX_BlockDevice* out);
+    PHX_Bool (*getDevice)(PHX_Context* context, PHX_FileDevice* device, PHX_Bool readonly, PHX_DiskDevice* out);
+    PHX_Bool (*formatDevice)(PHX_Context* context, PHX_FileDevice* device, PHX_Bool readonly, PHX_DiskDevice* out);
 
     const char* name;
     const char* type;
@@ -51,7 +61,7 @@ typedef struct PHX_Disk_Interface
 extern PHX_Disk_Interface* PHX_Disk_Interfaces[];
 extern PHX_Size PHX_Disk_InterfaceCount;
 
-PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_BlockSize targetBlockSize, PHX_Bool takeOwnership, PHX_BlockDevice* outDevice);
+PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_DiskDevice* device, PHX_BlockSize targetBlockSize, PHX_Bool takeOwnership, PHX_DiskDevice* outDevice);
 
 
 #ifdef __cplusplus

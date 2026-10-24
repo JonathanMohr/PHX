@@ -23,7 +23,7 @@
 #include <errno.h>
 #include <base.h>
 
-static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
+static inline PHX_Bool PHX_File_Seek(FILE* file, PHX_FileSize pos)
 {
     if (pos > INT64_MAX)
         return PHX_FALSE;
@@ -37,7 +37,7 @@ static inline PHX_Bool PHX_File_Seek(FILE* file, uint64_t pos)
     return PHX_TRUE;
 }
 
-static PHX_Bool PHX_File_GetSize(FILE* file, PHX_BlockSize* out)
+static PHX_Bool PHX_File_GetSize(FILE* file, PHX_FileSize* out)
 {
 #ifdef _WIN32
     if (_fseeki64(file, 0, SEEK_END) != 0)
@@ -53,66 +53,12 @@ static PHX_Bool PHX_File_GetSize(FILE* file, PHX_BlockSize* out)
     if (PHX_File_Seek(file, 0) != PHX_TRUE)
         return PHX_FALSE;
 
-    *out = (PHX_BlockSize)size;
+    *out = (PHX_FileSize)size;
     return PHX_TRUE;
 }
 
 
-static PHX_BlockSize PHX_File_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
-{
-    FILE* file = (FILE*)device->data;
-
-    if (PHX_File_Seek(file, block) != PHX_TRUE)
-        return 0;
-
-    uint8_t* buf = (uint8_t*)buffer;
-    PHX_BlockSize remaining = count;
-    while (remaining > 0)
-    {
-        const size_t toRead = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
-        size_t read = fread(buf, 1, toRead, file);
-        if (read == 0)
-            break;
-
-        remaining -= read;
-        buf += read;
-    }
-
-    return count - remaining;
-}
-
-static PHX_BlockSize PHX_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
-{
-    if (device->readonly)
-        return 0;
-
-    FILE* file = (FILE*)device->data;
-
-    if (PHX_File_Seek(file, block) != PHX_TRUE)
-        return 0;
-
-    uint8_t* buf = (uint8_t*)buffer;
-    PHX_BlockSize remaining = count;
-    while (remaining > 0)
-    {
-        const size_t toWrite = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
-        size_t written = fwrite(buf, 1, toWrite, file);
-        if (written == 0)
-            break;
-
-        remaining -= written;
-        buf += written;
-    }
-
-    return count - remaining;
-}
-
-static void PHX_File_Close(PHX_BlockDevice* device)
-{
-    fclose((FILE*)device->data);
-}
-
-PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_BlockDevice* out, PHX_BlockSize size)
+PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_FileDevice* out, PHX_FileSize size)
 {
     PHX_DetailedResult result = {PHX_SUCCESS, "?"};
 
@@ -176,10 +122,10 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_Block
         return result;
     }
 
-    PHX_BlockSize blockCount;
+    PHX_FileSize fileSize;
     if (mode == PHX_FILE_MODE_CREATE)
     {
-        blockCount = size;
+        fileSize = size;
 
         if (size != 0)
         {
@@ -198,7 +144,7 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_Block
     }
     else
     {
-        if (PHX_File_GetSize(file, &blockCount) != PHX_TRUE)
+        if (PHX_File_GetSize(file, &fileSize) != PHX_TRUE)
         {
             fclose(file);
             result.msg = "Could not get size";
@@ -207,19 +153,64 @@ PHX_DetailedResult PHX_File_Open(const char* path, PHX_File_Mode mode, PHX_Block
         }
     }
 
-    out->blockCount = blockCount;
-    out->blockSize = 1;
-    out->data = (void*)file;
-
-    out->sectorOffset = 0;
-
-    out->read = PHX_File_Read;
-    out->write = PHX_File_Write;
-    out->close = PHX_File_Close;
-
-    out->type = "FILE";
-
+    out->fileSize = fileSize;
+    out->file = (void*)file;
     out->readonly = (mode == PHX_FILE_MODE_READ) ? PHX_TRUE : PHX_FALSE;
 
     return result;
+}
+
+void PHX_File_Close(PHX_FileDevice* device)
+{
+    fclose((FILE*)device->file);
+}
+
+
+PHX_FileSize PHX_File_Read(PHX_FileDevice* device, void* buffer, PHX_FileSize offset, PHX_FileSize count)
+{
+    FILE* file = (FILE*)device->file;
+
+    if (PHX_File_Seek(file, offset) != PHX_TRUE)
+        return 0;
+
+    uint8_t* buf = (uint8_t*)buffer;
+    PHX_FileSize remaining = count;
+    while (remaining > 0)
+    {
+        const size_t toRead = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
+        size_t read = fread(buf, 1, toRead, file);
+        if (read == 0)
+            break;
+
+        remaining -= read;
+        buf += read;
+    }
+
+    return count - remaining;
+}
+
+PHX_FileSize PHX_File_Write(PHX_FileDevice* device, const void* buffer, PHX_FileSize offset, PHX_FileSize count)
+{
+    if (device->readonly == PHX_TRUE)
+        return 0;
+
+    FILE* file = (FILE*)device->file;
+
+    if (PHX_File_Seek(file, offset) != PHX_TRUE)
+        return 0;
+
+    uint8_t* buf = (uint8_t*)buffer;
+    PHX_FileSize remaining = count;
+    while (remaining > 0)
+    {
+        const size_t toWrite = (remaining > SIZE_MAX) ? SIZE_MAX : remaining;
+        size_t written = fwrite(buf, 1, toWrite, file);
+        if (written == 0)
+            break;
+
+        remaining -= written;
+        buf += written;
+    }
+
+    return count - remaining;
 }

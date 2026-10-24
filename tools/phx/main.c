@@ -135,7 +135,7 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
 
-static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_BlockDevice* fileDevice, PHX_BlockDevice* diskOut, PHX_BlockDevice* partitionOut)
+static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_FileDevice* fileDevice, PHX_BlockDevice* diskOut, PHX_BlockDevice* partitionOut)
 {
     PHX_Result result;
     PHX_DetailedResult detailedResult;
@@ -190,7 +190,7 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
         else
             fputs("Error while opening\n", stderr);
 
-        fileDevice->close(fileDevice);
+        PHX_File_Close(fileDevice);
         return PHX_NULL;
     }
 
@@ -292,13 +292,13 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
 
     const char* imagePath = args[0];
 
-    PHX_BlockSize imageSize = 0;
+    PHX_FileSize imageSize = 0;
     if (command == PHX_COMMAND_DISK_CREATE)
     {
         const char* sizeStr = args[2];
 
         PHX_Bool overflow;
-        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
+        imageSize = PHX_Size_FromStr(sizeStr, &overflow, PHX_FileSize);
         
         if (overflow == PHX_TRUE)
         {
@@ -315,7 +315,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
 
     const PHX_File_Mode imageMode = (command == PHX_COMMAND_DISK_CREATE) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ_WRITE;
 
-    PHX_BlockDevice fileDevice;
+    PHX_FileDevice fileDevice;
     if ((detailedResult = PHX_File_Open(imagePath, imageMode, &fileDevice, imageSize)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
@@ -332,7 +332,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             {
                 fprintf(stderr, "Could not find disk interface for type \"%s\"\n", imageType);
                 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 return 1;
             }
 
@@ -341,7 +341,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             {
                 fputs("Formatting failed", stderr);
 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 return 1;
             }
 
@@ -361,7 +361,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
                 else
                     fputs("Error while opening\n", stderr);
 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 return 1;
             }
 
@@ -476,7 +476,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         }
     }
 
-    PHX_BlockDevice fileDevice;
+    PHX_FileDevice fileDevice;
     if ((detailedResult = PHX_File_Open(imagePath, PHX_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
@@ -491,7 +491,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         else
             fputs("Error while opening\n", stderr);
 
-        fileDevice.close(&fileDevice);
+        PHX_File_Close(&fileDevice);
         return 1;
     }
 
@@ -747,7 +747,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            PHX_BlockDevice bootsectorFileDevice;
+            PHX_FileDevice bootsectorFileDevice;
             if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
@@ -757,11 +757,11 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            if (bootsectorFileDevice.read(&bootsectorFileDevice, table.bootsector, 0, 512) != 512)
+            if (PHX_File_Read(&bootsectorFileDevice, table.bootsector, 0, 512) != 512)
             {
                 fputs("Error reading from bootsector file\n", stderr);
 
-                bootsectorFileDevice.close(&bootsectorFileDevice);
+                PHX_File_Close(&fileDevice);
                 PHX_Partition_CloseTable(context, &table);
                 diskDevice.close(&diskDevice);
                 return 1;
@@ -771,13 +771,13 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fputs("Error writing partition table to disk\n", stderr);
 
-                bootsectorFileDevice.close(&bootsectorFileDevice);
+                PHX_File_Close(&fileDevice);
                 PHX_Partition_CloseTable(context, &table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            bootsectorFileDevice.close(&bootsectorFileDevice);
+            PHX_File_Close(&fileDevice);
             PHX_Partition_CloseTable(context, &table);
             break;
         }
@@ -995,7 +995,7 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
             return 1;
         }
 
-        PHX_BlockDevice fileDevice;
+        PHX_FileDevice fileDevice;
         if ((detailedResult = PHX_File_Open(hostPath, PHX_FILE_MODE_CREATE, &fileDevice, node->size)).code != PHX_SUCCESS)
         {
             fprintf(stderr, "Could not open file %s: %s\n", hostPath, detailedResult.msg);
@@ -1013,13 +1013,13 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
             PHX_Filesystem_Size read = filesystem->ops->file_read(filesystem, node, &openNode, chunk, buffer);
             if (read == 0)
                 break;
-            PHX_Filesystem_Size currentWritten = fileDevice.write(&fileDevice, buffer, written, read);
+            PHX_Filesystem_Size currentWritten = PHX_File_Write(&fileDevice, buffer, written, read);
             written += currentWritten;
             if (currentWritten != read)
                 break;
         }
 
-        fileDevice.close(&fileDevice);
+        PHX_File_Close(&fileDevice);
         (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
 
         if (written < node->size)
@@ -1171,7 +1171,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 return 1;
             }
 
-            PHX_BlockDevice fileDevice;
+            PHX_FileDevice fileDevice;
             if ((detailedResult = PHX_File_Open(queryPath, PHX_FILE_MODE_READ, &fileDevice, 0)).code != PHX_SUCCESS)
             {
                 fputs("Could not open host file ", stderr);
@@ -1181,7 +1181,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
-            const PHX_Size size = fileDevice.blockCount;
+            const PHX_FileSize size = fileDevice.fileSize;
 
             if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_ENTRY_FILE, attributes, name, &newNode)) != PHX_SUCCESS)
             {
@@ -1189,7 +1189,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 printSafe(stderr, name);
                 fputc('\n', stderr);
 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
@@ -1199,7 +1199,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             {
                 fputs("Could not create open node\n", stderr);
 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 filesystem->ops->cleanupNode(filesystem, &newNode);
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
@@ -1212,7 +1212,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 const PHX_Filesystem_Size remaining = size - done;
                 const PHX_Filesystem_Size chunk = (remaining < sizeof(buffer)) ? remaining : sizeof(buffer);
 
-                const PHX_Filesystem_Size read = fileDevice.read(&fileDevice, buffer, done, chunk);
+                const PHX_Filesystem_Size read = PHX_File_Read(&fileDevice, buffer, done, chunk);
                 if (read == 0)
                     break;
 
@@ -1223,7 +1223,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             }
 
             (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
-            fileDevice.close(&fileDevice);
+            PHX_File_Close(&fileDevice);
             filesystem->ops->cleanupNode(filesystem, &newNode);
 
             if (done < size)
@@ -1470,7 +1470,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
     const char* deviceStr = args[0];
 
-    PHX_BlockDevice inFileDevice;
+    PHX_FileDevice inFileDevice;
     PHX_BlockDevice diskDevice;
     PHX_BlockDevice partitionDevice;
     PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
@@ -1797,7 +1797,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             const char* file = args[2];
             const PHX_File_Mode fileMode = (command == PHX_COMMAND_FILESYSTEM_READ) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ;
             const PHX_BlockSize fileSize = (command == PHX_COMMAND_FILESYSTEM_READ) ? node.size : 0;
-            PHX_BlockDevice fileDevice;
+            PHX_FileDevice fileDevice;
             if ((detailedResult = PHX_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg);
@@ -1813,7 +1813,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 fputs("Could not create open node\n", stderr);
 
                 returnCode = 1;
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 filesystem.ops->cleanupNode(&filesystem, &node);
                 goto cleanup;
             }
@@ -1828,15 +1828,15 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 while (read > 0 && written < node.size)
                 {
                     read = filesystem.ops->file_read(&filesystem, &node, &openNode, sizeof(buffer), buffer);
-                    written += fileDevice.write(&fileDevice, buffer, written, read);
+                    written += PHX_File_Write(&fileDevice, buffer, written, read);
                 }
             }
             else // write
             {
-                expected = fileDevice.blockCount;
-                while (read > 0 && written < fileDevice.blockCount)
+                expected = fileDevice.fileSize;
+                while (read > 0 && written < fileDevice.fileSize)
                 {
-                    read = fileDevice.read(&fileDevice, buffer, written, sizeof(buffer));
+                    read = PHX_File_Read(&fileDevice, buffer, written, sizeof(buffer));
                     written += filesystem.ops->file_write(&filesystem, &node, &openNode, read, buffer);
                 }
             }
@@ -1848,7 +1848,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             (void)filesystem.ops->closeOpenNode(&filesystem, &openNode);
-            fileDevice.close(&fileDevice);
+            PHX_File_Close(&fileDevice);
             filesystem.ops->cleanupNode(&filesystem, &node);
 
             break;
@@ -2044,7 +2044,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         {
             const char* bootsectorFileStr = args[1];
 
-            PHX_BlockDevice bootsectorFileDevice;
+            PHX_FileDevice bootsectorFileDevice;
             if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
@@ -2054,12 +2054,12 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             PHX_Byte bootsector[512];
-            if (bootsectorFileDevice.read(&bootsectorFileDevice, bootsector, 0, 512) != 512)
+            if (PHX_File_Read(&bootsectorFileDevice, bootsector, 0, 512) != 512)
             {
                 fputs("Error reading from bootsector file\n", stderr);
 
                 returnCode = 1;
-                bootsectorFileDevice.close(&bootsectorFileDevice);
+                PHX_File_Close(&bootsectorFileDevice);
                 goto cleanup;
             }
 
@@ -2069,7 +2069,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 returnCode = 1;
             }
 
-            bootsectorFileDevice.close(&bootsectorFileDevice);
+            PHX_File_Close(&bootsectorFileDevice);
 
             break;
         }
@@ -2119,7 +2119,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
 
     const char* deviceStr = args[0];
 
-    PHX_BlockDevice inFileDevice;
+    PHX_FileDevice inFileDevice;
     PHX_BlockDevice diskDevice;
     PHX_BlockDevice partitionDevice;
     PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
@@ -2139,7 +2139,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             }
 
 
-            PHX_BlockDevice fileDevice;
+            PHX_FileDevice fileDevice;
             if ((detailedResult = PHX_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg);
@@ -2156,7 +2156,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             {
                 fputs("Could not allocate buffer\n", stderr);
 
-                fileDevice.close(&fileDevice);
+                PHX_File_Close(&fileDevice);
                 device->close(device);
                 if (device == &partitionDevice)
                     diskDevice.close(&diskDevice);
@@ -2175,18 +2175,18 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                         fputs("Could not read chunk from device\n", stderr);
 
                         context->allocator.free(&context->allocator, buffer);
-                        fileDevice.close(&fileDevice);
+                        PHX_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
                         return 1;
                     }
-                    if (fileDevice.write(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    if (PHX_File_Write(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
                     {
                         fputs("Could not write chunk to file\n", stderr);
 
                         context->allocator.free(&context->allocator, buffer);
-                        fileDevice.close(&fileDevice);
+                        PHX_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2195,12 +2195,12 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 }
                 else // write
                 {
-                    if (fileDevice.read(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    if (PHX_File_Read(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
                     {
                         fputs("Could not read chunk from file\n", stderr);
 
                         context->allocator.free(&context->allocator, buffer);
-                        fileDevice.close(&fileDevice);
+                        PHX_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2212,7 +2212,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                         fputs("Could not write chunk to device\n", stderr);
 
                         context->allocator.free(&context->allocator, buffer);
-                        fileDevice.close(&fileDevice);
+                        PHX_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2224,7 +2224,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             }
 
             context->allocator.free(&context->allocator, buffer);
-            fileDevice.close(&fileDevice);
+            PHX_File_Close(&fileDevice);
             break;
         }
     }

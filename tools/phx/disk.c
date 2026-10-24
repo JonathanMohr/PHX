@@ -16,7 +16,7 @@ PHX_Disk_Interface* PHX_Disk_FindInterfaceByType(const char* type)
     return PHX_NULL;
 }
 
-PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_BlockDevice* fileDevice, PHX_BlockDevice* diskDeviceOut)
+PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_FileDevice* fileDevice, PHX_BlockDevice* diskDeviceOut)
 {
     for (PHX_Size i = 0; i < PHX_Disk_InterfaceCount; i++)
     {
@@ -88,4 +88,38 @@ PHX_Result PHX_Filesystem_Open(PHX_Context* context, PHX_BlockDevice* device, PH
     }
 
     return PHX_ERROR_FORMAT;
+}
+
+
+static PHX_BlockSize PHX_DiskDevice_File_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+{
+    return PHX_File_Read(device->data, buffer, block, count);
+}
+
+static PHX_BlockSize PHX_DiskDevice_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+{
+    return PHX_File_Write(device->data, buffer, block, count);
+}
+
+static void PHX_DiskDevice_File_Close(PHX_BlockDevice* device)
+{
+    PHX_File_Close(device->data);
+}
+
+void PHX_File_GetDiskDevice(PHX_FileDevice* fileDevice, PHX_DiskDevice* out)
+{
+    out->blockSize = 1;
+    out->blockCount = fileDevice->fileSize;
+    out->data = fileDevice;
+
+    out->sectorOffset = 0;
+
+    out->read = PHX_DiskDevice_File_Read;
+    out->write = PHX_DiskDevice_File_Write;
+
+    out->close = PHX_DiskDevice_File_Close;
+
+    out->type = "FILE-DEVICE";
+
+    out->readonly = fileDevice->readonly;
 }
