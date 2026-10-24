@@ -362,8 +362,20 @@ def main() -> bool:
             logger.error("Invalid test class")
             return False
 
-    host_os = False
-    host_arch = False
+    os_uname = platform.system().lower()
+    if (os_uname == "windows"): host_os = OS.Windows
+    elif (os_uname == "darwin"): host_os = OS.macOS
+    elif (os_uname == "linux"): host_os = OS.Linux
+    else:
+        logger.error(f"Unknown host OS uname: {os_uname}")
+        return False
+
+    cpu_arch = platform.machine().lower()
+    if (cpu_arch in ["x86_64", "amd64"]): host_arch = ARCH.x86_64
+    elif (cpu_arch in ["arm64", "aarch64"]): host_arch = ARCH.arm64
+    else:
+        logger.error(f"Unknown host architecture: {cpu_arch}")
+        return False
 
     match args.os:
         case "windows": target_os = OS.Windows
@@ -372,15 +384,10 @@ def main() -> bool:
 
         case None | _:
             if args.os is not None:
-                logger.warning("Invalid OS")
-            
-            os_uname = platform.system().lower()
-            if (os_uname == "windows"): target_os = OS.Windows
-            elif (os_uname == "darwin"): target_os = OS.macOS
-            elif (os_uname == "linux"): target_os = OS.Linux
-            else:
-                logger.error("Invalid OS")
+                logger.error(f"Invalid OS: {args.os}")
                 return False
+
+            target_os = host_os
 
     match args.arch:
         case "x86-64" | "x86_64" | "x86":
@@ -390,16 +397,12 @@ def main() -> bool:
 
         case None | _:
             if args.arch is not None:
-                logger.warning("Invalid arch")
-            
-            cpu_arch = platform.machine().lower()
-            if (cpu_arch in ["x86_64", "amd64"]): target_arch = ARCH.x86_64
-            elif (cpu_arch in ["arm64", "aarch64"]): target_arch = ARCH.arm64
-            else:
-                logger.error("Invalid arch")
+                logger.error(f"Invalid arch: {args.arch}")
                 return False
+            
+            target_arch = host_arch
 
-    isHost = host_os and host_arch
+    isHost = host_os == target_os and host_arch == target_arch
 
     project_dir = Path(".")
     # include_dir = project_dir / "include"
@@ -575,7 +578,11 @@ def main() -> bool:
         buildCache.save()
         return False
 
-    test(logger, project_dir, build_dir, test_class, bin_phx)
+    if not test(logger, project_dir, build_dir, test_class, bin_phx, host_os):
+        logger.error(f"Tests failed")
+
+        buildCache.save()
+        return False
 
     compileCommands.write(compileCommandsPath)
     buildCache.save()
