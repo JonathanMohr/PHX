@@ -220,6 +220,8 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
         part->start = startLBA;
         part->size = countLBA;
 
+        part->signature = (PHX_Partition_Signature)i;
+
         part->flags = 0;
         if (bootFlag == 0x80)
             part->flags |= PHX_PARTITION_BOOTABLE;

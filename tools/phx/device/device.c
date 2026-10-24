@@ -5,9 +5,11 @@
 #include "raw.h"
 #include "types.h"
 #include "vdi.h"
+#include "vhd.h"
 
 PHX_Disk_Interface* PHX_Disk_Interfaces[] = {
-    // TODO: &PHX_VDI_Interface,
+    &PHX_VDI_Interface,
+    &PHX_VHD_Interface,
     &PHX_RAW_Interface
 };
 PHX_Size PHX_Disk_InterfaceCount = sizeof(PHX_Disk_Interfaces) / sizeof(PHX_Disk_Interfaces[0]);

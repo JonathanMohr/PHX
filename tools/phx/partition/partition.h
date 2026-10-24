@@ -7,6 +7,8 @@ extern "C" {
 
 #include <device/device.h>
 
+typedef PHX_u32 PHX_Partition_Signature;
+
 typedef PHX_Byte PHX_Partition_Type;
 #define PHX_PARTITION_UNKNOWN 0
 #define PHX_PARTITION_FAT12   1
@@ -23,6 +25,8 @@ typedef struct PHX_Partition
     PHX_BlockSize start;
     PHX_BlockSize size;
 
+    PHX_Partition_Signature signature;
+
     PHX_u16 flags;
 
     PHX_Partition_Type type;
@@ -37,7 +41,7 @@ typedef struct PHX_Partition_Table
     PHX_PartitionSize partitionCount;
     PHX_PartitionSize maxPartitionCount;
 
-    PHX_u32 signature;
+    PHX_Partition_Signature signature;
 
     PHX_BlockSize startUsable;
     PHX_BlockSize sizeUsable;
