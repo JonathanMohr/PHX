@@ -339,7 +339,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             PHX_BlockDevice diskDevice;
             if (interface->formatDevice(context, &fileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
             {
-                fputs("Formatting failed", stderr);
+                fputs("Formatting failed\n", stderr);
 
                 PHX_File_Close(&fileDevice);
                 return 1;
