@@ -255,9 +255,9 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     if (!data)
         return PHX_ERROR_MEMORY;
 
-    const PHX_BlockSize blocksForBootsector = (512 + device->blockSize - 1) / device->blockSize;
+    const PHX_SectorSize blocksForBootsector = (512 + device->sectorSize - 1) / device->sectorSize;
 
-    PHX_Byte* sectorBuffer = context->allocator.allocate(&context->allocator, blocksForBootsector * device->blockSize);
+    PHX_Byte* sectorBuffer = context->allocator.allocate(&context->allocator, blocksForBootsector * device->sectorSize);
     if (!sectorBuffer)
     {
         context->allocator.free(&context->allocator, data);
@@ -405,7 +405,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     }
 
     
-    if (device->blockSize != bytesPerSector)
+    if (device->sectorSize != bytesPerSector)
     {
         PHX_BlockDevice* usedDevice = context->allocator.allocate(&context->allocator, sizeof(PHX_BlockDevice));
         if (!usedDevice)
@@ -634,16 +634,16 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         return PHX_ERROR_MEMORY;
 
     PHX_u16 bytesPerSector;
-    if (device->blockSize <= 512)
+    if (device->sectorSize <= 512)
         bytesPerSector = 512;
-    else if (device->blockSize <= 1024)
+    else if (device->sectorSize <= 1024)
         bytesPerSector = 1024;
-    else if (device->blockSize <= 2048)
+    else if (device->sectorSize <= 2048)
         bytesPerSector = 2048;
     else
         bytesPerSector = 4096;
 
-    if (device->blockSize != bytesPerSector)
+    if (device->sectorSize != bytesPerSector)
     {
         PHX_BlockDevice* usedDevice = context->allocator.allocate(&context->allocator, sizeof(PHX_BlockDevice));
         if (!usedDevice)
@@ -711,7 +711,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     const PHX_u32 fat32Floor = (customVersion == PHX_TRUE) ? 1 : (4096 / bytesPerSector);
 
     PHX_Filesystem_FAT_Version version;
-    if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_32) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat32_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat32_rootDirEntryCount, fatCount, 32, 65525, 0x0FFFFFF4, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, fat32Floor, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_32) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat32_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat32_rootDirEntryCount, fatCount, 32, 65525, 0x0FFFFFF4, data->usedDevice->totalSectors, bytesPerSector, maxSectorsPerCluster, fat32Floor, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
         version = PHX_FILESYSTEM_FAT_32;
         if (customRootDirEntryCount != PHX_TRUE)
@@ -719,7 +719,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (customReservedSectors != PHX_TRUE)
             reservedSectors = fat32_reservedSectors;
     }
-    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_16) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat16_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat16_rootDirEntryCount, fatCount, 16, 4085, 65524, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_16) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat16_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat16_rootDirEntryCount, fatCount, 16, 4085, 65524, data->usedDevice->totalSectors, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
         version = PHX_FILESYSTEM_FAT_16;
         if (customRootDirEntryCount != PHX_TRUE)
@@ -727,7 +727,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (customReservedSectors != PHX_TRUE)
             reservedSectors = fat16_reservedSectors;
     }
-    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_12) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat12_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat12_rootDirEntryCount, fatCount, 12, 1, 4084, data->usedDevice->blockCount, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
+    else if ((customVersion == PHX_FALSE || setVersion == PHX_FILESYSTEM_FAT_12) && fitsFatType((customReservedSectors == PHX_TRUE) ? reservedSectors : fat12_reservedSectors, (customRootDirEntryCount == PHX_TRUE) ? rootDirEntryCount : fat12_rootDirEntryCount, fatCount, 12, 1, 4084, data->usedDevice->totalSectors, bytesPerSector, maxSectorsPerCluster, 1, &sectorsPerCluster, &fatSectorCount) == PHX_TRUE)
     {
         version = PHX_FILESYSTEM_FAT_12;
         if (customRootDirEntryCount != PHX_TRUE)
@@ -747,7 +747,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     }
 
 
-    const PHX_u32 totalSectors = (PHX_u32)data->usedDevice->blockCount;
+    const PHX_u32 totalSectors = (PHX_u32)data->usedDevice->totalSectors;
 
     
     if ((PHX_u32)reservedSectors >= totalSectors)
@@ -929,14 +929,14 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         buffer = data->buffer;
         bufferSize = bytesPerSector;
     }
-    const PHX_BlockSize blocksPerCycle = bufferSize / bytesPerSector;
+    const PHX_SectorSize blocksPerCycle = bufferSize / bytesPerSector;
 
 
     if ((PHX_Size)bytesPerSector > sizeof(zeroBuffer))
         memset(data->buffer, 0, bytesPerSector);
-    for (PHX_BlockSize i = reservedSectors; i < rootDirEntryStart; i += blocksPerCycle)
+    for (PHX_SectorSize i = reservedSectors; i < rootDirEntryStart; i += blocksPerCycle)
     {
-        const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > rootDirEntryStart) ? (rootDirEntryStart - i) : blocksPerCycle;
+        const PHX_SectorSize blocksToWrite = (i + blocksPerCycle > rootDirEntryStart) ? (rootDirEntryStart - i) : blocksPerCycle;
         if (data->usedDevice->write(data->usedDevice, buffer, i, blocksToWrite) != blocksToWrite)
         {
             if (data->useDevice)
@@ -991,9 +991,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         memset(data->buffer, 0, bytesPerSector);
     if (version == PHX_FILESYSTEM_FAT_12 || version == PHX_FILESYSTEM_FAT_16)
     {
-        for (PHX_BlockSize i = (PHX_u64)rootDirEntryStart; i < (PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors; i += blocksPerCycle)
+        for (PHX_SectorSize i = (PHX_u64)rootDirEntryStart; i < (PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors; i += blocksPerCycle)
         {
-            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors)) ? (((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors) - i) : blocksPerCycle;
+            const PHX_SectorSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors)) ? (((PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors) - i) : blocksPerCycle;
             if (data->usedDevice->write(data->usedDevice, buffer, i, blocksToWrite) != blocksToWrite)
             {
                 if (data->useDevice)
@@ -1009,9 +1009,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     }
     else if (context->fast == PHX_TRUE)
     {
-        for (PHX_BlockSize i = 0; i < sectorsPerCluster; i += blocksPerCycle)
+        for (PHX_SectorSize i = 0; i < sectorsPerCluster; i += blocksPerCycle)
         {
-            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > sectorsPerCluster) ? (sectorsPerCluster - i) : blocksPerCycle;
+            const PHX_SectorSize blocksToWrite = (i + blocksPerCycle > sectorsPerCluster) ? (sectorsPerCluster - i) : blocksPerCycle;
             if (data->usedDevice->write(data->usedDevice, buffer, i + nonDataSectors, blocksToWrite) != blocksToWrite)
             {
                 if (data->useDevice)
@@ -1028,9 +1028,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     if (context->fast != PHX_TRUE)
     {
-        for (PHX_BlockSize i = 0; i < (PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters; i += blocksPerCycle)
+        for (PHX_SectorSize i = 0; i < (PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters; i += blocksPerCycle)
         {
-            const PHX_BlockSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters)) ? (((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters) - i) : blocksPerCycle;
+            const PHX_SectorSize blocksToWrite = (i + blocksPerCycle > ((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters)) ? (((PHX_u64)sectorsPerCluster * (PHX_u64)data->totalClusters) - i) : blocksPerCycle;
             if (data->usedDevice->write(data->usedDevice, buffer, i + nonDataSectors, blocksToWrite) != blocksToWrite)
             {
                 if (data->useDevice)

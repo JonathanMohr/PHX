@@ -373,7 +373,7 @@ PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data*
 PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
 PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut);
 
-static inline PHX_BlockSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
+static inline PHX_SectorSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
 {
     return (PHX_u64)(cluster - 2) * (PHX_u64)data->sectorsPerCluster + (PHX_u64)data->dataSector;
 }

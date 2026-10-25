@@ -13,11 +13,11 @@ typedef struct PHX_Partition_Device
 {
     PHX_Context* context;
     PHX_BlockDevice* device;
-    PHX_BlockSize start;
-    PHX_BlockSize size;
+    PHX_SectorSize start;
+    PHX_SectorSize size;
 } PHX_Partition_Device;
 
-static PHX_BlockSize PHX_Partition_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_Partition_Read(PHX_BlockDevice* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_Partition_Device* data = (PHX_Partition_Device*)device->data;
 
@@ -30,7 +30,7 @@ static PHX_BlockSize PHX_Partition_Read(PHX_BlockDevice* device, void* buffer, P
     return data->device->read(data->device, buffer, block + data->start, count);
 }
 
-static PHX_BlockSize PHX_Partition_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_Partition_Write(PHX_BlockDevice* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_Partition_Device* data = (PHX_Partition_Device*)device->data;
 
@@ -52,7 +52,7 @@ static void PHX_Partition_Close_(PHX_BlockDevice* device)
 
 PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition* partition, PHX_BlockDevice* outDevice)
 {
-    if (partition->start > device->blockCount || partition->size > device->blockCount - partition->start)
+    if (partition->start > device->totalSectors || partition->size > device->totalSectors - partition->start)
         return PHX_FALSE;
 
     PHX_Partition_Device* data = (PHX_Partition_Device*)context->allocator.allocate(&context->allocator, sizeof(PHX_Partition_Device));
@@ -64,8 +64,8 @@ PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* devic
     data->start = partition->start;
     data->size = partition->size;
 
-    outDevice->blockSize = device->blockSize;
-    outDevice->blockCount = partition->size;
+    outDevice->sectorSize = device->sectorSize;
+    outDevice->totalSectors = partition->size;
     outDevice->data = data;
 
     outDevice->sectorOffset = partition->start;
@@ -75,6 +75,10 @@ PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* devic
     outDevice->close = PHX_Partition_Close_;
 
     outDevice->type = "PARTITION-DEVICE";
+
+    outDevice->totalCylinders = device->totalCylinders;
+    outDevice->totalHeads = device->totalHeads;
+    outDevice->sectorsPerTrack = device->sectorsPerTrack;
 
     outDevice->readonly = device->readonly;
 

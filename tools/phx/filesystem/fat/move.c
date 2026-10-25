@@ -253,7 +253,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem* fs, PHX_Filesystem_Node*
 
         if (movedCluster >= 2)
         {
-            const PHX_BlockSize movedStart = PHX_Filesystem_FAT_GetClusterStart(data, movedCluster);
+            const PHX_SectorSize movedStart = PHX_Filesystem_FAT_GetClusterStart(data, movedCluster);
             if (data->usedDevice->read(data->usedDevice, data->buffer, movedStart, 1) != 1)
                 return PHX_ERROR_IO;
 

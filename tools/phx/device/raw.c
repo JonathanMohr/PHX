@@ -6,7 +6,7 @@
 
 #define RAW_Type "RAW-DISK"
 
-static const PHX_BlockSize blockSize = 512;
+static const PHX_SectorSize sectorSize = 512;
 
 typedef struct PHX_RAW_Data
 {
@@ -16,13 +16,13 @@ typedef struct PHX_RAW_Data
 } PHX_RAW_Data;
 
 
-static PHX_BlockSize PHX_RAW_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_RAW_Read(PHX_BlockDevice* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_RAW_Data* data = device->data;
     return data->transformedDevice.read(&data->transformedDevice, buffer, block, count);
 }
 
-static PHX_BlockSize PHX_RAW_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_RAW_Write(PHX_BlockDevice* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_RAW_Data* data = device->data;
     return data->transformedDevice.write(&data->transformedDevice, buffer, block, count);
@@ -52,14 +52,14 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_FileDevice* device, 
 
     PHX_File_GetDiskDevice(device, &data->fileDevice);
 
-    if (PHX_BlockCountTransformDevice(context, &data->fileDevice, blockSize, PHX_TRUE, &data->transformedDevice) != PHX_TRUE)
+    if (PHX_BlockCountTransformDevice(context, &data->fileDevice, sectorSize, PHX_TRUE, &data->transformedDevice) != PHX_TRUE)
     {
         context->allocator.free(&context->allocator, data);
         return PHX_FALSE;
     }
 
-    out->blockSize = blockSize;
-    out->blockCount = data->transformedDevice.blockCount;
+    out->sectorSize = sectorSize;
+    out->totalSectors = data->transformedDevice.totalSectors;
     out->data = data;
 
     out->sectorOffset = 0;
@@ -70,6 +70,10 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_FileDevice* device, 
     out->close = PHX_RAW_Close;
 
     out->type = RAW_Type;
+
+    out->totalCylinders = out->totalSectors / (255 * 63);
+    out->totalHeads = 255;
+    out->sectorsPerTrack = 63;
 
     out->readonly = readonly;
 
@@ -89,14 +93,14 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_FileDevice* devic
 
     PHX_File_GetDiskDevice(device, &data->fileDevice);
 
-    if (PHX_BlockCountTransformDevice(context, &data->fileDevice, blockSize, PHX_TRUE, &data->transformedDevice) != PHX_TRUE)
+    if (PHX_BlockCountTransformDevice(context, &data->fileDevice, sectorSize, PHX_TRUE, &data->transformedDevice) != PHX_TRUE)
     {
         context->allocator.free(&context->allocator, data);
         return PHX_FALSE;
     }
 
-    out->blockSize = blockSize;
-    out->blockCount = data->transformedDevice.blockCount;
+    out->sectorSize = sectorSize;
+    out->totalSectors = data->transformedDevice.totalSectors;
     out->data = data;
 
     out->sectorOffset = 0;
@@ -107,6 +111,10 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_FileDevice* devic
     out->close = PHX_RAW_Close;
 
     out->type = RAW_Type;
+
+    out->totalCylinders = out->totalSectors / (255 * 63);
+    out->totalHeads = 255;
+    out->sectorsPerTrack = 63;
 
     out->readonly = readonly;
 

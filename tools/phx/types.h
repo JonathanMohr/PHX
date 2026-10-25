@@ -13,7 +13,7 @@ extern "C" {
 #define NAME_LEN (PHX_NAME_LEN + 1)
 
 typedef size_t PHX_Size;
-typedef uint64_t PHX_BlockSize;
+typedef uint64_t PHX_SectorSize;
 typedef uint64_t PHX_BlockByteSize;
 typedef uint64_t PHX_PartitionSize;
 typedef uint64_t PHX_FileSize;

@@ -22,25 +22,22 @@ extern "C" {
 
 typedef struct PHX_DiskDevice
 {
-    // PHX_BlockSize sectorSize;
-    // PHX_BlockSize totalSectors;
+    PHX_SectorSize sectorSize;
+    PHX_SectorSize totalSectors;
 
-    PHX_BlockSize blockSize;
-    PHX_BlockSize blockCount;
-
-    PHX_BlockSize sectorOffset;
+    PHX_SectorSize sectorOffset;
     void* data;
 
-    PHX_BlockSize (*read)(struct PHX_DiskDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count);
-    PHX_BlockSize (*write)(struct PHX_DiskDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count);
+    PHX_SectorSize (*read)(struct PHX_DiskDevice* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count);
+    PHX_SectorSize (*write)(struct PHX_DiskDevice* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count);
 
     void (*close)(struct PHX_DiskDevice* device);
 
     const char* type;
 
-    // PHX_u16 totalCylinders;
-    // PHX_u8 totalHeads;
-    // PHX_u8 sectorsPerTrack;
+    PHX_SectorSize totalCylinders;
+    PHX_u8 totalHeads;
+    PHX_u8 sectorsPerTrack;
 
     PHX_Bool readonly;
 } PHX_DiskDevice;
@@ -61,7 +58,7 @@ typedef struct PHX_Disk_Interface
 extern PHX_Disk_Interface* PHX_Disk_Interfaces[];
 extern PHX_Size PHX_Disk_InterfaceCount;
 
-PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_DiskDevice* device, PHX_BlockSize targetBlockSize, PHX_Bool takeOwnership, PHX_DiskDevice* outDevice);
+PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_DiskDevice* device, PHX_SectorSize targetBlockSize, PHX_Bool takeOwnership, PHX_DiskDevice* outDevice);
 
 
 #ifdef __cplusplus

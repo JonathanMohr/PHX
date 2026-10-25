@@ -139,8 +139,8 @@ static inline PHX_Bool MBR_WriteBootsector(PHX_BlockDevice* device, const PHX_By
 
 static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
 {
-    const PHX_Size bootsectorBlocks = (512 + device->blockSize - 1) / device->blockSize;
-    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->blockSize);
+    const PHX_Size bootsectorBlocks = (512 + device->sectorSize - 1) / device->sectorSize;
+    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->sectorSize);
     if (!bootsectorBuffer)
         return PHX_FALSE;
 
@@ -238,7 +238,7 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
     outTable->maxPartitionCount = 4;
     outTable->signature = diskSignature;
     outTable->startUsable = 1;
-    outTable->sizeUsable = device->blockCount - 1;
+    outTable->sizeUsable = device->totalSectors - 1;
 
     memcpy(outTable->bootsector, bootsectorBuffer, 512);
 
@@ -252,13 +252,13 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     if (table->partitionCount > 4)
         return PHX_FALSE;
 
-    const PHX_Size bootsectorBlocks = (512 + device->blockSize - 1) / device->blockSize;
-    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->blockSize);
+    const PHX_Size bootsectorBlocks = (512 + device->sectorSize - 1) / device->sectorSize;
+    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->sectorSize);
     if (!bootsectorBuffer)
         return PHX_FALSE;
 
     // Don't destroy stuff after the bootsector
-    if (bootsectorBlocks * device->blockSize > 512 && MBR_ReadBootsector(device, bootsectorBuffer, bootsectorBlocks) != PHX_TRUE)
+    if (bootsectorBlocks * device->sectorSize > 512 && MBR_ReadBootsector(device, bootsectorBuffer, bootsectorBlocks) != PHX_TRUE)
     {
         context->allocator.free(&context->allocator, bootsectorBuffer);
         return PHX_FALSE;
@@ -285,6 +285,8 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     bootsectorBuffer[444] = 0;
     bootsectorBuffer[445] = 0;
 
+    const PHX_u32 sectorsPerCylinder = (PHX_u32)device->totalHeads * (PHX_u32)device->sectorsPerTrack;
+
     for (PHX_PartitionSize i = 0; i < table->partitionCount; i++)
     {
         const PHX_Partition* partition = &table->partitions[i];
@@ -307,10 +309,24 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
         const PHX_Byte type = MBR_ConvertTypeBack(partition->type);
         const PHX_Byte bootFlag = (partition->flags & PHX_PARTITION_BOOTABLE) ? 0x80 : 0x00;
 
+        const PHX_SectorSize firstCylinder = partition->start / sectorsPerCylinder;
+        const PHX_u8 firstHead = (PHX_u8)((partition->start / (PHX_SectorSize)device->sectorsPerTrack) % (PHX_SectorSize)device->totalHeads);
+        const PHX_u8 firstSector = (PHX_u8)((partition->start % (PHX_SectorSize)device->sectorsPerTrack) + 1);
+
+        const PHX_SectorSize lastCylinder = (partition->start + partition->size - 1) / sectorsPerCylinder;
+        const PHX_u8 lastHead = (PHX_u8)(((partition->start + partition->size - 1) / (PHX_SectorSize)device->sectorsPerTrack) % (PHX_SectorSize)device->totalHeads);
+        const PHX_u8 lastSector = (PHX_u8)(((partition->start + partition->size - 1) % (PHX_SectorSize)device->sectorsPerTrack) + 1);
+
         part[0] = bootFlag;
-        MBR_EncodeCHS(1023, 254, 63, part + 1);
+        if (firstCylinder <= 1023)
+            MBR_EncodeCHS((PHX_u16)firstCylinder, firstHead, firstSector, part + 1);
+        else
+            MBR_EncodeCHS(1023, 254, 63, part + 1);
         part[4] = type;
-        MBR_EncodeCHS(1023, 254, 63, part + 5);
+        if (lastCylinder <= 1023)
+            MBR_EncodeCHS((PHX_u16)lastCylinder, lastHead, lastSector, part + 5);
+        else
+            MBR_EncodeCHS(1023, 254, 63, part + 5);
 
         memcpy(part + 8, &start, 4);
         memcpy(part + 12, &count, 4);
@@ -336,7 +352,7 @@ static void MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_
     while (outTable->signature == 0)
         outTable->signature = PHX_Context_GetRandomU32(context);
     outTable->startUsable = 1;
-    outTable->sizeUsable = device->blockCount - 1;
+    outTable->sizeUsable = device->totalSectors - 1;
     memcpy(outTable->bootsector, binary_file_data, 512);
 }
 

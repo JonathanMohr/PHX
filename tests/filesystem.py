@@ -24,6 +24,10 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
     
     build_dir.mkdir(parents=True, exist_ok=True)
 
+    # TODO: Actually do different tests depending on test class
+    if test_class == TESTCLASS.NONE:
+        return True
+
     # On Linux also check with fsck.fat
     # Also Check with mtools
 

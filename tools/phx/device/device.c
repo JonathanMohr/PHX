@@ -23,79 +23,79 @@ typedef enum
     PHX_BST_TARGET_MULTIPLE,
     PHX_BST_SOURCE_MULTIPLE,
     PHX_BST_GENERAL
-} PHX_BlockSizeRelation;
+} PHX_SectorSizeRelation;
 
 #define PHX_BST_CHUNK_TARGET_BLOCKS 128
 
-typedef struct PHX_BlockSizeTransform
+typedef struct PHX_SectorSizeTransform
 {
     PHX_Context* context;
     PHX_BlockDevice* source;
 
     PHX_Byte* scratch;
-    PHX_BlockSize scratchSourceBlocks;
+    PHX_SectorSize scratchSourceBlocks;
 
-    PHX_BlockSize targetBlockSize;
-    PHX_BlockSize ratio;
-    PHX_BlockSizeRelation relation;
+    PHX_SectorSize targetBlockSize;
+    PHX_SectorSize ratio;
+    PHX_SectorSizeRelation relation;
 
     PHX_Bool ownsSource;
-} PHX_BlockSizeTransform;
+} PHX_SectorSizeTransform;
 
 static inline PHX_BlockByteSize PHX_CeilDiv(PHX_BlockByteSize a, PHX_BlockByteSize b) { return (a + b - 1) / b; }
 
 
-static PHX_BlockSize BST_Read_Identity(PHX_BlockSizeTransform* t, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Read_Identity(PHX_SectorSizeTransform* t, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     return t->source->read(t->source, buffer, block, count);
 }
 
-static PHX_BlockSize BST_Write_Identity(PHX_BlockSizeTransform* t, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Write_Identity(PHX_SectorSizeTransform* t, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     return t->source->write(t->source, buffer, block, count);
 }
 
 
-static PHX_BlockSize BST_Read_TargetMultiple(PHX_BlockSizeTransform* t, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Read_TargetMultiple(PHX_SectorSizeTransform* t, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize srcBlock = block * t->ratio;
-    const PHX_BlockSize srcCount = count * t->ratio;
-    const PHX_BlockSize srcRead = t->source->read(t->source, buffer, srcBlock, srcCount);
+    const PHX_SectorSize srcBlock = block * t->ratio;
+    const PHX_SectorSize srcCount = count * t->ratio;
+    const PHX_SectorSize srcRead = t->source->read(t->source, buffer, srcBlock, srcCount);
     return srcRead / t->ratio;
 }
 
-static PHX_BlockSize BST_Write_TargetMultiple(PHX_BlockSizeTransform* t, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Write_TargetMultiple(PHX_SectorSizeTransform* t, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize srcBlock = block * t->ratio;
-    const PHX_BlockSize srcCount = count * t->ratio;
-    const PHX_BlockSize srcWritten = t->source->write(t->source, buffer, srcBlock, srcCount);
+    const PHX_SectorSize srcBlock = block * t->ratio;
+    const PHX_SectorSize srcCount = count * t->ratio;
+    const PHX_SectorSize srcWritten = t->source->write(t->source, buffer, srcBlock, srcCount);
     return srcWritten / t->ratio;
 }
 
 
-static PHX_BlockSize BST_Read_SourceMultiple(PHX_BlockSizeTransform* t, PHX_Byte* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Read_SourceMultiple(PHX_SectorSizeTransform* t, PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize ratio = t->ratio;
-    const PHX_BlockSize targetBlockSize = t->targetBlockSize;
-    PHX_BlockSize done = 0;
+    const PHX_SectorSize ratio = t->ratio;
+    const PHX_SectorSize targetBlockSize = t->targetBlockSize;
+    PHX_SectorSize done = 0;
 
     while (done < count)
     {
-        const PHX_BlockSize remaining = count - done;
-        const PHX_BlockSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
-        const PHX_BlockSize targetBlock = block + done;
+        const PHX_SectorSize remaining = count - done;
+        const PHX_SectorSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
+        const PHX_SectorSize targetBlock = block + done;
 
-        const PHX_BlockSize firstSrcBlock = targetBlock / ratio;
-        const PHX_BlockSize lastSrcBlock  = (targetBlock + chunk - 1) / ratio;
-        const PHX_BlockSize srcBlockCount = lastSrcBlock - firstSrcBlock + 1;
-        const PHX_BlockSize subOffset     = targetBlock % ratio;
+        const PHX_SectorSize firstSrcBlock = targetBlock / ratio;
+        const PHX_SectorSize lastSrcBlock  = (targetBlock + chunk - 1) / ratio;
+        const PHX_SectorSize srcBlockCount = lastSrcBlock - firstSrcBlock + 1;
+        const PHX_SectorSize subOffset     = targetBlock % ratio;
 
-        const PHX_BlockSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         if (srcRead == 0)
             return done;
 
-        const PHX_BlockSize availableTargetBlocks = (srcRead * ratio) - subOffset;
-        const PHX_BlockSize copyBlocks = (availableTargetBlocks < chunk) ? availableTargetBlocks : chunk;
+        const PHX_SectorSize availableTargetBlocks = (srcRead * ratio) - subOffset;
+        const PHX_SectorSize copyBlocks = (availableTargetBlocks < chunk) ? availableTargetBlocks : chunk;
 
         memcpy(buffer + done * targetBlockSize, t->scratch + subOffset * targetBlockSize, copyBlocks * targetBlockSize);
 
@@ -107,42 +107,42 @@ static PHX_BlockSize BST_Read_SourceMultiple(PHX_BlockSizeTransform* t, PHX_Byte
     return done;
 }
 
-static PHX_BlockSize BST_Write_SourceMultiple(PHX_BlockSizeTransform* t, const PHX_Byte* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Write_SourceMultiple(PHX_SectorSizeTransform* t, const PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize ratio = t->ratio;
-    const PHX_BlockSize targetBlockSize = t->targetBlockSize;
-    PHX_BlockSize done = 0;
+    const PHX_SectorSize ratio = t->ratio;
+    const PHX_SectorSize targetBlockSize = t->targetBlockSize;
+    PHX_SectorSize done = 0;
 
     while (done < count)
     {
-        const PHX_BlockSize remaining = count - done;
-        const PHX_BlockSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
-        const PHX_BlockSize targetBlock = block + done;
+        const PHX_SectorSize remaining = count - done;
+        const PHX_SectorSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
+        const PHX_SectorSize targetBlock = block + done;
 
         if (targetBlock % ratio == 0 && chunk % ratio == 0)
         {
-            const PHX_BlockSize srcBlock = targetBlock / ratio;
-            const PHX_BlockSize srcCount = chunk / ratio;
-            const PHX_BlockSize srcWritten = t->source->write(t->source, buffer + done * targetBlockSize, srcBlock, srcCount);
-            const PHX_BlockSize writtenTargetBlocks = srcWritten * ratio;
+            const PHX_SectorSize srcBlock = targetBlock / ratio;
+            const PHX_SectorSize srcCount = chunk / ratio;
+            const PHX_SectorSize srcWritten = t->source->write(t->source, buffer + done * targetBlockSize, srcBlock, srcCount);
+            const PHX_SectorSize writtenTargetBlocks = srcWritten * ratio;
             done += writtenTargetBlocks;
             if (writtenTargetBlocks < chunk)
                 break;
             continue;
         }
 
-        const PHX_BlockSize firstSrcBlock = targetBlock / ratio;
-        const PHX_BlockSize lastSrcBlock  = (targetBlock + chunk - 1) / ratio;
-        const PHX_BlockSize srcBlockCount = lastSrcBlock - firstSrcBlock + 1;
-        const PHX_BlockSize subOffset     = targetBlock % ratio;
+        const PHX_SectorSize firstSrcBlock = targetBlock / ratio;
+        const PHX_SectorSize lastSrcBlock  = (targetBlock + chunk - 1) / ratio;
+        const PHX_SectorSize srcBlockCount = lastSrcBlock - firstSrcBlock + 1;
+        const PHX_SectorSize subOffset     = targetBlock % ratio;
 
-        const PHX_BlockSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         if (srcRead != srcBlockCount)
             return done;
 
         memcpy(t->scratch + subOffset * targetBlockSize, buffer + done * targetBlockSize, chunk * targetBlockSize);
 
-        const PHX_BlockSize srcWritten = t->source->write(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcWritten = t->source->write(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         if (srcWritten != srcBlockCount)
             return done;
 
@@ -153,28 +153,28 @@ static PHX_BlockSize BST_Write_SourceMultiple(PHX_BlockSizeTransform* t, const P
 }
 
 
-static PHX_BlockSize BST_Read_General(PHX_BlockSizeTransform* t, PHX_Byte* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Read_General(PHX_SectorSizeTransform* t, PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize targetBlockSize = t->targetBlockSize;
-    const PHX_BlockSize sourceBlockSize = t->source->blockSize;
-    PHX_BlockSize done = 0;
+    const PHX_SectorSize targetBlockSize = t->targetBlockSize;
+    const PHX_SectorSize sourceBlockSize = t->source->sectorSize;
+    PHX_SectorSize done = 0;
 
     while (done < count)
     {
-        const PHX_BlockSize remaining = count - done;
-        const PHX_BlockSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
-        const PHX_BlockSize targetBlock = block + done;
+        const PHX_SectorSize remaining = count - done;
+        const PHX_SectorSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
+        const PHX_SectorSize targetBlock = block + done;
 
         const PHX_BlockByteSize byteOffset = (PHX_BlockByteSize)targetBlock * targetBlockSize;
         const PHX_BlockByteSize byteCount  = (PHX_BlockByteSize)chunk * targetBlockSize;
         const PHX_BlockByteSize byteEnd    = byteOffset + byteCount;
 
-        const PHX_BlockSize firstSrcBlock = (PHX_BlockSize)(byteOffset / sourceBlockSize);
-        const PHX_BlockSize lastSrcBlock  = (PHX_BlockSize)PHX_CeilDiv(byteEnd, sourceBlockSize);
-        const PHX_BlockSize srcBlockCount = lastSrcBlock - firstSrcBlock;
+        const PHX_SectorSize firstSrcBlock = (PHX_SectorSize)(byteOffset / sourceBlockSize);
+        const PHX_SectorSize lastSrcBlock  = (PHX_SectorSize)PHX_CeilDiv(byteEnd, sourceBlockSize);
+        const PHX_SectorSize srcBlockCount = lastSrcBlock - firstSrcBlock;
         const PHX_BlockByteSize relOffset = byteOffset - (PHX_BlockByteSize)firstSrcBlock * sourceBlockSize;
 
-        const PHX_BlockSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         const PHX_BlockByteSize bytesRead = (PHX_BlockByteSize)srcRead * sourceBlockSize;
 
         const PHX_BlockByteSize usable = (bytesRead > relOffset) ? (bytesRead - relOffset) : 0;
@@ -183,7 +183,7 @@ static PHX_BlockSize BST_Read_General(PHX_BlockSizeTransform* t, PHX_Byte* buffe
         if (bytesToCopy > 0)
             memcpy(buffer + done * targetBlockSize, t->scratch + relOffset, bytesToCopy);
 
-        const PHX_BlockSize copyBlocks = bytesToCopy / targetBlockSize;
+        const PHX_SectorSize copyBlocks = bytesToCopy / targetBlockSize;
         done += copyBlocks;
         if (copyBlocks < chunk)
             break;
@@ -192,45 +192,45 @@ static PHX_BlockSize BST_Read_General(PHX_BlockSizeTransform* t, PHX_Byte* buffe
     return done;
 }
 
-static PHX_BlockSize BST_Write_General(PHX_BlockSizeTransform* t, const PHX_Byte* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Write_General(PHX_SectorSizeTransform* t, const PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    const PHX_BlockSize targetBlockSize = t->targetBlockSize;
-    const PHX_BlockSize sourceBlockSize = t->source->blockSize;
-    PHX_BlockSize done = 0;
+    const PHX_SectorSize targetBlockSize = t->targetBlockSize;
+    const PHX_SectorSize sourceBlockSize = t->source->sectorSize;
+    PHX_SectorSize done = 0;
 
     while (done < count)
     {
-        const PHX_BlockSize remaining = count - done;
-        const PHX_BlockSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
-        const PHX_BlockSize targetBlock = block + done;
+        const PHX_SectorSize remaining = count - done;
+        const PHX_SectorSize chunk = (remaining < PHX_BST_CHUNK_TARGET_BLOCKS) ? remaining : PHX_BST_CHUNK_TARGET_BLOCKS;
+        const PHX_SectorSize targetBlock = block + done;
 
         const PHX_BlockByteSize byteOffset = (PHX_BlockByteSize)targetBlock * targetBlockSize;
         const PHX_BlockByteSize byteCount  = (PHX_BlockByteSize)chunk * targetBlockSize;
         const PHX_BlockByteSize byteEnd    = byteOffset + byteCount;
 
-        const PHX_BlockSize firstSrcBlock = (PHX_BlockSize)(byteOffset / sourceBlockSize);
-        const PHX_BlockSize lastSrcBlock  = (PHX_BlockSize)PHX_CeilDiv(byteEnd, sourceBlockSize);
-        const PHX_BlockSize srcBlockCount = lastSrcBlock - firstSrcBlock;
+        const PHX_SectorSize firstSrcBlock = (PHX_SectorSize)(byteOffset / sourceBlockSize);
+        const PHX_SectorSize lastSrcBlock  = (PHX_SectorSize)PHX_CeilDiv(byteEnd, sourceBlockSize);
+        const PHX_SectorSize srcBlockCount = lastSrcBlock - firstSrcBlock;
         const PHX_BlockByteSize relOffset = byteOffset - (PHX_BlockByteSize)firstSrcBlock * sourceBlockSize;
 
         if (relOffset == 0 && byteCount % sourceBlockSize == 0)
         {
-            const PHX_BlockSize srcWritten = t->source->write(t->source, buffer + done * targetBlockSize, firstSrcBlock, srcBlockCount);
+            const PHX_SectorSize srcWritten = t->source->write(t->source, buffer + done * targetBlockSize, firstSrcBlock, srcBlockCount);
             const PHX_BlockByteSize writtenBytes = (PHX_BlockByteSize)srcWritten * sourceBlockSize;
-            const PHX_BlockSize writtenBlocks = (PHX_BlockSize)(writtenBytes / targetBlockSize);
+            const PHX_SectorSize writtenBlocks = (PHX_SectorSize)(writtenBytes / targetBlockSize);
             done += writtenBlocks;
             if (writtenBlocks < chunk)
                 break;
             continue;
         }
 
-        const PHX_BlockSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcRead = t->source->read(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         if (srcRead != srcBlockCount)
             return done;
 
         memcpy(t->scratch + relOffset, buffer + done * targetBlockSize, byteCount);
 
-        const PHX_BlockSize srcWritten = t->source->write(t->source, t->scratch, firstSrcBlock, srcBlockCount);
+        const PHX_SectorSize srcWritten = t->source->write(t->source, t->scratch, firstSrcBlock, srcBlockCount);
         if (srcWritten != srcBlockCount)
             return done;
 
@@ -241,9 +241,9 @@ static PHX_BlockSize BST_Write_General(PHX_BlockSizeTransform* t, const PHX_Byte
 }
 
 
-static PHX_BlockSize BST_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Read(PHX_BlockDevice* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    PHX_BlockSizeTransform* t = (PHX_BlockSizeTransform*)device->data;
+    PHX_SectorSizeTransform* t = (PHX_SectorSizeTransform*)device->data;
     if (count == 0) return 0;
     switch (t->relation)
     {
@@ -255,9 +255,9 @@ static PHX_BlockSize BST_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSi
     return 0;
 }
 
-static PHX_BlockSize BST_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize BST_Write(PHX_BlockDevice* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
-    PHX_BlockSizeTransform* t = (PHX_BlockSizeTransform*)device->data;
+    PHX_SectorSizeTransform* t = (PHX_SectorSizeTransform*)device->data;
     if (device->readonly || count == 0) return 0;
     switch (t->relation)
     {
@@ -271,7 +271,7 @@ static PHX_BlockSize BST_Write(PHX_BlockDevice* device, const void* buffer, PHX_
 
 static void BST_Close(PHX_BlockDevice* device)
 {
-    PHX_BlockSizeTransform* t = (PHX_BlockSizeTransform*)device->data;
+    PHX_SectorSizeTransform* t = (PHX_SectorSizeTransform*)device->data;
     PHX_Context* context = t->context;
     if (t->ownsSource && t->source->close)
         t->source->close(t->source);
@@ -281,42 +281,42 @@ static void BST_Close(PHX_BlockDevice* device)
 }
 
 
-PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_BlockSize targetBlockSize, PHX_Bool takeOwnership, PHX_BlockDevice* outDevice)
+PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* device, PHX_SectorSize targetBlockSize, PHX_Bool takeOwnership, PHX_BlockDevice* outDevice)
 {
-    if (targetBlockSize == 0 || device->blockSize == 0)
+    if (targetBlockSize == 0 || device->sectorSize == 0)
         return PHX_FALSE;
 
-    PHX_BlockSizeTransform* t = (PHX_BlockSizeTransform*)context->allocator.allocate(&context->allocator, sizeof(PHX_BlockSizeTransform));
+    PHX_SectorSizeTransform* t = (PHX_SectorSizeTransform*)context->allocator.allocate(&context->allocator, sizeof(PHX_SectorSizeTransform));
     if (!t)
         return PHX_FALSE;
 
-    memset(t, 0, sizeof(PHX_BlockSizeTransform));
+    memset(t, 0, sizeof(PHX_SectorSizeTransform));
     t->context = context;
     t->source = device;
     t->ownsSource = takeOwnership;
     t->targetBlockSize = targetBlockSize;
 
-    const PHX_BlockSize sourceBlockSize = device->blockSize;
-    PHX_BlockSize outBlockCount;
+    const PHX_SectorSize sourceBlockSize = device->sectorSize;
+    PHX_SectorSize outBlockCount;
 
     if (targetBlockSize == sourceBlockSize)
     {
         t->relation = PHX_BST_IDENTITY;
-        outBlockCount = device->blockCount;
+        outBlockCount = device->totalSectors;
     }
     else if (targetBlockSize % sourceBlockSize == 0)
     {
         t->relation = PHX_BST_TARGET_MULTIPLE;
         t->ratio = targetBlockSize / sourceBlockSize;
-        outBlockCount = device->blockCount / t->ratio;
+        outBlockCount = device->totalSectors / t->ratio;
     }
     else if (sourceBlockSize % targetBlockSize == 0)
     {
         t->relation = PHX_BST_SOURCE_MULTIPLE;
         t->ratio = sourceBlockSize / targetBlockSize;
-        outBlockCount = device->blockCount * t->ratio;
+        outBlockCount = device->totalSectors * t->ratio;
 
-        const PHX_BlockSize maxSrcBlocks = PHX_CeilDiv(PHX_BST_CHUNK_TARGET_BLOCKS, t->ratio) + 1;
+        const PHX_SectorSize maxSrcBlocks = PHX_CeilDiv(PHX_BST_CHUNK_TARGET_BLOCKS, t->ratio) + 1;
         t->scratchSourceBlocks = maxSrcBlocks;
         t->scratch = (PHX_Byte*)context->allocator.allocate(&context->allocator, maxSrcBlocks * sourceBlockSize);
         if (!t->scratch)
@@ -329,11 +329,11 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* de
     {
         t->relation = PHX_BST_GENERAL;
 
-        const PHX_BlockByteSize totalBytes = (PHX_BlockByteSize)device->blockCount * sourceBlockSize;
-        outBlockCount = (PHX_BlockSize)(totalBytes / targetBlockSize);
+        const PHX_BlockByteSize totalBytes = (PHX_BlockByteSize)device->totalSectors * sourceBlockSize;
+        outBlockCount = (PHX_SectorSize)(totalBytes / targetBlockSize);
 
-        const PHX_BlockSize chunkBytes = PHX_BST_CHUNK_TARGET_BLOCKS * targetBlockSize;
-        const PHX_BlockSize maxSrcBlocks = PHX_CeilDiv(chunkBytes, sourceBlockSize) + 1;
+        const PHX_SectorSize chunkBytes = PHX_BST_CHUNK_TARGET_BLOCKS * targetBlockSize;
+        const PHX_SectorSize maxSrcBlocks = PHX_CeilDiv(chunkBytes, sourceBlockSize) + 1;
         t->scratchSourceBlocks = maxSrcBlocks;
         t->scratch = (PHX_Byte*)context->allocator.allocate(&context->allocator, maxSrcBlocks * sourceBlockSize);
         if (!t->scratch)
@@ -343,8 +343,8 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* de
         }
     }
 
-    outDevice->blockSize = targetBlockSize;
-    outDevice->blockCount = outBlockCount;
+    outDevice->sectorSize = targetBlockSize;
+    outDevice->totalSectors = outBlockCount;
     outDevice->data = t;
 
     outDevice->sectorOffset = device->sectorOffset;
@@ -354,6 +354,10 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_BlockDevice* de
     outDevice->close = BST_Close;
 
     outDevice->type = PHX_BLOCK_SIZE_TRANSFORM_TYPE;
+
+    outDevice->totalCylinders = device->totalCylinders;
+    outDevice->totalHeads = device->totalHeads;
+    outDevice->sectorsPerTrack = device->sectorsPerTrack;
 
     outDevice->readonly = device->readonly;
 

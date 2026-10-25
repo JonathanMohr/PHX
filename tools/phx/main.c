@@ -366,8 +366,12 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             }
 
             fprintf(stdout, "%s (%s):\n", imagePath, diskDevice.type);
-            fprintf(stdout, "  Block Size: %" PRIu64 "\n", diskDevice.blockSize);
-            fprintf(stdout, "  Block Count: %" PRIu64 "\n", diskDevice.blockCount);
+            fprintf(stdout, "  Sector Size: %" PRIu64 "\n", diskDevice.sectorSize);
+            fprintf(stdout, "  Total Sectors: %" PRIu64 "\n", diskDevice.totalSectors);
+
+            fprintf(stdout, "  Total Cylinders: %" PRIu64 "\n", diskDevice.totalCylinders);
+            fprintf(stdout, "  Total Heads: %" PRIu8 "\n", diskDevice.totalHeads);
+            fprintf(stdout, "  Sectors Per Track: %" PRIu8 "\n", diskDevice.sectorsPerTrack);
 
             diskDevice.close(&diskDevice);
             break;
@@ -513,8 +517,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             fprintf(stdout, "%s (%s):\n", imagePath, interface->partitionType);
-            fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.blockSize);
-            fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.blockSize);
+            fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.sectorSize);
+            fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.sectorSize);
             fprintf(stdout, "  Signature: 0x%" PRIx32 "\n", table.signature);
             fprintf(stdout, "  Max Partition Count: %" PRIu64 "\n", table.maxPartitionCount);
             fprintf(stdout, "  Partition Count: %" PRIu64 "\n", table.partitionCount);
@@ -523,8 +527,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 PHX_Partition* partition = &table.partitions[i];
                 fprintf(stdout, "    Partition %" PRIu64 "%s%s%s:\n", i + 1, (partition->name[0] != '\0') ? " (" : "", partition->name, (partition->name[0] != '\0') ? ")" : "");
-                fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.blockSize, partition->start);
-                fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.blockSize, partition->size);
+                fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
+                fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
 
                 fputs("      Flags:", stdout);
                 if (partition->flags & PHX_PARTITION_BOOTABLE)
@@ -613,7 +617,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             table.partitions = newPartitions;
             PHX_Partition* newPartition = &table.partitions[table.partitionCount++];
 
-            PHX_BlockSize start = PHX_Size_FromStr(startStr, &overflow, PHX_BlockSize);
+            PHX_SectorSize start = PHX_Size_FromStr(startStr, &overflow, PHX_SectorSize);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of start\n", stderr);
@@ -623,7 +627,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            PHX_BlockSize size = PHX_Size_FromStr(sizeStr, &overflow, PHX_BlockSize);
+            PHX_SectorSize size = PHX_Size_FromStr(sizeStr, &overflow, PHX_SectorSize);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of size\n", stderr);
@@ -633,7 +637,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            if (start % diskDevice.blockSize)
+            if (start % diskDevice.sectorSize)
             {
                 fputs("Start not aligned to sector size\n", stderr);
 
@@ -641,7 +645,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 diskDevice.close(&diskDevice);
                 return 1;
             }
-            if (size % diskDevice.blockSize)
+            if (size % diskDevice.sectorSize)
             {
                 fputs("Size not aligned to sector size\n", stderr);
 
@@ -650,8 +654,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            newPartition->start = start / diskDevice.blockSize;
-            newPartition->size = size / diskDevice.blockSize;
+            newPartition->start = start / diskDevice.sectorSize;
+            newPartition->size = size / diskDevice.sectorSize;
 
             newPartition->flags = 0;
             if (flags_bootable == PHX_TRUE)
@@ -1796,7 +1800,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
             const char* file = args[2];
             const PHX_File_Mode fileMode = (command == PHX_COMMAND_FILESYSTEM_READ) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ;
-            const PHX_BlockSize fileSize = (command == PHX_COMMAND_FILESYSTEM_READ) ? node.size : 0;
+            const PHX_SectorSize fileSize = (command == PHX_COMMAND_FILESYSTEM_READ) ? node.size : 0;
             PHX_FileDevice fileDevice;
             if ((detailedResult = PHX_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
             {
@@ -2131,11 +2135,11 @@ static int raw(PHX_Context* context, const char* executable, const char* command
         {
             const char* file = args[1];
             const PHX_File_Mode fileMode = (command == PHX_COMMAND_RAW_READ) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ;
-            PHX_BlockSize fileSize = 0;
+            PHX_SectorSize fileSize = 0;
             if (command == PHX_COMMAND_RAW_READ)
             {
                 // TODO: Overflow
-                fileSize = device->blockSize * device->blockCount;
+                fileSize = device->sectorSize * device->totalSectors;
             }
 
 
@@ -2150,8 +2154,8 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 return 1;
             }
 
-            const PHX_Size blocksPerRead = (device->blockSize >= 16384) ? 1 : (16384 / device->blockSize);
-            PHX_Byte* buffer = context->allocator.allocate(&context->allocator, device->blockSize * blocksPerRead);
+            const PHX_Size blocksPerRead = (device->sectorSize >= 16384) ? 1 : (16384 / device->sectorSize);
+            PHX_Byte* buffer = context->allocator.allocate(&context->allocator, device->sectorSize * blocksPerRead);
             if (!buffer)
             {
                 fputs("Could not allocate buffer\n", stderr);
@@ -2163,10 +2167,10 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 return 1;
             }
 
-            PHX_BlockSize currentBlock = 0;
-            while (currentBlock < device->blockCount)
+            PHX_SectorSize currentBlock = 0;
+            while (currentBlock < device->totalSectors)
             {
-                const PHX_BlockSize chunk = ((currentBlock + blocksPerRead) > device->blockCount) ? (device->blockCount - currentBlock) : (blocksPerRead);
+                const PHX_SectorSize chunk = ((currentBlock + blocksPerRead) > device->totalSectors) ? (device->totalSectors - currentBlock) : (blocksPerRead);
 
                 if (command == PHX_COMMAND_RAW_READ)
                 {
@@ -2181,7 +2185,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                             diskDevice.close(&diskDevice);
                         return 1;
                     }
-                    if (PHX_File_Write(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    if (PHX_File_Write(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
                     {
                         fputs("Could not write chunk to file\n", stderr);
 
@@ -2195,7 +2199,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 }
                 else // write
                 {
-                    if (PHX_File_Read(&fileDevice, buffer, currentBlock * device->blockSize, chunk * device->blockSize) != chunk * device->blockSize)
+                    if (PHX_File_Read(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
                     {
                         fputs("Could not read chunk from file\n", stderr);
 

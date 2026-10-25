@@ -22,8 +22,8 @@ typedef struct PHX_Partition
 {
     // TODO: id
 
-    PHX_BlockSize start;
-    PHX_BlockSize size;
+    PHX_SectorSize start;
+    PHX_SectorSize size;
 
     PHX_Partition_Signature signature;
 
@@ -43,8 +43,8 @@ typedef struct PHX_Partition_Table
 
     PHX_Partition_Signature signature;
 
-    PHX_BlockSize startUsable;
-    PHX_BlockSize sizeUsable;
+    PHX_SectorSize startUsable;
+    PHX_SectorSize sizeUsable;
 
     PHX_Byte bootsector[512];
 } PHX_Partition_Table;

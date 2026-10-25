@@ -91,12 +91,12 @@ PHX_Result PHX_Filesystem_Open(PHX_Context* context, PHX_BlockDevice* device, PH
 }
 
 
-static PHX_BlockSize PHX_DiskDevice_File_Read(PHX_BlockDevice* device, void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_DiskDevice_File_Read(PHX_BlockDevice* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     return PHX_File_Read(device->data, buffer, block, count);
 }
 
-static PHX_BlockSize PHX_DiskDevice_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_BlockSize block, PHX_BlockSize count)
+static PHX_SectorSize PHX_DiskDevice_File_Write(PHX_BlockDevice* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     return PHX_File_Write(device->data, buffer, block, count);
 }
@@ -108,8 +108,8 @@ static void PHX_DiskDevice_File_Close(PHX_BlockDevice* device)
 
 void PHX_File_GetDiskDevice(PHX_FileDevice* fileDevice, PHX_DiskDevice* out)
 {
-    out->blockSize = 1;
-    out->blockCount = fileDevice->fileSize;
+    out->sectorSize = 1;
+    out->totalSectors = fileDevice->fileSize;
     out->data = fileDevice;
 
     out->sectorOffset = 0;
@@ -120,6 +120,10 @@ void PHX_File_GetDiskDevice(PHX_FileDevice* fileDevice, PHX_DiskDevice* out)
     out->close = PHX_DiskDevice_File_Close;
 
     out->type = "FILE-DEVICE";
+
+    out->totalCylinders = out->totalSectors;
+    out->totalHeads = 1;
+    out->sectorsPerTrack = 1;
 
     out->readonly = fileDevice->readonly;
 }
