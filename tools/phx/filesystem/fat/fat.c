@@ -172,7 +172,7 @@ static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
     *(bootsector + 511) = 0xAA;
 }
 
-static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u64 id)
+static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u8 sectorsPerTrack, PHX_u8 totalHeads, PHX_u64 id)
 {
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
@@ -201,8 +201,8 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_
     PHX_Filesystem_FAT_WriteBootsectorBuffer(
         data,
         "PHX     ",
-        (data->version == PHX_FILESYSTEM_FAT_12) ? 18 : 32,
-        (data->version == PHX_FILESYSTEM_FAT_32) ? 8 : 2,
+        sectorsPerTrack,
+        totalHeads,
         (PHX_u32)data->usedDevice->sectorOffset,
         (data->version == PHX_FILESYSTEM_FAT_12) ? 0x00 : 0x80,
         (id == PHX_FILESYSTEM_NO_ID) ? 0 : (PHX_u32)id,
@@ -220,7 +220,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
-    return PHX_Filesystem_FAT_UpdateBootsector(fs->context, fs->data, bootsector, fs->id);
+    return PHX_Filesystem_FAT_UpdateBootsector(fs->context, fs->data, bootsector, fs->device->sectorsPerTrack, fs->device->totalHeads, fs->id);
 }
 
 
@@ -892,7 +892,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     const PHX_u32 volumeId = PHX_Context_GetRandomU32(context);
 
-    if ((result = PHX_Filesystem_FAT_UpdateBootsector(context, data, bootsector, volumeId)) != PHX_SUCCESS)
+    if ((result = PHX_Filesystem_FAT_UpdateBootsector(context, data, bootsector, device->sectorsPerTrack, device->totalHeads, volumeId)) != PHX_SUCCESS)
     {
         if (data->useDevice)
         {
