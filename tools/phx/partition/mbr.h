@@ -1,5 +1,5 @@
-#ifndef PHX_DEVICE_RAW_H
-#define PHX_DEVICE_RAW_H
+#ifndef PHX_PARTITION_MBR_H
+#define PHX_PARTITION_MBR_H
 
 #ifdef __cplusplus
 extern "C" {

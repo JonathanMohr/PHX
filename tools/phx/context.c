@@ -10,3 +10,8 @@ PHX_u32 PHX_Context_GetRandomU32(PHX_Context* context)
 
     return x;
 }
+
+PHX_u64 PHX_Context_GetRandomU64(PHX_Context* context)
+{
+    return ((PHX_u64)PHX_Context_GetRandomU32(context)) | (PHX_u64)PHX_Context_GetRandomU32(context);
+}

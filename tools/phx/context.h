@@ -31,6 +31,7 @@ typedef struct PHX_Context
 } PHX_Context;
 
 PHX_u32 PHX_Context_GetRandomU32(PHX_Context* context);
+PHX_u64 PHX_Context_GetRandomU64(PHX_Context* context);
 
 
 #ifdef __cplusplus

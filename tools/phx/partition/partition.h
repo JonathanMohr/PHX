@@ -7,7 +7,11 @@ extern "C" {
 
 #include <device/device.h>
 
-typedef PHX_u32 PHX_Partition_Signature;
+typedef struct
+{
+    PHX_u64 first;
+    PHX_u64 second;
+} PHX_Partition_Signature;
 
 typedef PHX_Byte PHX_Partition_Type;
 #define PHX_PARTITION_UNKNOWN 0
@@ -53,7 +57,7 @@ typedef struct PHX_Partition_Interface
 {
     PHX_Bool (*readTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
     PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table);
-    void (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
+    PHX_Bool (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
 
     const char* partitionType;
     const char* name;

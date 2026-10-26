@@ -519,7 +519,10 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             fprintf(stdout, "%s (%s):\n", imagePath, interface->partitionType);
             fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.sectorSize);
             fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.sectorSize);
-            fprintf(stdout, "  Signature: 0x%" PRIx32 "\n", table.signature);
+            if (table.signature.second != 0)
+                fprintf(stdout, "  Signature: 0x%" PRIx64 "%" PRIx64 "\n", table.signature.second, table.signature.first);
+            else
+                fprintf(stdout, "  Signature: 0x%" PRIx64 "\n", table.signature.first);
             fprintf(stdout, "  Max Partition Count: %" PRIu64 "\n", table.maxPartitionCount);
             fprintf(stdout, "  Partition Count: %" PRIu64 "\n", table.partitionCount);
             fputs("  Partitions:\n", stdout);
@@ -557,7 +560,14 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             PHX_Partition_Table table;
-            interface->getDefaultTable(context, &diskDevice, &table);
+            if (interface->getDefaultTable(context, &diskDevice, &table) != PHX_TRUE )
+            {
+                fputs("Error getting empty partition table\n", stderr);
+
+                PHX_Partition_CloseTable(context, &table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
 
             if (interface->writeTable(context, &diskDevice, &table) != PHX_TRUE)
             {

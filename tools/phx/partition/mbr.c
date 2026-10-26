@@ -1,5 +1,4 @@
 #include "mbr.h"
-#include "partition/partition.h"
 #include "types.h"
 
 #include <endianness.h>
@@ -220,7 +219,8 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
         part->start = startLBA;
         part->size = countLBA;
 
-        part->signature = (PHX_Partition_Signature)i;
+        part->signature.first = (PHX_u64)i;
+        part->signature.second = 0;
 
         part->flags = 0;
         if (bootFlag == 0x80)
@@ -236,7 +236,8 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
     outTable->partitions = partitions;
     outTable->partitionCount = partitionCount;
     outTable->maxPartitionCount = 4;
-    outTable->signature = diskSignature;
+    outTable->signature.first = diskSignature;
+    outTable->signature.second = 0;
     outTable->startUsable = 1;
     outTable->sizeUsable = device->totalSectors - 1;
 
@@ -278,7 +279,7 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     bootsectorBuffer[511] = 0xAA;
 
     // Disk signature
-    const PHX_u32 diskSignature = Endian_Convert_u32_Le(table->signature);
+    const PHX_u32 diskSignature = Endian_Convert_u32_Le((PHX_u32)table->signature.first);
     memcpy(&bootsectorBuffer[440], &diskSignature, 4);
 
     // Disk reserved
@@ -343,17 +344,26 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     return PHX_TRUE;
 }
 
-static void MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
+static PHX_Bool MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
 {
+    const PHX_SectorSize sectorSize = device->sectorSize;
+    const PHX_SectorSize bootsectorSectors = (512 + sectorSize - 1) / sectorSize;
+
+    if (device->totalSectors <= bootsectorSectors)
+        return PHX_FALSE;
+
     outTable->partitions = PHX_NULL;
     outTable->partitionCount = 0;
     outTable->maxPartitionCount = 4;
-    outTable->signature = PHX_Context_GetRandomU32(context);
-    while (outTable->signature == 0)
-        outTable->signature = PHX_Context_GetRandomU32(context);
-    outTable->startUsable = 1;
-    outTable->sizeUsable = device->totalSectors - 1;
+    outTable->signature.first = PHX_Context_GetRandomU32(context);
+    outTable->signature.second = 0;
+    while (outTable->signature.first == 0)
+        outTable->signature.first = PHX_Context_GetRandomU32(context);
+    outTable->startUsable = bootsectorSectors;
+    outTable->sizeUsable = device->totalSectors - bootsectorSectors;
     memcpy(outTable->bootsector, binary_file_data, 512);
+
+    return PHX_TRUE;
 }
 
 PHX_Partition_Interface PHX_Partition_MBR_Interface = {
