@@ -1,8 +1,6 @@
 #include "fat.h"
-#include "filesystem/filesystem.h"
-#include "types.h"
 
-PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u64* entryCountOut)
+PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_u64* entryCountOut)
 {
     PHX_Result result;
 
@@ -85,7 +83,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesyst
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut)
+PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut)
 {
     PHX_Result result;
 
@@ -256,7 +254,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem* fs, PHX_Filesystem_N
     }
 }
 
-PHX_Result PHX_Filesystem_FAT_Dir_LookupEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut)
+PHX_Result PHX_Filesystem_FAT_Dir_LookupEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut)
 {
     PHX_Result result;
 

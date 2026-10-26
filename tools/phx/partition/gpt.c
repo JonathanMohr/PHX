@@ -1,8 +1,7 @@
 #include "gpt.h"
-#include "types.h"
 
-#include <endianness.h>
-#include <base.h>
+#include <phx/base/endianness.h>
+#include <phx/base/intrinsic.h>
 
 #include <embed/gpt.h>
 
@@ -36,23 +35,23 @@ static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte secto
 }
 
 
-static PHX_Bool GPT_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
+static PHX_Bool GPT_ReadTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable)
 {
     const PHX_Size bootsectorBlocks = (512 + device->sectorSize - 1) / device->sectorSize;
-    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->sectorSize);
+    PHX_Byte* bootsectorBuffer = context->allocator->allocate(context->allocator, bootsectorBlocks * device->sectorSize);
     if (!bootsectorBuffer)
         return PHX_FALSE;
 
     if (device->read(device, bootsectorBuffer, 0, bootsectorBlocks) != PHX_TRUE)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
     const PHX_Byte signature[2] = {bootsectorBuffer[510], bootsectorBuffer[511]};
     if (signature[0] != 0x55 || signature[1] != 0xAA)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
@@ -76,17 +75,17 @@ static PHX_Bool GPT_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
 
     if (found != PHX_TRUE)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
     // TODO
     (void)outTable;
-    context->allocator.free(&context->allocator, bootsectorBuffer);
+    context->allocator->free(context->allocator, bootsectorBuffer);
     return PHX_FALSE;
 }
 
-static PHX_Bool GPT_WriteTable(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table)
+static PHX_Bool GPT_WriteTable(PHX_Context* context, PHX_Disk_Device* device, const PHX_Partition_Table* table)
 {
     // TODO
     (void)MBR_EncodeCHS;
@@ -96,7 +95,7 @@ static PHX_Bool GPT_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
     return PHX_FALSE;
 }
 
-static PHX_Bool GPT_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
+static PHX_Bool GPT_DefaultTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable)
 {
     const PHX_SectorSize sectorSize = device->sectorSize;
     const PHX_SectorSize bootsectorSectors = (512 + sectorSize - 1) / sectorSize;

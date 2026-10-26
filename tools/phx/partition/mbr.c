@@ -1,8 +1,7 @@
 #include "mbr.h"
-#include "types.h"
 
-#include <endianness.h>
-#include <base.h>
+#include <phx/base/endianness.h>
+#include <phx/base/intrinsic.h>
 
 #include <embed/mbr.h>
 
@@ -120,7 +119,7 @@ static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte secto
     out[2] = (PHX_Byte)(cylinder & 0xFF);
 }
 
-static inline PHX_Bool MBR_ReadBootsector(PHX_BlockDevice* device, PHX_Byte* buffer, PHX_Size blocks)
+static inline PHX_Bool MBR_ReadBootsector(PHX_Disk_Device* device, PHX_Byte* buffer, PHX_Size blocks)
 {
     if (device->read(device, buffer, 0, blocks) != blocks)
         return PHX_FALSE;
@@ -128,7 +127,7 @@ static inline PHX_Bool MBR_ReadBootsector(PHX_BlockDevice* device, PHX_Byte* buf
     return PHX_TRUE;
 }
 
-static inline PHX_Bool MBR_WriteBootsector(PHX_BlockDevice* device, const PHX_Byte* buffer, PHX_Size blocks)
+static inline PHX_Bool MBR_WriteBootsector(PHX_Disk_Device* device, const PHX_Byte* buffer, PHX_Size blocks)
 {
     if (device->write(device, buffer, 0, blocks) != blocks)
         return PHX_FALSE;
@@ -136,23 +135,23 @@ static inline PHX_Bool MBR_WriteBootsector(PHX_BlockDevice* device, const PHX_By
     return PHX_TRUE;
 }
 
-static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
+static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable)
 {
     const PHX_Size bootsectorBlocks = (512 + device->sectorSize - 1) / device->sectorSize;
-    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->sectorSize);
+    PHX_Byte* bootsectorBuffer = context->allocator->allocate(context->allocator, bootsectorBlocks * device->sectorSize);
     if (!bootsectorBuffer)
         return PHX_FALSE;
 
     if (MBR_ReadBootsector(device, bootsectorBuffer, bootsectorBlocks) != PHX_TRUE)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
     const PHX_Byte signature[2] = {bootsectorBuffer[510], bootsectorBuffer[511]};
     if (signature[0] != 0x55 || signature[1] != 0xAA)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
@@ -174,13 +173,13 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
 
         if (bootFlag != 0x00 && bootFlag != 0x80)
         {
-            context->allocator.free(&context->allocator, bootsectorBuffer);
+            context->allocator->free(context->allocator, bootsectorBuffer);
             return PHX_FALSE;
         }
 
         if (type == MBR_TYPE_PROTECTED)
         {
-            context->allocator.free(&context->allocator, bootsectorBuffer);
+            context->allocator->free(context->allocator, bootsectorBuffer);
             return PHX_FALSE;
         }
 
@@ -189,10 +188,10 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
     }
 
     const PHX_PartitionSize partitionCount = currentPartitionCount;
-    PHX_Partition* partitions = (partitionCount > 0) ? context->allocator.allocate(&context->allocator, sizeof(PHX_Partition) * partitionCount) : PHX_NULL;
+    PHX_Partition* partitions = (partitionCount > 0) ? context->allocator->allocate(context->allocator, sizeof(PHX_Partition) * partitionCount) : PHX_NULL;
     if (partitionCount > 0 && !partitions)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
@@ -243,25 +242,25 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_BlockDevice* device, PHX
 
     memcpy(outTable->bootsector, bootsectorBuffer, 512);
 
-    context->allocator.free(&context->allocator, bootsectorBuffer);
+    context->allocator->free(context->allocator, bootsectorBuffer);
 
     return PHX_TRUE;
 }
 
-static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table)
+static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_Disk_Device* device, const PHX_Partition_Table* table)
 {
     if (table->partitionCount > 4)
         return PHX_FALSE;
 
     const PHX_Size bootsectorBlocks = (512 + device->sectorSize - 1) / device->sectorSize;
-    PHX_Byte* bootsectorBuffer = context->allocator.allocate(&context->allocator, bootsectorBlocks * device->sectorSize);
+    PHX_Byte* bootsectorBuffer = context->allocator->allocate(context->allocator, bootsectorBlocks * device->sectorSize);
     if (!bootsectorBuffer)
         return PHX_FALSE;
 
     // Don't destroy stuff after the bootsector
     if (bootsectorBlocks * device->sectorSize > 512 && MBR_ReadBootsector(device, bootsectorBuffer, bootsectorBlocks) != PHX_TRUE)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
@@ -295,13 +294,13 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
 
         if (partition->start > 0xFFFFFFFF)
         {
-            context->allocator.free(&context->allocator, bootsectorBuffer);
+            context->allocator->free(context->allocator, bootsectorBuffer);
             return PHX_FALSE;
         }
 
         if (partition->size > 0xFFFFFFFF)
         {
-            context->allocator.free(&context->allocator, bootsectorBuffer);
+            context->allocator->free(context->allocator, bootsectorBuffer);
             return PHX_FALSE;
         }
 
@@ -335,16 +334,16 @@ static PHX_Bool MBR_WriteTable(PHX_Context* context, PHX_BlockDevice* device, co
 
     if (MBR_WriteBootsector(device, bootsectorBuffer, bootsectorBlocks) != PHX_TRUE)
     {
-        context->allocator.free(&context->allocator, bootsectorBuffer);
+        context->allocator->free(context->allocator, bootsectorBuffer);
         return PHX_FALSE;
     }
 
-    context->allocator.free(&context->allocator, bootsectorBuffer);
+    context->allocator->free(context->allocator, bootsectorBuffer);
 
     return PHX_TRUE;
 }
 
-static PHX_Bool MBR_DefaultTable(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable)
+static PHX_Bool MBR_DefaultTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable)
 {
     const PHX_SectorSize sectorSize = device->sectorSize;
     const PHX_SectorSize bootsectorSectors = (512 + sectorSize - 1) / sectorSize;

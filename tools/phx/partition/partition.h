@@ -5,76 +5,12 @@
 extern "C" {
 #endif
 
-#include <device/device.h>
-
-typedef struct
-{
-    PHX_u64 first;
-    PHX_u64 second;
-} PHX_Partition_Signature;
-
-typedef PHX_Byte PHX_Partition_Type;
-#define PHX_PARTITION_UNKNOWN 0
-#define PHX_PARTITION_FAT12   1
-#define PHX_PARTITION_FAT16   2
-#define PHX_PARTITION_FAT32   3
-
-typedef PHX_u16 PHX_Partition_Flags;
-#define PHX_PARTITION_BOOTABLE (1 << 0)
-
-typedef struct PHX_Partition
-{
-    // TODO: id
-
-    PHX_SectorSize start;
-    PHX_SectorSize size;
-
-    PHX_Partition_Signature signature;
-
-    PHX_u16 flags;
-
-    PHX_Partition_Type type;
-
-    char name[PHX_NAME_LEN + 1];
-} PHX_Partition;
-
-typedef struct PHX_Partition_Table
-{
-    PHX_Partition* partitions;
-
-    PHX_PartitionSize partitionCount;
-    PHX_PartitionSize maxPartitionCount;
-
-    PHX_Partition_Signature signature;
-
-    PHX_SectorSize startUsable;
-    PHX_SectorSize sizeUsable;
-
-    PHX_Byte bootsector[512];
-} PHX_Partition_Table;
-
-typedef struct PHX_Partition_Interface
-{
-    PHX_Bool (*readTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
-    PHX_Bool (*writeTable)(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition_Table* table);
-    PHX_Bool (*getDefaultTable)(PHX_Context* context, PHX_BlockDevice* device, PHX_Partition_Table* outTable);
-
-    const char* partitionType;
-    const char* name;
-    const char* type;
-} PHX_Partition_Interface;
+#include <phx/context.h>
+#include <phx/interface/partition.h>
 
 extern PHX_Partition_Interface* PHX_Partition_Interfaces[];
 extern PHX_Size PHX_Partition_InterfaceCount;
 
-static inline void PHX_Partition_CloseTable(PHX_Context* context, PHX_Partition_Table* table)
-{
-    if (table->partitions)
-        context->allocator.free(&context->allocator, table->partitions);
-    table->partitions = PHX_NULL;
-}
-
-PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_BlockDevice* device, const PHX_Partition* partition, PHX_BlockDevice* outDevice);
 
 #ifdef __cplusplus
 }

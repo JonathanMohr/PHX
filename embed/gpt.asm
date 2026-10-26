@@ -79,7 +79,7 @@ restart:
 triple_fault_idt:
     times 6 db 0
 
-not_bootable_msg db "This is not a bootable FAT disk or partition.", 0
+not_bootable_msg db "This is not a legacy bootable GPT disk.", 0
 press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
 
 times 440 - ($ - $$) db 0

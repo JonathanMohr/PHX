@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include "partition.h"
+#include <phx/interface/partition.h>
 
 extern PHX_Partition_Interface PHX_Partition_MBR_Interface;
 

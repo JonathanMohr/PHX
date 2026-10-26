@@ -1,7 +1,4 @@
 #include "fat.h"
-#include "filesystem/filesystem.h"
-#include "result.h"
-#include "types.h"
 
 void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13])
 {
@@ -72,7 +69,7 @@ PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b)
     return (*a == *b) ? PHX_TRUE : PHX_FALSE;
 }
 
-static PHX_Result shortNameExists(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char candidate[11], PHX_Bool* existsOut)
+static PHX_Result shortNameExists(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char candidate[11], PHX_Bool* existsOut)
 {
     PHX_Result result;
     PHX_Filesystem_FAT_Data* data = fs->data;
@@ -147,7 +144,7 @@ static PHX_Result shortNameExists(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, 
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11])
+PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11])
 {
     static const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_$%'@~!(){}^#&";
     static const size_t alphabetSize = sizeof(alphabet) - 1;

@@ -5,35 +5,16 @@
 #include <time.h>
 #include <inttypes.h>
 
-#include "device/device.h"
-#include "disk.h"
-#include "native/filesystem.h"
+#include <phx/native/filesystem.h>
+#include <phx/native/memory.h>
+
+#include <phx/utility/partition.h>
+#include <phx/utility/filesystem.h>
+
+#include "interfaces.h"
+#include "disk/disk.h"
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
-
-#include "file.h"
-#include "result.h"
-#include "types.h"
-
-static void* PHX_Allocate(struct PHX_Allocator* allocator, PHX_Size size)
-{
-    (void)allocator;
-    void* r = malloc(size);
-    return r;
-}
-
-static void* PHX_Reallocate(struct PHX_Allocator* allocator, void* oldPtr, PHX_Size newSize)
-{
-    (void)allocator;
-    return realloc(oldPtr, newSize);
-}
-
-static void PHX_Free(struct PHX_Allocator* allocator, void* ptr)
-{
-    (void)allocator;
-    free(ptr);
-}
-
 
 static void print_help(const char* name);
 
@@ -135,7 +116,7 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
 
-static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_FileDevice* fileDevice, PHX_BlockDevice* diskOut, PHX_BlockDevice* partitionOut)
+static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_File_Device* fileDevice, PHX_Disk_Device* diskOut, PHX_Disk_Device* partitionOut)
 {
     PHX_Result result;
     PHX_DetailedResult detailedResult;
@@ -158,7 +139,7 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
             lastColon = PHX_NULL;
     }
 
-    const char* name = lastColon ? context->allocator.allocate(&context->allocator, (PHX_Size)(lastColon - str + 1)) : str;
+    const char* name = lastColon ? context->allocator->allocate(context->allocator, (PHX_Size)(lastColon - str + 1)) : str;
     if (lastColon && !name)
     {
         fputs("Could not allocate memory for name\n", stderr);
@@ -171,17 +152,17 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
         ((char*)name)[(PHX_Size)(lastColon - str)] = '\0';
     }
 
-    if ((detailedResult = PHX_File_Open(lastColon ? name : str, PHX_FILE_MODE_READ_WRITE, fileDevice, 0)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_Native_File_Open(lastColon ? name : str, PHX_NATIVE_FILE_MODE_READ_WRITE, fileDevice, 0)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", name, detailedResult.msg);
 
         if (lastColon)
-            context->allocator.free(&context->allocator, (char*)name);
+            context->allocator->free(context->allocator, (char*)name);
         return PHX_NULL;
     }
 
     if (lastColon)
-        context->allocator.free(&context->allocator, (char*)name);
+        context->allocator->free(context->allocator, (char*)name);
     
     if ((result = PHX_Disk_Open(context, fileDevice, diskOut)) != PHX_SUCCESS)
     {
@@ -190,7 +171,7 @@ static PHX_BlockDevice* PHX_Device_FromStr(PHX_Context* context, const char* str
         else
             fputs("Error while opening\n", stderr);
 
-        PHX_File_Close(fileDevice);
+        PHX_Native_File_Close(fileDevice);
         return PHX_NULL;
     }
 
@@ -313,10 +294,10 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         }
     }
 
-    const PHX_File_Mode imageMode = (command == PHX_COMMAND_DISK_CREATE) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ_WRITE;
+    const PHX_Native_File_Mode imageMode = (command == PHX_COMMAND_DISK_CREATE) ? PHX_NATIVE_FILE_MODE_CREATE : PHX_NATIVE_FILE_MODE_READ_WRITE;
 
-    PHX_FileDevice fileDevice;
-    if ((detailedResult = PHX_File_Open(imagePath, imageMode, &fileDevice, imageSize)).code != PHX_SUCCESS)
+    PHX_File_Device fileDevice;
+    if ((detailedResult = PHX_Native_File_Open(imagePath, imageMode, &fileDevice, imageSize)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
         return 1;
@@ -332,16 +313,16 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             {
                 fprintf(stderr, "Could not find disk interface for type \"%s\"\n", imageType);
                 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 return 1;
             }
 
-            PHX_BlockDevice diskDevice;
+            PHX_Disk_Device diskDevice;
             if (interface->formatDevice(context, &fileDevice, PHX_FALSE, &diskDevice) != PHX_TRUE)
             {
                 fputs("Formatting failed\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 return 1;
             }
 
@@ -353,7 +334,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         {
             PHX_Result result;
 
-            PHX_BlockDevice diskDevice;
+            PHX_Disk_Device diskDevice;
             if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
@@ -361,7 +342,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
                 else
                     fputs("Error while opening\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 return 1;
             }
 
@@ -480,14 +461,14 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         }
     }
 
-    PHX_FileDevice fileDevice;
-    if ((detailedResult = PHX_File_Open(imagePath, PHX_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
+    PHX_File_Device fileDevice;
+    if ((detailedResult = PHX_Native_File_Open(imagePath, PHX_NATIVE_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
         return 1;
     }
 
-    PHX_BlockDevice diskDevice;
+    PHX_Disk_Device diskDevice;
     if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice)) != PHX_SUCCESS)
     {
         if (result == PHX_ERROR_FORMAT)
@@ -495,7 +476,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         else
             fputs("Error while opening\n", stderr);
 
-        PHX_File_Close(&fileDevice);
+        PHX_Native_File_Close(&fileDevice);
         return 1;
     }
 
@@ -614,7 +595,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
             // TODO: Validate it is not overlapping
 
-            PHX_Partition* newPartitions = context->allocator.reallocate(&context->allocator, table.partitions, sizeof(PHX_Partition) * (table.partitionCount + 1));
+            PHX_Partition* newPartitions = context->allocator->reallocate(context->allocator, table.partitions, sizeof(PHX_Partition) * (table.partitionCount + 1));
             if (!newPartitions)
             {
                 fputs("Could not allocate new partition array\n", stderr);
@@ -761,8 +742,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            PHX_FileDevice bootsectorFileDevice;
-            if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
+            PHX_File_Device bootsectorFileDevice;
+            if ((detailedResult = PHX_Native_File_Open(bootsectorFileStr, PHX_NATIVE_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
 
@@ -771,11 +752,11 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            if (PHX_File_Read(&bootsectorFileDevice, table.bootsector, 0, 512) != 512)
+            if (PHX_Native_File_Read(&bootsectorFileDevice, table.bootsector, 0, 512) != 512)
             {
                 fputs("Error reading from bootsector file\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&bootsectorFileDevice);
                 PHX_Partition_CloseTable(context, &table);
                 diskDevice.close(&diskDevice);
                 return 1;
@@ -785,13 +766,13 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fputs("Error writing partition table to disk\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&bootsectorFileDevice);
                 PHX_Partition_CloseTable(context, &table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            PHX_File_Close(&fileDevice);
+            PHX_Native_File_Close(&bootsectorFileDevice);
             PHX_Partition_CloseTable(context, &table);
             break;
         }
@@ -811,12 +792,12 @@ struct PHX_Entry_Info
     PHX_Filesystem_Node node;
 };
 
-static int entry_type_rank(PHX_Filesystem_Entry_Type type)
+static int entry_type_rank(PHX_Filesystem_Node_Type type)
 {
     switch (type)
     {
-        case PHX_FILESYSTEM_ENTRY_DIRECTORY: return 0;
-        case PHX_FILESYSTEM_ENTRY_FILE: return 1;
+        case PHX_FILESYSTEM_NODE_TYPE_DIRECTORY: return 0;
+        case PHX_FILESYSTEM_NODE_TYPE_FILE: return 1;
         default: return 2;
     }
 }
@@ -842,11 +823,11 @@ static void printEntry(const struct PHX_Entry_Info* entryInfo, FILE* stream)
 
     switch (node->type)
     {
-        case PHX_FILESYSTEM_ENTRY_FILE:
+        case PHX_FILESYSTEM_NODE_TYPE_FILE:
             fputs("fil", stream);
             break;
 
-        case PHX_FILESYSTEM_ENTRY_DIRECTORY:
+        case PHX_FILESYSTEM_NODE_TYPE_DIRECTORY:
             fputs("dir", stream);
             break;
 
@@ -857,19 +838,19 @@ static void printEntry(const struct PHX_Entry_Info* entryInfo, FILE* stream)
 
     fputs(" (", stream);
 
-    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_READONLY)
+    if (node->attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_READONLY)
         fputs("ro | ", stream);
     else
         fputs("-- | ", stream);
-    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_EXECUTABLE)
+    if (node->attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_EXECUTABLE)
         fputs("exec | ", stream);
     else
         fputs("---- | ", stream);
-    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_HIDDEN)
+    if (node->attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_HIDDEN)
         fputs("hid | ", stream);
     else
         fputs("--- | ", stream);
-    if (node->attributes & PHX_FILESYSTEM_ATTRIBUTE_SYSTEM)
+    if (node->attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_SYSTEM)
         fputs("sys", stream);
     else
         fputs("---", stream);
@@ -883,7 +864,7 @@ static void printEntry(const struct PHX_Entry_Info* entryInfo, FILE* stream)
     fputc('\n', stream);
 }
 
-static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_Bool recursive)
+static int printNode(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* dir, PHX_Bool recursive)
 {
     // TODO: Make recursive look nicer and more like tree
 
@@ -899,7 +880,7 @@ static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_B
     if (entryCount == 0)
         return 0;
 
-    struct PHX_Entry_Info* entries = filesystem->context->allocator.allocate(&filesystem->context->allocator, sizeof(struct PHX_Entry_Info) * entryCount);
+    struct PHX_Entry_Info* entries = filesystem->context->allocator->allocate(filesystem->context->allocator, sizeof(struct PHX_Entry_Info) * entryCount);
     if (!entries)
     {
         fputs("Could not allocate memory for entries\n", stderr);
@@ -910,7 +891,7 @@ static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_B
     if ((result = filesystem->ops->createOpenNode(filesystem, dir, &openNode)) != PHX_SUCCESS)
     {
         fputs("Could not create open node\n", stderr);
-        filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+        filesystem->context->allocator->free(filesystem->context->allocator, entries);
         return 1;
     }
 
@@ -928,7 +909,7 @@ static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_B
         fputs("Error while reading directory entries\n", stderr);
         for (PHX_Size i = 0; i < currentEntry; i++)
             filesystem->ops->cleanupNode(filesystem, &entries[i].node);
-        filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+        filesystem->context->allocator->free(filesystem->context->allocator, entries);
         return 1;
     }
 
@@ -942,7 +923,7 @@ static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_B
         for (PHX_Size i = 0; i < currentEntry; i++)
         {
             struct PHX_Entry_Info* entryInfo = &entries[i];
-            if (entryInfo->node.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (entryInfo->node.type != PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
                 continue;
 
             fprintf(stdout, "\n%s:\n", entryInfo->entry.name);
@@ -955,7 +936,7 @@ static int printNode(PHX_Filesystem* filesystem, PHX_Filesystem_Node* dir, PHX_B
     for (PHX_Size i = 0; i < currentEntry; i++)
         filesystem->ops->cleanupNode(filesystem, &entries[i].node);
     (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
-    filesystem->context->allocator.free(&filesystem->context->allocator, entries);
+    filesystem->context->allocator->free(filesystem->context->allocator, entries);
 
     return 0;
 }
@@ -983,7 +964,7 @@ static void printSafe(FILE* stream, const char* s)
     }
 }
 
-static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const char* hostPath, PHX_Size maxRecursionDepth, PHX_Size currentRecursionDepth)
+static int extract(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* node, const char* hostPath, PHX_Size maxRecursionDepth, PHX_Size currentRecursionDepth)
 {
     PHX_Result result;
     PHX_DetailedResult detailedResult;
@@ -1000,7 +981,7 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
 
     // TODO: Attributes
 
-    if (node->type == PHX_FILESYSTEM_ENTRY_FILE)
+    if (node->type == PHX_FILESYSTEM_NODE_TYPE_FILE)
     {
         PHX_Filesystem_OpenNode openNode;
         if ((result = filesystem->ops->createOpenNode(filesystem, node, &openNode)) != PHX_SUCCESS)
@@ -1009,8 +990,8 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
             return 1;
         }
 
-        PHX_FileDevice fileDevice;
-        if ((detailedResult = PHX_File_Open(hostPath, PHX_FILE_MODE_CREATE, &fileDevice, node->size)).code != PHX_SUCCESS)
+        PHX_File_Device fileDevice;
+        if ((detailedResult = PHX_Native_File_Open(hostPath, PHX_NATIVE_FILE_MODE_CREATE, &fileDevice, node->size)).code != PHX_SUCCESS)
         {
             fprintf(stderr, "Could not open file %s: %s\n", hostPath, detailedResult.msg);
             (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
@@ -1018,22 +999,22 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
         }
 
         PHX_Byte buffer[4096];
-        PHX_Filesystem_Size written = 0;
+        PHX_Filesystem_Node_Size written = 0;
         while (written < node->size)
         {
-            const PHX_Filesystem_Size remaining = node->size - written;
-            const PHX_Filesystem_Size chunk = (remaining < sizeof(buffer)) ? remaining : sizeof(buffer);
+            const PHX_Filesystem_Node_Size remaining = node->size - written;
+            const PHX_Filesystem_Node_Size chunk = (remaining < sizeof(buffer)) ? remaining : sizeof(buffer);
 
-            PHX_Filesystem_Size read = filesystem->ops->file_read(filesystem, node, &openNode, chunk, buffer);
+            PHX_Filesystem_Node_Size read = filesystem->ops->file_read(filesystem, node, &openNode, chunk, buffer);
             if (read == 0)
                 break;
-            PHX_Filesystem_Size currentWritten = PHX_File_Write(&fileDevice, buffer, written, read);
+            PHX_Filesystem_Node_Size currentWritten = (PHX_Filesystem_Node_Size)PHX_Native_File_Write(&fileDevice, buffer, written, (PHX_FileSize)read);
             written += currentWritten;
             if (currentWritten != read)
                 break;
         }
 
-        PHX_File_Close(&fileDevice);
+        PHX_Native_File_Close(&fileDevice);
         (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
 
         if (written < node->size)
@@ -1042,9 +1023,9 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
             return 1;
         }
     }
-    else if (node->type == PHX_FILESYSTEM_ENTRY_DIRECTORY)
+    else if (node->type == PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
     {
-        if (PHX_Native_MakeDirectory(hostPath) != PHX_TRUE)
+        if (PHX_Native_Directory_Make(hostPath) != PHX_TRUE)
         {
             fprintf(stderr, "Error while creating directory %s\n", hostPath);
             return 1;
@@ -1085,7 +1066,7 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
                 while (*nameEnd) nameEnd++;
                 const PHX_Size nameLen = (PHX_Size)(nameEnd - entry.name);
 
-                char* newPath = filesystem->context->allocator.allocate(&filesystem->context->allocator, hostPathLen + nameLen + 2);
+                char* newPath = filesystem->context->allocator->allocate(filesystem->context->allocator, hostPathLen + nameLen + 2);
                 if (!newPath)
                 {
                     result = PHX_ERROR_MEMORY;
@@ -1100,13 +1081,13 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
 
                 if (extract(filesystem, &newNode, newPath, maxRecursionDepth, currentRecursionDepth + 1) != 0)
                 {
-                    filesystem->context->allocator.free(&filesystem->context->allocator, newPath);
+                    filesystem->context->allocator->free(filesystem->context->allocator, newPath);
                     filesystem->ops->cleanupNode(filesystem, &newNode);
                     (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
                     return 1;
                 }
 
-                filesystem->context->allocator.free(&filesystem->context->allocator, newPath);
+                filesystem->context->allocator->free(filesystem->context->allocator, newPath);
                 filesystem->ops->cleanupNode(filesystem, &newNode);
             }
 
@@ -1129,7 +1110,7 @@ static int extract(PHX_Filesystem* filesystem, PHX_Filesystem_Node* node, const 
     return 0;
 }
 
-static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, const char* name, const char* hostPath, PHX_Size maxRecursionDepth, PHX_Size currentRecursionDepth)
+static int insert(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* parentDir, const char* name, const char* hostPath, PHX_Size maxRecursionDepth, PHX_Size currentRecursionDepth)
 {
     PHX_Result result;
     PHX_DetailedResult detailedResult;
@@ -1141,8 +1122,8 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
 
     const char* queryPath = (hostPathLen == 0) ? "/" : hostPath;
 
-    PHX_Native_Type type;
-    if (PHX_Native_GetPathType(queryPath, &type) != PHX_TRUE)
+    PHX_Native_Path_Type type;
+    if (PHX_Native_Path_GetType(queryPath, &type) != PHX_TRUE)
     {
         fputs("Could not get type of path: ", stderr);
         printSafe(stderr, queryPath);
@@ -1151,7 +1132,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
     }
 
     // TODO: Attributes
-    PHX_Filesystem_Entry_Attribute attributes = 0;
+    PHX_Filesystem_Node_Attribute attributes = 0;
 
     // TODO: Allow if types match, but clear file
     PHX_Filesystem_Entry tmpEntry;
@@ -1175,7 +1156,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
 
     switch (type)
     {
-        case PHX_NATIVE_FILE:
+        case PHX_NATIVE_TYPE_FILE:
         {
             if (exists == PHX_TRUE)
             {
@@ -1185,8 +1166,8 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 return 1;
             }
 
-            PHX_FileDevice fileDevice;
-            if ((detailedResult = PHX_File_Open(queryPath, PHX_FILE_MODE_READ, &fileDevice, 0)).code != PHX_SUCCESS)
+            PHX_File_Device fileDevice;
+            if ((detailedResult = PHX_Native_File_Open(queryPath, PHX_NATIVE_FILE_MODE_READ, &fileDevice, 0)).code != PHX_SUCCESS)
             {
                 fputs("Could not open host file ", stderr);
                 printSafe(stderr, queryPath);
@@ -1197,13 +1178,13 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             }
             const PHX_FileSize size = fileDevice.fileSize;
 
-            if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_ENTRY_FILE, attributes, name, &newNode)) != PHX_SUCCESS)
+            if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_NODE_TYPE_FILE, attributes, name, &newNode)) != PHX_SUCCESS)
             {
                 fputs("Could not create file in filesystem: ", stderr);
                 printSafe(stderr, name);
                 fputc('\n', stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
@@ -1213,31 +1194,31 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             {
                 fputs("Could not create open node\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 filesystem->ops->cleanupNode(filesystem, &newNode);
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
 
             PHX_Byte buffer[4096];
-            PHX_Filesystem_Size done = 0;
+            PHX_FileSize done = 0;
             while (done < size)
             {
-                const PHX_Filesystem_Size remaining = size - done;
-                const PHX_Filesystem_Size chunk = (remaining < sizeof(buffer)) ? remaining : sizeof(buffer);
+                const PHX_FileSize remaining = size - done;
+                const PHX_FileSize chunk = (remaining < sizeof(buffer)) ? remaining : sizeof(buffer);
 
-                const PHX_Filesystem_Size read = PHX_File_Read(&fileDevice, buffer, done, chunk);
+                const PHX_FileSize read = PHX_Native_File_Read(&fileDevice, buffer, done, chunk);
                 if (read == 0)
                     break;
 
-                const PHX_Filesystem_Size written = filesystem->ops->file_write(filesystem, &newNode, &openNode, read, buffer);
+                const PHX_FileSize written = (PHX_FileSize)filesystem->ops->file_write(filesystem, &newNode, &openNode, (PHX_FileSize)read, buffer);
                 done += written;
                 if (written != read)
                     break;
             }
 
             (void)filesystem->ops->closeOpenNode(filesystem, &openNode);
-            PHX_File_Close(&fileDevice);
+            PHX_Native_File_Close(&fileDevice);
             filesystem->ops->cleanupNode(filesystem, &newNode);
 
             if (done < size)
@@ -1251,9 +1232,9 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             break;
         }
 
-        case PHX_NATIVE_DIRECTORY:
+        case PHX_NATIVE_TYPE_DIRECTORY:
         {
-            if (exists == PHX_TRUE && tmpNode.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (exists == PHX_TRUE && tmpNode.type != PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
             {
                 fprintf(stderr, "Entry for directory %s already exists as a file\n", hostPath);
 
@@ -1268,7 +1249,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                 dirNode = &tmpNode;
             else if (intoParent == PHX_TRUE)
                 dirNode = parentDir;
-            else if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_ENTRY_DIRECTORY, attributes, name, &newNode)) != PHX_SUCCESS)
+            else if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_NODE_TYPE_DIRECTORY, attributes, name, &newNode)) != PHX_SUCCESS)
             {
                 fputs("Could not create directory in filesystem: ", stderr);
                 printSafe(stderr, name);
@@ -1285,7 +1266,7 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
             else
             {
                 PHX_Native_Directory dir;
-                if (PHX_Native_OpenDir(queryPath, &dir) != PHX_TRUE)
+                if (PHX_Native_Directory_Open(queryPath, &dir) != PHX_TRUE)
                 {
                     fputs("Could not open host directory ", stderr);
                     printSafe(stderr, queryPath);
@@ -1296,20 +1277,20 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
                     return 1;
                 }
 
-                PHX_Native_Entry entry;
-                while (PHX_Native_GetEntry(&dir, &entry) == PHX_TRUE)
+                PHX_Native_Directory_Entry entry;
+                while (PHX_Native_Directory_GetEntry(&dir, &entry) == PHX_TRUE)
                 {
                     const PHX_Size nameLen = (PHX_Size)strlen(entry.name);
 
                     const PHX_Size sepLen = (hostPathLen == 0 || hostPath[hostPathLen - 1] != '/') ? 1 : 0;
 
-                    char* childPath = filesystem->context->allocator.allocate(&filesystem->context->allocator, hostPathLen + sepLen + nameLen + 1);
+                    char* childPath = filesystem->context->allocator->allocate(filesystem->context->allocator, hostPathLen + sepLen + nameLen + 1);
                     if (!childPath)
                     {
                         fputs("Could not allocate memory for child path\n", stderr);
 
-                        PHX_Native_CleanupEntry(&entry);
-                        PHX_Native_CloseDir(&dir);
+                        PHX_Native_Directory_CleanupEntry(&entry);
+                        PHX_Native_Directory_Close(&dir);
                         if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
                         if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                         return 1;
@@ -1323,19 +1304,19 @@ static int insert(PHX_Filesystem* filesystem, PHX_Filesystem_Node* parentDir, co
 
                     const int failed = insert(filesystem, dirNode, entry.name, childPath, maxRecursionDepth, currentRecursionDepth + 1);
 
-                    filesystem->context->allocator.free(&filesystem->context->allocator, childPath);
-                    PHX_Native_CleanupEntry(&entry);
+                    filesystem->context->allocator->free(filesystem->context->allocator, childPath);
+                    PHX_Native_Directory_CleanupEntry(&entry);
 
                     if (failed)
                     {
-                        PHX_Native_CloseDir(&dir);
+                        PHX_Native_Directory_Close(&dir);
                         if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
                         if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                         return 1;
                     }
                 }
 
-                PHX_Native_CloseDir(&dir);
+                PHX_Native_Directory_Close(&dir);
             }
 
             if (intoParent != PHX_TRUE && exists != PHX_TRUE) filesystem->ops->cleanupNode(filesystem, &newNode);
@@ -1484,13 +1465,13 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
     const char* deviceStr = args[0];
 
-    PHX_FileDevice inFileDevice;
-    PHX_BlockDevice diskDevice;
-    PHX_BlockDevice partitionDevice;
-    PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    PHX_File_Device inFileDevice;
+    PHX_Disk_Device diskDevice;
+    PHX_Disk_Device partitionDevice;
+    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
     if (!device) return 1;
 
-    PHX_Filesystem filesystem;
+    PHX_Filesystem_Device filesystem;
     if (command == PHX_COMMAND_FILESYSTEM_FORMAT)
     {
         const char* format = args[1];
@@ -1607,10 +1588,10 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     fputs("Error while trying to find parent directory\n", stderr);
 
                 returnCode = 1;
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
-            if (parent) context->allocator.free(&context->allocator, parent);
+            if (parent) context->allocator->free(context->allocator, parent);
 
             returnCode = insert(&filesystem, &directoryNode, name, hostPath, 0, 0);
             filesystem.ops->cleanupNode(&filesystem, &directoryNode);
@@ -1648,7 +1629,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     fputs("Error while trying to find parent directory\n", stderr);
 
                 returnCode = 1;
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
@@ -1659,11 +1640,11 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
                 returnCode = 1;
                 filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
-            PHX_Filesystem_Entry_Type type = (command == PHX_COMMAND_FILESYSTEM_MKDIR) ? PHX_FILESYSTEM_ENTRY_DIRECTORY : PHX_FILESYSTEM_ENTRY_FILE;
+            PHX_Filesystem_Node_Type type = (command == PHX_COMMAND_FILESYSTEM_MKDIR) ? PHX_FILESYSTEM_NODE_TYPE_DIRECTORY : PHX_FILESYSTEM_NODE_TYPE_FILE;
 
             if ((filesystem.ops->createNode(&filesystem, &directoryNode, type, 0, name, PHX_NULL)) != PHX_SUCCESS)
             {
@@ -1672,7 +1653,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-            if (parent) context->allocator.free(&context->allocator, parent);
+            if (parent) context->allocator->free(context->allocator, parent);
 
             break;
         }
@@ -1693,7 +1674,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            if (directoryNode.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (directoryNode.type != PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
             {
                 fputs("Entry is not a directory\n", stderr);
 
@@ -1722,7 +1703,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            if (directoryNode.type != PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (directoryNode.type != PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
             {
                 fputs("Entry is not a directory\n", stderr);
 
@@ -1752,7 +1733,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            if (node.type != PHX_FILESYSTEM_ENTRY_FILE)
+            if (node.type != PHX_FILESYSTEM_NODE_TYPE_FILE)
             {
                 fputs("Entry is not a file\n", stderr);
 
@@ -1799,7 +1780,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            if (node.type != PHX_FILESYSTEM_ENTRY_FILE)
+            if (node.type != PHX_FILESYSTEM_NODE_TYPE_FILE)
             {
                 fputs("Entry is not a file\n", stderr);
 
@@ -1809,10 +1790,10 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             const char* file = args[2];
-            const PHX_File_Mode fileMode = (command == PHX_COMMAND_FILESYSTEM_READ) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ;
+            const PHX_Native_File_Mode fileMode = (command == PHX_COMMAND_FILESYSTEM_READ) ? PHX_NATIVE_FILE_MODE_CREATE : PHX_NATIVE_FILE_MODE_READ;
             const PHX_SectorSize fileSize = (command == PHX_COMMAND_FILESYSTEM_READ) ? node.size : 0;
-            PHX_FileDevice fileDevice;
-            if ((detailedResult = PHX_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
+            PHX_File_Device fileDevice;
+            if ((detailedResult = PHX_Native_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg);
 
@@ -1827,7 +1808,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 fputs("Could not create open node\n", stderr);
 
                 returnCode = 1;
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 filesystem.ops->cleanupNode(&filesystem, &node);
                 goto cleanup;
             }
@@ -1842,7 +1823,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 while (read > 0 && written < node.size)
                 {
                     read = filesystem.ops->file_read(&filesystem, &node, &openNode, sizeof(buffer), buffer);
-                    written += PHX_File_Write(&fileDevice, buffer, written, read);
+                    written += PHX_Native_File_Write(&fileDevice, buffer, written, read);
                 }
             }
             else // write
@@ -1850,7 +1831,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 expected = fileDevice.fileSize;
                 while (read > 0 && written < fileDevice.fileSize)
                 {
-                    read = PHX_File_Read(&fileDevice, buffer, written, sizeof(buffer));
+                    read = PHX_Native_File_Read(&fileDevice, buffer, written, sizeof(buffer));
                     written += filesystem.ops->file_write(&filesystem, &node, &openNode, read, buffer);
                 }
             }
@@ -1862,7 +1843,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             (void)filesystem.ops->closeOpenNode(&filesystem, &openNode);
-            PHX_File_Close(&fileDevice);
+            PHX_Native_File_Close(&fileDevice);
             filesystem.ops->cleanupNode(&filesystem, &node);
 
             break;
@@ -1898,7 +1879,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     fputs("Error while trying to find parent directory\n", stderr);
 
                 returnCode = 1;
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
@@ -1909,7 +1890,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
                 returnCode = 1;
                 filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
@@ -1920,11 +1901,11 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
                 returnCode = 1;
                 filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
-            if (node.type == PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (node.type == PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
             {
                 PHX_u64 entryCount;
                 if ((result = filesystem.ops->dir_getEntryCount(&filesystem, &node, &entryCount)) != PHX_SUCCESS)
@@ -1934,7 +1915,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     returnCode = 1;
                     filesystem.ops->cleanupNode(&filesystem, &node);
                     filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                    if (parent) context->allocator.free(&context->allocator, parent);
+                    if (parent) context->allocator->free(context->allocator, parent);
                     goto cleanup;
                 }
 
@@ -1945,12 +1926,12 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     returnCode = 1;
                     filesystem.ops->cleanupNode(&filesystem, &node);
                     filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                    if (parent) context->allocator.free(&context->allocator, parent);
+                    if (parent) context->allocator->free(context->allocator, parent);
                     goto cleanup;
                 }
             }
 
-            PHX_Filesystem_Size newReferenceCount;
+            PHX_Filesystem_Node_Count newReferenceCount;
             if ((result = filesystem.ops->unlinkEntry(&filesystem, &directoryNode, name, &newReferenceCount)) != PHX_SUCCESS)
             {
                 fputs("Error while trying to unlink entry\n", stderr);
@@ -1958,7 +1939,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 returnCode = 1;
                 filesystem.ops->cleanupNode(&filesystem, &node);
                 filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-                if (parent) context->allocator.free(&context->allocator, parent);
+                if (parent) context->allocator->free(context->allocator, parent);
                 goto cleanup;
             }
 
@@ -1971,7 +1952,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
             filesystem.ops->cleanupNode(&filesystem, &node);
             filesystem.ops->cleanupNode(&filesystem, &directoryNode);
-            if (parent) context->allocator.free(&context->allocator, parent);
+            if (parent) context->allocator->free(context->allocator, parent);
 
             break;
         }
@@ -2005,7 +1986,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 fputs("Error while separating destination parent\n", stderr);
 
                 returnCode = 1;
-                if (srcParent) context->allocator.free(&context->allocator, srcParent);
+                if (srcParent) context->allocator->free(context->allocator, srcParent);
                 goto cleanup;
             }
 
@@ -2018,8 +1999,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                     fputs("Error while trying to find source parent directory\n", stderr);
 
                 returnCode = 1;
-                if (srcParent) context->allocator.free(&context->allocator, srcParent);
-                if (dstParent) context->allocator.free(&context->allocator, dstParent);
+                if (srcParent) context->allocator->free(context->allocator, srcParent);
+                if (dstParent) context->allocator->free(context->allocator, dstParent);
                 goto cleanup;
             }
 
@@ -2033,12 +2014,12 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
                 returnCode = 1;
                 filesystem.ops->cleanupNode(&filesystem, &srcDirectoryNode);
-                if (srcParent) context->allocator.free(&context->allocator, srcParent);
-                if (dstParent) context->allocator.free(&context->allocator, dstParent);
+                if (srcParent) context->allocator->free(context->allocator, srcParent);
+                if (dstParent) context->allocator->free(context->allocator, dstParent);
                 goto cleanup;
             }
 
-            PHX_Filesystem_NodeNumber newNodeNumber;
+            PHX_Filesystem_Node_Number newNodeNumber;
             if ((result = filesystem.ops->moveEntry(&filesystem, &srcDirectoryNode, srcName, &dstDirectoryNode, dstName, &newNodeNumber)) != PHX_SUCCESS)
             {
                 fputs("Error while moving entry\n", stderr);
@@ -2048,8 +2029,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
 
             filesystem.ops->cleanupNode(&filesystem, &dstDirectoryNode);
             filesystem.ops->cleanupNode(&filesystem, &srcDirectoryNode);
-            if (srcParent) context->allocator.free(&context->allocator, srcParent);
-            if (dstParent) context->allocator.free(&context->allocator, dstParent);
+            if (srcParent) context->allocator->free(context->allocator, srcParent);
+            if (dstParent) context->allocator->free(context->allocator, dstParent);
 
             break;
         }
@@ -2058,8 +2039,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
         {
             const char* bootsectorFileStr = args[1];
 
-            PHX_FileDevice bootsectorFileDevice;
-            if ((detailedResult = PHX_File_Open(bootsectorFileStr, PHX_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
+            PHX_File_Device bootsectorFileDevice;
+            if ((detailedResult = PHX_Native_File_Open(bootsectorFileStr, PHX_NATIVE_FILE_MODE_READ, &bootsectorFileDevice, 0)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
 
@@ -2068,12 +2049,12 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
 
             PHX_Byte bootsector[512];
-            if (PHX_File_Read(&bootsectorFileDevice, bootsector, 0, 512) != 512)
+            if (PHX_Native_File_Read(&bootsectorFileDevice, bootsector, 0, 512) != 512)
             {
                 fputs("Error reading from bootsector file\n", stderr);
 
                 returnCode = 1;
-                PHX_File_Close(&bootsectorFileDevice);
+                PHX_Native_File_Close(&bootsectorFileDevice);
                 goto cleanup;
             }
 
@@ -2083,7 +2064,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 returnCode = 1;
             }
 
-            PHX_File_Close(&bootsectorFileDevice);
+            PHX_Native_File_Close(&bootsectorFileDevice);
 
             break;
         }
@@ -2133,10 +2114,10 @@ static int raw(PHX_Context* context, const char* executable, const char* command
 
     const char* deviceStr = args[0];
 
-    PHX_FileDevice inFileDevice;
-    PHX_BlockDevice diskDevice;
-    PHX_BlockDevice partitionDevice;
-    PHX_BlockDevice* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    PHX_File_Device inFileDevice;
+    PHX_Disk_Device diskDevice;
+    PHX_Disk_Device partitionDevice;
+    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
     if (!device) return 1;
 
     switch (command)
@@ -2144,7 +2125,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
         case PHX_COMMAND_RAW_READ: case PHX_COMMAND_RAW_WRITE:
         {
             const char* file = args[1];
-            const PHX_File_Mode fileMode = (command == PHX_COMMAND_RAW_READ) ? PHX_FILE_MODE_CREATE : PHX_FILE_MODE_READ;
+            const PHX_Native_File_Mode fileMode = (command == PHX_COMMAND_RAW_READ) ? PHX_NATIVE_FILE_MODE_CREATE : PHX_NATIVE_FILE_MODE_READ;
             PHX_SectorSize fileSize = 0;
             if (command == PHX_COMMAND_RAW_READ)
             {
@@ -2153,8 +2134,8 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             }
 
 
-            PHX_FileDevice fileDevice;
-            if ((detailedResult = PHX_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
+            PHX_File_Device fileDevice;
+            if ((detailedResult = PHX_Native_File_Open(file, fileMode, &fileDevice, fileSize)).code != PHX_SUCCESS)
             {
                 fprintf(stderr, "Could not open file %s: %s\n", file, detailedResult.msg);
 
@@ -2165,12 +2146,12 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             }
 
             const PHX_Size blocksPerRead = (device->sectorSize >= 16384) ? 1 : (16384 / device->sectorSize);
-            PHX_Byte* buffer = context->allocator.allocate(&context->allocator, device->sectorSize * blocksPerRead);
+            PHX_Byte* buffer = context->allocator->allocate(context->allocator, device->sectorSize * blocksPerRead);
             if (!buffer)
             {
                 fputs("Could not allocate buffer\n", stderr);
 
-                PHX_File_Close(&fileDevice);
+                PHX_Native_File_Close(&fileDevice);
                 device->close(device);
                 if (device == &partitionDevice)
                     diskDevice.close(&diskDevice);
@@ -2188,19 +2169,19 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                     {
                         fputs("Could not read chunk from device\n", stderr);
 
-                        context->allocator.free(&context->allocator, buffer);
-                        PHX_File_Close(&fileDevice);
+                        context->allocator->free(context->allocator, buffer);
+                        PHX_Native_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
                         return 1;
                     }
-                    if (PHX_File_Write(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
+                    if (PHX_Native_File_Write(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
                     {
                         fputs("Could not write chunk to file\n", stderr);
 
-                        context->allocator.free(&context->allocator, buffer);
-                        PHX_File_Close(&fileDevice);
+                        context->allocator->free(context->allocator, buffer);
+                        PHX_Native_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2209,12 +2190,12 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 }
                 else // write
                 {
-                    if (PHX_File_Read(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
+                    if (PHX_Native_File_Read(&fileDevice, buffer, currentBlock * device->sectorSize, chunk * device->sectorSize) != chunk * device->sectorSize)
                     {
                         fputs("Could not read chunk from file\n", stderr);
 
-                        context->allocator.free(&context->allocator, buffer);
-                        PHX_File_Close(&fileDevice);
+                        context->allocator->free(context->allocator, buffer);
+                        PHX_Native_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2225,8 +2206,8 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                         printf("device->write(device, buffer, %" PRIu64 ", %" PRIu64 ")\n", currentBlock, chunk);
                         fputs("Could not write chunk to device\n", stderr);
 
-                        context->allocator.free(&context->allocator, buffer);
-                        PHX_File_Close(&fileDevice);
+                        context->allocator->free(context->allocator, buffer);
+                        PHX_Native_File_Close(&fileDevice);
                         device->close(device);
                         if (device == &partitionDevice)
                             diskDevice.close(&diskDevice);
@@ -2237,8 +2218,8 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                 currentBlock += chunk;
             }
 
-            context->allocator.free(&context->allocator, buffer);
-            PHX_File_Close(&fileDevice);
+            context->allocator->free(context->allocator, buffer);
+            PHX_Native_File_Close(&fileDevice);
             break;
         }
     }
@@ -2388,13 +2369,6 @@ int main(int argc, const char* argv[])
 
     const char* command = argv[2];
 
-    struct PHX_Allocator allocator = {
-        PHX_Allocate,
-        PHX_Reallocate,
-        PHX_Free,
-        NULL
-    };
-
     PHX_Context context = {
         printWarning,
 
@@ -2404,7 +2378,7 @@ int main(int argc, const char* argv[])
 
         PHX_TRUE,
 
-        allocator
+        &PHX_Native_Allocator
     };
 
     if (strcmp(area, "disk") == 0)

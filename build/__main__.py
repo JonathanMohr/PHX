@@ -247,7 +247,7 @@ def generate_header(input_path: str, output_path: str, var_name: str = None, byt
     with open(output_path, "w") as f:
         f.write(f"#ifndef {guard}\n")
         f.write(f"#define {guard}\n\n")
-        f.write("#include <types.h>\n\n")
+        f.write("#include <phx/types.h>\n\n")
 
         f.write(f"static const unsigned char {var_name}_data[] = {{\n")
 
@@ -405,8 +405,8 @@ def main() -> bool:
     isHost = host_os == target_os and host_arch == target_arch
 
     project_dir = Path(".")
-    # include_dir = project_dir / "include"
-    # lib_dir = project_dir / "libs"
+    include_dir = project_dir / "include"
+    libs_dir = project_dir / "libs"
     tools_dir = project_dir / "tools"
     embed_dir = project_dir / "embed"
 
@@ -516,15 +516,42 @@ def main() -> bool:
             generate_header(str(binary), str(header), "binary_file")
 
 
+        # libs
+        libs_build_dir = build_dir / "libs"
+
+        ## core
+        base_path = libs_dir / "core"
+
+        base_toolchain = copy.copy(toolchain)
+        base_toolchain.Add_Include_Directory(include_dir)
+
+        base_build_mode = copy.copy(buildMode)
+        base_build_mode.host = HOST.HOSTED
+
+        base_lib = Build_Static_Library(logger, base_toolchain, base_build_mode, base_path, libs_build_dir / "core", "phx-core", True)
+
+        ## native
+        native_path = libs_dir / "native"
+
+        native_toolchain = copy.copy(toolchain)
+        native_toolchain.Add_Include_Directory(include_dir)
+
+        native_build_mode = copy.copy(buildMode)
+        native_build_mode.host = HOST.HOSTED
+
+        native_lib = Build_Static_Library(logger, native_toolchain, native_build_mode, native_path, libs_build_dir / "native", "phx-native", True)
+
+
         # PHX
         phxToolchain = copy.copy(toolchain)
+        phxToolchain.Add_Include_Directory(include_dir)
         phxToolchain.Add_Include_Directory(tools_dir / "phx")
         phxToolchain.Add_Include_Directory(embed_include_dir)
 
         phxBuildMode = copy.copy(buildMode)
         phxBuildMode.host = HOST.HOSTED
 
-        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
+        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [native_lib, base_lib], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
         # PHX-LFS

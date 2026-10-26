@@ -1,11 +1,11 @@
 #include "fat.h"
 
-PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNumber number, PHX_Filesystem_Node* nodeOut)
+PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node_Number number, PHX_Filesystem_Node* nodeOut)
 {
     PHX_Result result;
 
     PHX_Filesystem_FAT_Data* data = fs->data;
-    PHX_Filesystem_FAT_Node_Extra* extra = fs->context->allocator.allocate(&fs->context->allocator, sizeof(PHX_Filesystem_FAT_Node_Extra));
+    PHX_Filesystem_FAT_Node_Extra* extra = fs->context->allocator->allocate(fs->context->allocator, sizeof(PHX_Filesystem_FAT_Node_Extra));
     if (!extra)
         return PHX_ERROR_MEMORY;
 
@@ -24,21 +24,21 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
             {
                 if (++chainLength > data->totalClusters)
                 {
-                    fs->context->allocator.free(&fs->context->allocator, extra);
+                    fs->context->allocator->free(fs->context->allocator, extra);
                     return PHX_ERROR_FORMAT;
                 }
 
                 size += (PHX_u64)data->bytesPerSector * (PHX_u64)data->sectorsPerCluster;
                 if ((result = PHX_Filesystem_FAT_ReadFAT(data, cluster, &cluster)) != PHX_SUCCESS)
                 {
-                    fs->context->allocator.free(&fs->context->allocator, extra);
+                    fs->context->allocator->free(fs->context->allocator, extra);
                     return result;
                 }
             }
 
             if (status != PHX_FILESYSTEM_FAT_CLUSTER_EOC)
             {
-                fs->context->allocator.free(&fs->context->allocator, extra);
+                fs->context->allocator->free(fs->context->allocator, extra);
                 return PHX_ERROR_FORMAT;
             }
 
@@ -56,7 +56,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
         nodeOut->extra = extra;
 
         nodeOut->attributes = 0;
-        nodeOut->type = PHX_FILESYSTEM_ENTRY_DIRECTORY;
+        nodeOut->type = PHX_FILESYSTEM_NODE_TYPE_DIRECTORY;
 
         return PHX_SUCCESS;
     }
@@ -65,7 +65,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
     PHX_u32 index32 = (PHX_u32)(number & 0xFFFFFFFF);
     if (index32 > 0xFFFF)
     {
-        fs->context->allocator.free(&fs->context->allocator, extra);
+        fs->context->allocator->free(fs->context->allocator, extra);
         return PHX_ERROR_INTERNAL;
     }
 
@@ -77,7 +77,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
     {
         if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntries(data, index, 1, entry)) != PHX_SUCCESS)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return result;
         }
     }
@@ -85,14 +85,14 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
     {
         if (cluster < 2 || cluster >= data->totalClusters + 2)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return PHX_ERROR_INTERNAL;
         }
 
         const PHX_u32 offsetInCluster = (PHX_u32)index * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
         if (offsetInCluster >= data->bytesPerCluster)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return PHX_ERROR_INTERNAL;
         }
 
@@ -101,7 +101,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
 
         if (data->usedDevice->read(data->usedDevice, data->buffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster) + sectorOffset, 1) != 1)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return PHX_ERROR_IO;
         }
 
@@ -119,7 +119,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
     {
         if (extra->startCluster == 0)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return PHX_Filesystem_FAT_GetNode(fs, PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT, nodeOut);
         }
 
@@ -131,21 +131,21 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
         {
             if (++chainLength > data->totalClusters)
             {
-                fs->context->allocator.free(&fs->context->allocator, extra);
+                fs->context->allocator->free(fs->context->allocator, extra);
                 return PHX_ERROR_FORMAT;
             }
             
             size += (PHX_u64)data->bytesPerSector * (PHX_u64)data->sectorsPerCluster;
             if ((result = PHX_Filesystem_FAT_ReadFAT(data, dirCluster, &dirCluster)) != PHX_SUCCESS)
             {
-                fs->context->allocator.free(&fs->context->allocator, extra);
+                fs->context->allocator->free(fs->context->allocator, extra);
                 return result;
             }
         }
 
         if (status != PHX_FILESYSTEM_FAT_CLUSTER_EOC)
         {
-            fs->context->allocator.free(&fs->context->allocator, extra);
+            fs->context->allocator->free(fs->context->allocator, extra);
             return PHX_ERROR_FORMAT;
         }
     }
@@ -160,18 +160,18 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNum
 
     nodeOut->attributes = 0;
     if (attributes & PHX_FILESYSTEM_FAT_ENTRY_READONLY)
-        nodeOut->attributes |= PHX_FILESYSTEM_ATTRIBUTE_READONLY;
+        nodeOut->attributes |= PHX_FILESYSTEM_NODE_ATTRIBUTE_READONLY;
     if (attributes & PHX_FILESYSTEM_FAT_ENTRY_HIDDEN)
-        nodeOut->attributes |= PHX_FILESYSTEM_ATTRIBUTE_HIDDEN;
+        nodeOut->attributes |= PHX_FILESYSTEM_NODE_ATTRIBUTE_HIDDEN;
     if (attributes & PHX_FILESYSTEM_FAT_ENTRY_SYSTEM)
-        nodeOut->attributes |= PHX_FILESYSTEM_ATTRIBUTE_SYSTEM;
+        nodeOut->attributes |= PHX_FILESYSTEM_NODE_ATTRIBUTE_SYSTEM;
 
-    nodeOut->type = (attributes & PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY) ? PHX_FILESYSTEM_ENTRY_DIRECTORY : PHX_FILESYSTEM_ENTRY_FILE;
+    nodeOut->type = (attributes & PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY) ? PHX_FILESYSTEM_NODE_TYPE_DIRECTORY : PHX_FILESYSTEM_NODE_TYPE_FILE;
 
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node)
+PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     PHX_Result result;
@@ -203,7 +203,7 @@ PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     return PHX_SUCCESS;
 }
 
-void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node)
+void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node)
 {
-    fs->context->allocator.free(&fs->context->allocator, node->extra);
+    fs->context->allocator->free(fs->context->allocator, node->extra);
 }

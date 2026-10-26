@@ -1,8 +1,6 @@
 #include "fat.h"
-#include "filesystem/filesystem.h"
-#include "result.h"
 
-PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, void* buffer)
+PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size size, void* buffer)
 {
     PHX_Filesystem_FAT_Data* data = fs->data;
     PHX_Filesystem_FAT_OpenNode_Extra* extra = openFile->extra;
@@ -10,11 +8,11 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesys
     if (openFile->pos >= file->size)
         return 0;
 
-    PHX_Filesystem_Size remainingInFile = file->size - openFile->pos;
+    PHX_Filesystem_Node_Size remainingInFile = file->size - openFile->pos;
     if (size > remainingInFile)
         size = remainingInFile;
 
-    PHX_Filesystem_Size read = 0;
+    PHX_Filesystem_Node_Size read = 0;
     PHX_u32 cluster = extra->currentCluster;
     PHX_u32 offsetInCluster = (PHX_u32)(openFile->pos % data->bytesPerCluster);
 
@@ -36,8 +34,8 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesys
         }
 
         PHX_u32 chunk = data->bytesPerCluster - offsetInCluster;
-        PHX_Filesystem_Size remaining = size - read;
-        if ((PHX_Filesystem_Size)chunk > remaining)
+        PHX_Filesystem_Node_Size remaining = size - read;
+        if ((PHX_Filesystem_Node_Size)chunk > remaining)
             chunk = (PHX_u32)remaining;
 
         if (data->usedDevice->read(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
@@ -54,7 +52,7 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesys
     return read;
 }
 
-PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer)
+PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size size, const void* buffer)
 {
     if (fs->readonly == PHX_TRUE) return 0;
 
@@ -68,12 +66,12 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
     if (size > 0xFFFFFFFF - openFile->pos)
         size = 0xFFFFFFFF - openFile->pos;
 
-    const PHX_Filesystem_Size oldSize = file->size;
+    const PHX_Filesystem_Node_Size oldSize = file->size;
     const PHX_u32 oldStart = nodeExtra->startCluster;
-    const PHX_Filesystem_Size oldPos = openFile->pos;
+    const PHX_Filesystem_Node_Size oldPos = openFile->pos;
     const PHX_u32 oldCurrent = extra->currentCluster;
 
-    const PHX_Filesystem_Size gap = (openFile->pos > file->size) ? (openFile->pos - file->size) : 0;
+    const PHX_Filesystem_Node_Size gap = (openFile->pos > file->size) ? (openFile->pos - file->size) : 0;
 
     PHX_Bool startChanged = PHX_FALSE;
     PHX_u32 firstAllocated = 0;
@@ -122,8 +120,8 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
     if (offsetInCluster == 0 && openFile->pos != 0)
         offsetInCluster = data->bytesPerCluster;
 
-    const PHX_Filesystem_Size total = gap + size;
-    PHX_Filesystem_Size done = 0;
+    const PHX_Filesystem_Node_Size total = gap + size;
+    PHX_Filesystem_Node_Size done = 0;
 
     while (done < total)
     {
@@ -145,9 +143,9 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
             offsetInCluster = 0;
         }
 
-        PHX_Filesystem_Size limit = (done < gap) ? (gap - done) : (total - done);
+        PHX_Filesystem_Node_Size limit = (done < gap) ? (gap - done) : (total - done);
         PHX_u32 chunk = data->bytesPerCluster - offsetInCluster;
-        if ((PHX_Filesystem_Size)chunk > limit)
+        if ((PHX_Filesystem_Node_Size)chunk > limit)
             chunk = (PHX_u32)limit;
 
         if (data->usedDevice->read(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
@@ -167,7 +165,7 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
         extra->currentCluster = cluster;
     }
 
-    PHX_Filesystem_Size written = (done > gap) ? (done - gap) : 0;
+    PHX_Filesystem_Node_Size written = (done > gap) ? (done - gap) : 0;
 
     PHX_Bool sizeChanged = PHX_FALSE;
     if (openFile->pos > file->size)
@@ -240,7 +238,7 @@ PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesy
     return written;
 }
 
-PHX_Result PHX_Filesystem_FAT_File_Seek(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size pos)
+PHX_Result PHX_Filesystem_FAT_File_Seek(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size pos)
 {
     PHX_Filesystem_FAT_Data* data = fs->data;
     PHX_Filesystem_FAT_Node_Extra* nodeExtra = file->extra;

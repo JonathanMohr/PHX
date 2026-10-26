@@ -1,5 +1,4 @@
 #include "fat.h"
-#include "result.h"
 
 PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_Byte* outEntries)
 {
@@ -80,7 +79,7 @@ PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data*
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries)
+PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem_Device* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries)
 {
     PHX_Result result;
     PHX_Filesystem_FAT_Data* data = fs->data;
@@ -130,7 +129,7 @@ PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryClus
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut)
+PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut)
 {
     PHX_Result result;
     PHX_Filesystem_FAT_Data* data = fs->data;

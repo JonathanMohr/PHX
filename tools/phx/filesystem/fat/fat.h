@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define PHX_FILESYSTEM_FAT_TYPE "FAT-FILESYSTEM"
+#include <phx/interface/filesystem.h>
+#include <phx/base/intrinsic.h>
+#include <phx/base/endianness.h>
 
-#include <filesystem/filesystem.h>
-#include <base.h>
-#include <endianness.h>
+#define PHX_FILESYSTEM_FAT_TYPE "FAT-FILESYSTEM"
 
 #define PHX_FILESYSTEM_FAT_HEADER_OEM 3
 
@@ -278,7 +278,7 @@ typedef enum
 
 typedef struct PHX_Filesystem_FAT_Data
 {
-    PHX_BlockDevice* usedDevice;
+    PHX_Disk_Device* usedDevice;
     PHX_Byte* buffer;
     PHX_Byte* clusterBuffer;
 
@@ -370,8 +370,8 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
 PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_Byte* outEntries);
 PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_Byte* entries);
 
-PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
-PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut);
+PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem_Device* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
+PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut);
 
 static inline PHX_SectorSize PHX_Filesystem_FAT_GetClusterStart(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster)
 {
@@ -390,7 +390,7 @@ PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b);
 void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13]);
 void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_Byte outCount, char* out);
 
-PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11]);
+PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11]);
 
 PHX_u32 PHX_Filesystem_FAT_HashName(const char* name);
 void PHX_Filesystem_FAT_HashToChars(PHX_u32 hash, char out[4]);
@@ -399,30 +399,30 @@ PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, ch
 PHX_u32 PHX_Filesystem_FAT_UTF8_To_UTF16(const char* in, PHX_u32 count, PHX_u16* out, PHX_u32 maxOut);
 
 
-PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector);
-void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs);
+PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_Byte* bootsector);
+void PHX_Filesystem_FAT_Destroy(PHX_Filesystem_Device* fs);
 
-PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem* fs, PHX_Filesystem_NodeNumber number, PHX_Filesystem_Node* nodeOut);
-PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
-void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node);
+PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node_Number number, PHX_Filesystem_Node* nodeOut);
+PHX_Result PHX_Filesystem_FAT_RemoveNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node);
+void PHX_Filesystem_FAT_CleanupNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node);
 
-PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_u64* entryCountOut);
-PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut);
-PHX_Result PHX_Filesystem_FAT_Dir_LookupEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut);
+PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_u64* entryCountOut);
+PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_OpenNode* openDir, PHX_Filesystem_Entry* entryOut);
+PHX_Result PHX_Filesystem_FAT_Dir_LookupEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Entry* entryOut);
 
-PHX_Filesystem_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, void* buffer);
-PHX_Filesystem_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size size, const void* buffer);
-PHX_Result PHX_Filesystem_FAT_File_Seek(PHX_Filesystem* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Size pos);
+PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size size, void* buffer);
+PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size size, const void* buffer);
+PHX_Result PHX_Filesystem_FAT_File_Seek(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* file, PHX_Filesystem_OpenNode* openFile, PHX_Filesystem_Node_Size pos);
 
-PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut);
+PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Node_Type type, PHX_Filesystem_Node_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut);
 
-PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target);
-PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Size* newReferenceCountOut);
-PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_NodeNumber* newNumberOut);
+PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target);
+PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node_Count* newReferenceCountOut);
+PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_Node_Number* newNumberOut);
 
-PHX_Result PHX_Filesystem_FAT_CreateOpenNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
-PHX_Result PHX_Filesystem_FAT_CloseOpenNode(PHX_Filesystem* fs, PHX_Filesystem_OpenNode* openNode);
-PHX_Result PHX_Filesystem_FAT_ResetOpenNode(PHX_Filesystem* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
+PHX_Result PHX_Filesystem_FAT_CreateOpenNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNodeOut);
+PHX_Result PHX_Filesystem_FAT_CloseOpenNode(PHX_Filesystem_Device* fs, PHX_Filesystem_OpenNode* openNode);
+PHX_Result PHX_Filesystem_FAT_ResetOpenNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* node, PHX_Filesystem_OpenNode* openNode);
 
 
 #ifdef __cplusplus

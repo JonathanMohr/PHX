@@ -1,5 +1,7 @@
 #include "fat.h"
 
+#include <phx/utility/device.h>
+
 #include <zero.h>
 #include <embed/fat.h>
 
@@ -217,14 +219,14 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_
 }
 
 
-PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem* fs, const PHX_Byte* bootsector)
+PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_Byte* bootsector)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     return PHX_Filesystem_FAT_UpdateBootsector(fs->context, fs->data, bootsector, fs->device->sectorsPerTrack, fs->device->totalHeads, fs->id);
 }
 
 
-void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
+void PHX_Filesystem_FAT_Destroy(PHX_Filesystem_Device* fs)
 {
     PHX_Filesystem_FAT_Data* data = fs->data;
 
@@ -237,43 +239,43 @@ void PHX_Filesystem_FAT_Destroy(PHX_Filesystem* fs)
     if (data->useDevice)
     {
         data->usedDevice->close(data->usedDevice);
-        fs->context->allocator.free(&fs->context->allocator, data->usedDevice);
+        fs->context->allocator->free(fs->context->allocator, data->usedDevice);
     }
 
-    fs->context->allocator.free(&fs->context->allocator, data->buffer);
-    fs->context->allocator.free(&fs->context->allocator, data->clusterBuffer);
+    fs->context->allocator->free(fs->context->allocator, data->buffer);
+    fs->context->allocator->free(fs->context->allocator, data->clusterBuffer);
 
-    fs->context->allocator.free(&fs->context->allocator, data);
+    fs->context->allocator->free(fs->context->allocator, data);
 }
 
 
 static int isPowerOfTwo(PHX_u16 v) { return v && !(v & (v - 1)); }
 
-static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, PHX_Bool readonly)
+static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, PHX_Bool readonly)
 {
-    PHX_Filesystem_FAT_Data* data = context->allocator.allocate(&context->allocator, sizeof(PHX_Filesystem_FAT_Data));
+    PHX_Filesystem_FAT_Data* data = context->allocator->allocate(context->allocator, sizeof(PHX_Filesystem_FAT_Data));
     if (!data)
         return PHX_ERROR_MEMORY;
 
     const PHX_SectorSize blocksForBootsector = (512 + device->sectorSize - 1) / device->sectorSize;
 
-    PHX_Byte* sectorBuffer = context->allocator.allocate(&context->allocator, blocksForBootsector * device->sectorSize);
+    PHX_Byte* sectorBuffer = context->allocator->allocate(context->allocator, blocksForBootsector * device->sectorSize);
     if (!sectorBuffer)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
 
     if (device->read(device, sectorBuffer, 0, blocksForBootsector) != blocksForBootsector)
     {
-        context->allocator.free(&context->allocator, data);
-        context->allocator.free(&context->allocator, sectorBuffer);
+        context->allocator->free(context->allocator, data);
+        context->allocator->free(context->allocator, sectorBuffer);
         return PHX_ERROR_IO;
     }
 
     memcpy(data->bootsector, sectorBuffer, 512);
 
-    context->allocator.free(&context->allocator, sectorBuffer);
+    context->allocator->free(context->allocator, sectorBuffer);
 
     const PHX_u16 bytesPerSector = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_BPS);
     const PHX_Byte sectorsPerCluster = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_SPC);
@@ -300,26 +302,26 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
     if (data->bootsector[510] != 0x55 ||data->bootsector[511] != 0xAA)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
 
     if (bytesPerSector != 512 && bytesPerSector != 1024 &&
         bytesPerSector != 2048 && bytesPerSector != 4096)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
 
     if (!isPowerOfTwo(sectorsPerCluster) || sectorsPerCluster > 128)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
 
     if (fatSize == 0 || totalSectors == 0 || fatCount == 0 || reservedSectors == 0 || reservedSectors >= totalSectors)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
 
@@ -327,7 +329,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     const PHX_u64 fatSectors64 = (PHX_u64)fatCount * (PHX_u64)fatSize;
     if (fatSectors64 >= (PHX_u64)totalSectors - (PHX_u64)reservedSectors)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
     const PHX_u32 fatSectors = (PHX_u32)fatSectors64;
@@ -338,7 +340,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     const PHX_u64 nonDataSectors64 = (PHX_u64)rootDirEntryStart + (PHX_u64)rootDirSectors;
     if (nonDataSectors64 >= (PHX_u64)totalSectors)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
     const PHX_u32 nonDataSectors = (PHX_u32)nonDataSectors64;
@@ -347,7 +349,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     const PHX_u32 dataClusters = dataSectors / (PHX_u32)sectorsPerCluster;
     if (dataClusters == 0)
     {
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_FORMAT;
     }
 
@@ -357,7 +359,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     {
         if (rootDirEntryCount == 0)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_FORMAT;
         }
 
@@ -381,19 +383,19 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
 
         if (fsVersion != 0)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_FORMAT;
         }
 
         if (backupBootsector != 0 && backupBootsector + 3 > reservedSectors)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_FORMAT;
         }
 
         if (rootDirEntryCount != 0)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_FORMAT;
         }
 
@@ -407,16 +409,16 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     
     if (device->sectorSize != bytesPerSector)
     {
-        PHX_BlockDevice* usedDevice = context->allocator.allocate(&context->allocator, sizeof(PHX_BlockDevice));
+        PHX_Disk_Device* usedDevice = context->allocator->allocate(context->allocator, sizeof(PHX_Disk_Device));
         if (!usedDevice)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_MEMORY;
         }
         if (PHX_BlockCountTransformDevice(context, device, bytesPerSector, PHX_FALSE, usedDevice) != PHX_TRUE)
         {
-            context->allocator.free(&context->allocator, usedDevice);
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, usedDevice);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_MEMORY; // TODO: Check
         }
 
@@ -430,15 +432,15 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
     }
 
 
-    data->buffer = context->allocator.allocate(&context->allocator, bytesPerSector);
+    data->buffer = context->allocator->allocate(context->allocator, bytesPerSector);
     if (!data->buffer)
     {
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
 
@@ -497,10 +499,10 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
             if (data->useDevice)
             {
                 data->usedDevice->close(data->usedDevice);
-                context->allocator.free(&context->allocator, data->usedDevice);
+                context->allocator->free(context->allocator, data->usedDevice);
             }
-            context->allocator.free(&context->allocator, data->buffer);
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data->buffer);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_IO;
         }
 
@@ -520,16 +522,16 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Bl
         }
     }
 
-    data->clusterBuffer = context->allocator.allocate(&context->allocator, data->bytesPerCluster);
+    data->clusterBuffer = context->allocator->allocate(context->allocator, data->bytesPerCluster);
     if (!data->clusterBuffer)
     {
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
 
@@ -622,14 +624,14 @@ static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX
 
 #define allow64kCluster PHX_FALSE
 
-static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_BlockDevice* device, PHX_Filesystem* outFs, const PHX_Byte* bootsector)
+static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, const PHX_Byte* bootsector)
 {
     PHX_Result result;
 
     if (device->sectorOffset > 0xFFFFFFFF)
         return PHX_ERROR_PARAMETER;
 
-    PHX_Filesystem_FAT_Data* data = context->allocator.allocate(&context->allocator, sizeof(PHX_Filesystem_FAT_Data));
+    PHX_Filesystem_FAT_Data* data = context->allocator->allocate(context->allocator, sizeof(PHX_Filesystem_FAT_Data));
     if (!data)
         return PHX_ERROR_MEMORY;
 
@@ -645,16 +647,16 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     if (device->sectorSize != bytesPerSector)
     {
-        PHX_BlockDevice* usedDevice = context->allocator.allocate(&context->allocator, sizeof(PHX_BlockDevice));
+        PHX_Disk_Device* usedDevice = context->allocator->allocate(context->allocator, sizeof(PHX_Disk_Device));
         if (!usedDevice)
         {
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_MEMORY;
         }
         if (PHX_BlockCountTransformDevice(context, device, bytesPerSector, PHX_FALSE, usedDevice) != PHX_TRUE)
         {
-            context->allocator.free(&context->allocator, usedDevice);
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, usedDevice);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_MEMORY; // TODO: Check
         }
 
@@ -740,9 +742,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_SIZE;
     }
 
@@ -755,9 +757,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_INTERNAL;
     }
 
@@ -767,9 +769,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_INTERNAL;
     }
     const PHX_u32 fatSectors = (PHX_u32)fatSectors64;
@@ -781,9 +783,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_INTERNAL;
     }
     const PHX_u32 rootDirEntryStart = (PHX_u32)rootDirEntryStart64;
@@ -796,9 +798,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_INTERNAL;
     }
     const PHX_u32 nonDataSectors = (PHX_u32)nonDataSectors64;
@@ -810,9 +812,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_INTERNAL;
     }
 
@@ -823,9 +825,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             if (data->useDevice)
             {
                 data->usedDevice->close(data->usedDevice);
-                context->allocator.free(&context->allocator, data->usedDevice);
+                context->allocator->free(context->allocator, data->usedDevice);
             }
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_PARAMETER;
         }
 
@@ -839,9 +841,9 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             if (data->useDevice)
             {
                 data->usedDevice->close(data->usedDevice);
-                context->allocator.free(&context->allocator, data->usedDevice);
+                context->allocator->free(context->allocator, data->usedDevice);
             }
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_PARAMETER;
         }
 
@@ -850,15 +852,15 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         data->specific.fat32.backupBootsector = (customBackupBootsector == PHX_TRUE) ? backupBootsector : fat32_backupBootsector;
     }
 
-    data->buffer = context->allocator.allocate(&context->allocator, bytesPerSector);
+    data->buffer = context->allocator->allocate(context->allocator, bytesPerSector);
     if (!data->buffer)
     {
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
 
@@ -897,10 +899,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return result;
     }
 
@@ -913,10 +915,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             if (data->useDevice)
             {
                 data->usedDevice->close(data->usedDevice);
-                context->allocator.free(&context->allocator, data->usedDevice);
+                context->allocator->free(context->allocator, data->usedDevice);
             }
-            context->allocator.free(&context->allocator, data->buffer);
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data->buffer);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_IO;
         }
     }
@@ -942,10 +944,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
             if (data->useDevice)
             {
                 data->usedDevice->close(data->usedDevice);
-                context->allocator.free(&context->allocator, data->usedDevice);
+                context->allocator->free(context->allocator, data->usedDevice);
             }
-            context->allocator.free(&context->allocator, data->buffer);
-            context->allocator.free(&context->allocator, data);
+            context->allocator->free(context->allocator, data->buffer);
+            context->allocator->free(context->allocator, data);
             return PHX_ERROR_IO;
         }
     }
@@ -955,10 +957,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return result;
     }
 
@@ -967,10 +969,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return result;
     }
 
@@ -979,10 +981,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return result;
     }
 
@@ -999,10 +1001,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
                 if (data->useDevice)
                 {
                     data->usedDevice->close(data->usedDevice);
-                    context->allocator.free(&context->allocator, data->usedDevice);
+                    context->allocator->free(context->allocator, data->usedDevice);
                 }
-                context->allocator.free(&context->allocator, data->buffer);
-                context->allocator.free(&context->allocator, data);
+                context->allocator->free(context->allocator, data->buffer);
+                context->allocator->free(context->allocator, data);
                 return PHX_ERROR_IO;
             }
         }
@@ -1017,10 +1019,10 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
                 if (data->useDevice)
                 {
                     data->usedDevice->close(data->usedDevice);
-                    context->allocator.free(&context->allocator, data->usedDevice);
+                    context->allocator->free(context->allocator, data->usedDevice);
                 }
-                context->allocator.free(&context->allocator, data->buffer);
-                context->allocator.free(&context->allocator, data);
+                context->allocator->free(context->allocator, data->buffer);
+                context->allocator->free(context->allocator, data);
                 return PHX_ERROR_IO;
             }
         }
@@ -1036,25 +1038,25 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
                 if (data->useDevice)
                 {
                     data->usedDevice->close(data->usedDevice);
-                    context->allocator.free(&context->allocator, data->usedDevice);
+                    context->allocator->free(context->allocator, data->usedDevice);
                 }
-                context->allocator.free(&context->allocator, data->buffer);
-                context->allocator.free(&context->allocator, data);
+                context->allocator->free(context->allocator, data->buffer);
+                context->allocator->free(context->allocator, data);
                 return PHX_ERROR_IO;
             }
         }
     }
 
-    data->clusterBuffer = context->allocator.allocate(&context->allocator, data->bytesPerCluster);
+    data->clusterBuffer = context->allocator->allocate(context->allocator, data->bytesPerCluster);
     if (!data->clusterBuffer)
     {
         if (data->useDevice)
         {
             data->usedDevice->close(data->usedDevice);
-            context->allocator.free(&context->allocator, data->usedDevice);
+            context->allocator->free(context->allocator, data->usedDevice);
         }
-        context->allocator.free(&context->allocator, data->buffer);
-        context->allocator.free(&context->allocator, data);
+        context->allocator->free(context->allocator, data->buffer);
+        context->allocator->free(context->allocator, data);
         return PHX_ERROR_MEMORY;
     }
 

@@ -1,0 +1,60 @@
+#ifndef PHX_RESULT_H
+#define PHX_RESULT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <phx/types.h>
+
+typedef PHX_u8 PHX_Result;
+
+#define PHX_SUCCESS 0
+#define PHX_ERROR_INTERNAL 1
+#define PHX_ERROR_MEMORY 2
+#define PHX_ERROR_IO 3
+#define PHX_ERROR_FORMAT 4
+#define PHX_ERROR_SIZE 6
+#define PHX_ERROR_PARAMETER 7
+#define PHX_ERROR_PERMISSION 8
+#define PHX_ERROR_NOT_SUPPORTED 9
+#define PHX_ERROR_OUT_OF_SPACE 10
+#define PHX_ERROR_NOT_FOUND 11
+#define PHX_ERROR_NAME_TOO_LONG 12
+#define PHX_ERROR_DIRECTORY 13
+#define PHX_ERROR_INVALID_PATH 14
+
+
+typedef struct PHX_DetailedResult
+{
+    PHX_Result code;
+    const char* msg;
+} PHX_DetailedResult;
+
+
+typedef PHX_u8 PHX_Warning_Code;
+
+#define PHX_WARNING_FORMAT 0
+
+typedef struct
+{
+    PHX_Warning_Code code;
+    const char* msg;
+} PHX_Warning;
+
+static inline PHX_Warning PHX_CreateWarning(PHX_Warning_Code code, const char* msg)
+{
+    PHX_Warning warning = {0};
+    warning.code = code;
+    warning.msg = msg;
+    return warning;
+}
+
+#define PHX_Warning(code, msg) PHX_CreateWarning(code, msg)
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

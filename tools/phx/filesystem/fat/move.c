@@ -1,6 +1,6 @@
 #include "fat.h"
 
-PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_NodeNumber* newNumberOut)
+PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_Node_Number* newNumberOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     PHX_Result result;

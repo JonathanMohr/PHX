@@ -1,7 +1,7 @@
 #include "fat.h"
 
 // TODO: IMPORTANT: CHECK writeWithLFN
-PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Entry_Type type, PHX_Filesystem_Entry_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
+PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Node_Type type, PHX_Filesystem_Node_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     PHX_Result result;
@@ -9,7 +9,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     PHX_Filesystem_FAT_Data* data = fs->data;
 
     PHX_Filesystem_FAT_Node_Extra* dirExtra = dir->extra;
-    PHX_Filesystem_FAT_Node_Extra* newExtra = nodeOut ? fs->context->allocator.allocate(&fs->context->allocator, sizeof(PHX_Filesystem_FAT_Node_Extra)) : PHX_NULL;
+    PHX_Filesystem_FAT_Node_Extra* newExtra = nodeOut ? fs->context->allocator->allocate(fs->context->allocator, sizeof(PHX_Filesystem_FAT_Node_Extra)) : PHX_NULL;
     if (nodeOut && !newExtra)
         return PHX_ERROR_MEMORY;
 
@@ -19,7 +19,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
 
     if ((namePtr - name) > 255)
     {
-        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+        if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
         return PHX_ERROR_NAME_TOO_LONG;
     }
 
@@ -49,7 +49,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     char shortName[11];
     if ((result = PHX_Filesystem_FAT_GenerateShortName(fs, dir, firstChars, hash, ext, shortName)) != PHX_SUCCESS)
     {
-        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+        if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
         return result;
     }
 
@@ -58,7 +58,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     const PHX_u32 totalEntries = lfnSlotCount + 1;
     const PHX_Byte lfnChecksum = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
 
-    const PHX_Bool isDir = (type == PHX_FILESYSTEM_ENTRY_DIRECTORY) ? PHX_TRUE : PHX_FALSE;
+    const PHX_Bool isDir = (type == PHX_FILESYSTEM_NODE_TYPE_DIRECTORY) ? PHX_TRUE : PHX_FALSE;
     PHX_u32 cluster = 0;
 
 
@@ -68,7 +68,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     PHX_u32 mainEntryIndex;
     if ((result = PHX_Filesystem_FAT_FindFreeEntrySlots(fs, dir, totalEntries, &entryCluster, &entryIndex, &mainEntryCluster, &mainEntryIndex)) != PHX_SUCCESS)
     {
-        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+        if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
         return result;
     }
 
@@ -76,7 +76,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
     {
         if ((result = PHX_Filesystem_FAT_FindFreeClusters(data, 1, &cluster)) != PHX_SUCCESS)
         {
-            if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+            if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
             return result;
         }
 
@@ -124,7 +124,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
             data->freeClusterCount++;
             if (cluster < data->nextFreeCluster) data->nextFreeCluster = cluster;
 
-            if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+            if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
             return PHX_ERROR_IO;
         }
     }
@@ -142,14 +142,14 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
             PHX_Byte* entry = entries[i];
 
             PHX_Byte attribute = 0;
-            if (attributes & PHX_FILESYSTEM_ATTRIBUTE_READONLY)
+            if (attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_READONLY)
                 attribute |= PHX_FILESYSTEM_FAT_ENTRY_READONLY;
-            if (attributes & PHX_FILESYSTEM_ATTRIBUTE_HIDDEN)
+            if (attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_HIDDEN)
                 attribute |= PHX_FILESYSTEM_FAT_ENTRY_HIDDEN;
-            if (attributes & PHX_FILESYSTEM_ATTRIBUTE_SYSTEM)
+            if (attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_SYSTEM)
                 attribute |= PHX_FILESYSTEM_FAT_ENTRY_SYSTEM;
 
-            if (type == PHX_FILESYSTEM_ENTRY_DIRECTORY)
+            if (type == PHX_FILESYSTEM_NODE_TYPE_DIRECTORY)
                 attribute |= PHX_FILESYSTEM_FAT_ENTRY_DIRECTORY;
 
             memcpy(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, shortName, 8);
@@ -178,7 +178,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem* fs, PHX_Filesystem_Node
             if (cluster < data->nextFreeCluster) data->nextFreeCluster = cluster;
         }
 
-        if (newExtra) fs->context->allocator.free(&fs->context->allocator, newExtra);
+        if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
         return result;
     }
 

@@ -1,0 +1,6 @@
+The library `core` is responsible for the header files in
+- phx/*
+- phx/base/**
+- phx/device/**
+- phx/interface/**
+- phx/utility/**
