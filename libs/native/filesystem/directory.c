@@ -169,7 +169,7 @@ PHX_Bool PHX_Native_Directory_GetEntry(PHX_Native_Directory* dir, PHX_Native_Dir
     if (!name)
         return PHX_FALSE;
 
-    PHX_Native_Type type = PHX_NATIVE_FILE;
+    PHX_Native_Path_Type type = PHX_NATIVE_TYPE_FILE;
     PHX_Size size = 0;
     int isDir = 0;
 
@@ -191,7 +191,7 @@ PHX_Bool PHX_Native_Directory_GetEntry(PHX_Native_Directory* dir, PHX_Native_Dir
     }
 
     if (isDir)
-        type = PHX_NATIVE_DIRECTORY;
+        type = PHX_NATIVE_TYPE_DIRECTORY;
 
     entryOut->name = name;
     entryOut->type = type;
