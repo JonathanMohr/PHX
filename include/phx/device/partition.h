@@ -6,9 +6,11 @@ extern "C" {
 #endif
 
 #include <phx/types.h>
+#include <phx/result.h>
 #include <phx/context.h>
+#include <phx/device/disk.h>
 
-typedef PHX_u8 PHX_Partition_Signature_Type;
+typedef PHX_u64 PHX_Partition_Signature_Type;
 #define PHX_PARTITION_SIGNATURE_NONE 0
 #define PHX_PARTITION_SIGNATURE_FIRST 1
 #define PHX_PARTITION_SIGNATURE_GUID 2
@@ -20,52 +22,63 @@ typedef struct PHX_Partition_Signature
     PHX_Partition_Signature_Type type;
 } PHX_Partition_Signature;
 
-typedef PHX_u8 PHX_Partition_Type;
-#define PHX_PARTITION_UNKNOWN 0
-#define PHX_PARTITION_FAT12   1
-#define PHX_PARTITION_FAT16   2
-#define PHX_PARTITION_FAT32   3
-#define PHX_PARTITION_ESP     4
+typedef PHX_u32 PHX_Partition_Flags;
+#define PHX_PARTITION_FLAGS_LEGACY_BOOTABLE (1 << 0)
+#define PHX_PARTITION_FLAGS_REQUIRED        (1 << 1)
 
-typedef PHX_u16 PHX_Partition_Flags;
-#define PHX_PARTITION_BOOTABLE (1 << 0)
-#define PHX_PARTITION_REQUIRED (1 << 1)
+typedef PHX_u32 PHX_Partition_Type;
+#define PHX_PARTITION_TYPE_UNKNOWN 0
 
 typedef struct PHX_Partition
 {
-    PHX_SectorSize start;
-    PHX_SectorSize size;
+    // Empty -> start = 0 and size = 0
 
     PHX_Partition_Signature signature;
 
-    PHX_u16 flags;
+    PHX_SectorSize start;
+    PHX_SectorSize size;
 
+    PHX_Partition_Flags flags;
     PHX_Partition_Type type;
 
     char name[PHX_NAME_LEN + 1];
 } PHX_Partition;
 
-typedef struct PHX_Partition_Table
+typedef struct PHX_Partition_Table_Device PHX_Partition_Table_Device;
+
+typedef struct PHX_Partition_Table_Operations
 {
-    PHX_Partition* partitions;
+    PHX_Result (*changeBootsector)(PHX_Partition_Table_Device* pt, const PHX_u8* bootsector);
+    void (*close)(PHX_Partition_Table_Device* pt);
 
-    PHX_PartitionSize partitionCount;
-    PHX_PartitionSize maxPartitionCount;
+    PHX_Result (*writeChanges)(PHX_Partition_Table_Device* pt);
 
+    PHX_Result (*removePartition)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
+    PHX_Result (*addPartition)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index, const PHX_Partition* partition);
+
+    // TODO: void (*getFlags)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
+    // TODO: void (*getType)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
+} PHX_Partition_Table_Operations;
+
+struct PHX_Partition_Table_Device
+{
     PHX_Partition_Signature signature;
+
+    PHX_PartitionSize maxPartitionCount;
 
     PHX_SectorSize startUsable;
     PHX_SectorSize sizeUsable;
 
-    PHX_u8 bootsector[512];
-} PHX_Partition_Table;
+    PHX_Context* context;
+    PHX_Disk_Device* disk;
 
-static inline void PHX_Partition_CloseTable(PHX_Context* context, PHX_Partition_Table* table)
-{
-    if (table->partitions)
-        context->allocator->free(context->allocator, table->partitions);
-    table->partitions = PHX_NULL;
-}
+    const PHX_Partition_Table_Operations* ops;
+
+    void* data;
+
+    PHX_u8* partitions; // Points to an array of structs with a PHX_Partition as their first element
+    PHX_Size partitionSize; // Size of a struct in the partitions array
+};
 
 #ifdef __cplusplus
 }

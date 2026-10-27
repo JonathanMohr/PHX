@@ -11,9 +11,8 @@ extern "C" {
 
 typedef struct PHX_Partition_Interface
 {
-    PHX_Bool (*readTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable);
-    PHX_Bool (*writeTable)(PHX_Context* context, PHX_Disk_Device* device, const PHX_Partition_Table* table);
-    PHX_Bool (*getDefaultTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable);
+    PHX_Bool (*openPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable);
+    PHX_Bool (*formatPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector);
 
     const char* partitionType;
     const char* name;

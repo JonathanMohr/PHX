@@ -99,7 +99,7 @@ struct PHX_Filesystem_Device
 
     void* data;
     
-    const struct PHX_Filesystem_Operations* ops;
+    const PHX_Filesystem_Operations* ops;
 
     const char* type;
 

@@ -45,16 +45,20 @@ PHX_Partition_Interface* PHX_Partition_FindInterfaceByType(const char* type)
     return PHX_NULL;
 }
 
-PHX_Result PHX_Partition_Open(PHX_Context* context, PHX_Disk_Device* diskDevice, PHX_Partition_Interface** interfaceOut, PHX_Partition_Table* partitionTableOut)
+PHX_Result PHX_Partition_Open(PHX_Context* context, PHX_Disk_Device* diskDevice, PHX_Partition_Table_Device* partitionTableOut)
 {
     for (PHX_Size i = 0; i < PHX_Partition_InterfaceCount; i++)
     {
         PHX_Partition_Interface* interface = PHX_Partition_Interfaces[i];
-        if (interface->readTable(context, diskDevice, partitionTableOut) == PHX_TRUE)
-        {
-            *interfaceOut = interface;
+
+        PHX_Result result = interface->openPartitionTable(context, diskDevice, partitionTableOut);
+        if (result == PHX_SUCCESS)
             return PHX_SUCCESS;
-        }
+
+        if (result == PHX_ERROR_FORMAT)
+            continue;
+
+        return result;
     }
 
     return PHX_ERROR_FORMAT;

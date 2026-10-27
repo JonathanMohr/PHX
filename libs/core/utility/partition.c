@@ -34,7 +34,7 @@ static PHX_SectorSize PHX_Partition_Write(PHX_Disk_Device* device, const void* b
     return data->device->write(data->device, buffer, block + data->start, count);
 }
 
-static void PHX_Partition_Close_(PHX_Disk_Device* device)
+static void PHX_Partition_Close(PHX_Disk_Device* device)
 {
     PHX_Partition_Device* data = (PHX_Partition_Device*)device->data;
     PHX_Context* context = data->context;
@@ -63,7 +63,7 @@ PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_Disk_Device* devic
 
     outDevice->read = PHX_Partition_Read;
     outDevice->write = PHX_Partition_Write;
-    outDevice->close = PHX_Partition_Close_;
+    outDevice->close = PHX_Partition_Close;
 
     outDevice->type = "PARTITION-DEVICE";
 
