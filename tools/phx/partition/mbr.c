@@ -220,6 +220,7 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_Disk_Device* device, PHX
 
         part->signature.first = (PHX_u64)i;
         part->signature.second = 0;
+        part->signature.type = PHX_PARTITION_SIGNATURE_FIRST;
 
         part->flags = 0;
         if (bootFlag == 0x80)
@@ -237,6 +238,7 @@ static PHX_Bool MBR_ReadTable(PHX_Context* context, PHX_Disk_Device* device, PHX
     outTable->maxPartitionCount = 4;
     outTable->signature.first = diskSignature;
     outTable->signature.second = 0;
+    outTable->signature.type = PHX_PARTITION_SIGNATURE_FIRST;
     outTable->startUsable = 1;
     outTable->sizeUsable = device->totalSectors - 1;
 

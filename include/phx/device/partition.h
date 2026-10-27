@@ -8,11 +8,16 @@ extern "C" {
 #include <phx/types.h>
 #include <phx/context.h>
 
+typedef PHX_u8 PHX_Partition_Signature_Type;
+#define PHX_PARTITION_SIGNATURE_NONE 0
+#define PHX_PARTITION_SIGNATURE_FIRST 1
+#define PHX_PARTITION_SIGNATURE_GUID 2
+
 typedef struct PHX_Partition_Signature
 {
     PHX_u64 first;
     PHX_u64 second;
-    // TODO: exists bool
+    PHX_Partition_Signature_Type type;
 } PHX_Partition_Signature;
 
 typedef PHX_u8 PHX_Partition_Type;
@@ -20,9 +25,11 @@ typedef PHX_u8 PHX_Partition_Type;
 #define PHX_PARTITION_FAT12   1
 #define PHX_PARTITION_FAT16   2
 #define PHX_PARTITION_FAT32   3
+#define PHX_PARTITION_ESP     4
 
 typedef PHX_u16 PHX_Partition_Flags;
 #define PHX_PARTITION_BOOTABLE (1 << 0)
+#define PHX_PARTITION_REQUIRED (1 << 1)
 
 typedef struct PHX_Partition
 {

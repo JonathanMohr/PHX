@@ -15,6 +15,7 @@
 #include "disk/disk.h"
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
+#include "phx/device/partition.h"
 
 static void print_help(const char* name);
 
@@ -226,6 +227,38 @@ static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str
     PHX_Partition_CloseTable(context, &table);
     return partitionOut;
 }
+
+
+static void print_signature(FILE* stream, PHX_Partition_Signature* signature)
+{
+    switch (signature->type)
+    {
+        case PHX_PARTITION_SIGNATURE_NONE:
+            fputs("NO SIGNATURE", stream);
+            break;
+        
+        case PHX_PARTITION_SIGNATURE_FIRST:
+            fprintf(stream, "0x%" PRIX64, signature->first);
+            break;
+
+        case PHX_PARTITION_SIGNATURE_GUID:
+            fprintf(
+                stream,
+                "%08" PRIX32 "-%04" PRIX16 "-%04" PRIX16 "-%04" PRIX16 "-%012" PRIX64,
+                (PHX_u32)(signature->second >> 32),
+                (PHX_u16)((signature->second >> 16) & 0xFFFF),
+                (PHX_u16)(signature->second & 0xFFFF),
+                (PHX_u16)(signature->first >> 48),
+                (PHX_u64)(signature->first & 0xFFFFFFFFFFFF)
+            );
+            break;
+
+        default:
+            fputs("INVALID SIGNATURE TYPE", stream);
+            break;
+    }
+}
+
 
 static int disk(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
 {
@@ -500,10 +533,9 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             fprintf(stdout, "%s (%s):\n", imagePath, interface->partitionType);
             fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.sectorSize);
             fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.sectorSize);
-            if (table.signature.second != 0)
-                fprintf(stdout, "  Signature: 0x%" PRIx64 "%" PRIx64 "\n", table.signature.second, table.signature.first);
-            else
-                fprintf(stdout, "  Signature: 0x%" PRIx64 "\n", table.signature.first);
+            fputs("  Signature: ", stdout);
+            print_signature(stdout, &table.signature);
+            fputc('\n', stdout);
             fprintf(stdout, "  Max Partition Count: %" PRIu64 "\n", table.maxPartitionCount);
             fprintf(stdout, "  Partition Count: %" PRIu64 "\n", table.partitionCount);
             fputs("  Partitions:\n", stdout);
@@ -513,6 +545,10 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 fprintf(stdout, "    Partition %" PRIu64 "%s%s%s:\n", i + 1, (partition->name[0] != '\0') ? " (" : "", partition->name, (partition->name[0] != '\0') ? ")" : "");
                 fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
                 fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
+
+                fputs("      Signature: ", stdout);
+                print_signature(stdout, &partition->signature);
+                fputc('\n', stdout);
 
                 fputs("      Flags:", stdout);
                 if (partition->flags & PHX_PARTITION_BOOTABLE)
