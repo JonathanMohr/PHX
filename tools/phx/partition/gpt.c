@@ -1,9 +1,6 @@
 #include "gpt.h"
-#include "phx/device/partition.h"
-#include "phx/result.h"
-#include "phx/types.h"
 
-#include <phx/base/endianness.h>
+#include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
 
 #include <embed/gpt.h>
@@ -50,11 +47,23 @@
 
 */
 
-typedef struct
-{
-    PHX_u64 first;
-    PHX_u64 second;
-} GUID;
+
+#define MBR_SIGNATURE 0xAA55
+
+#define MBR_BOOTSECTOR_DSIG 440
+#define MBR_BOOTSECTOR_RES 444
+#define MBR_BOOTSECTOR_PART 446
+#define MBR_BOOTSECTOR_SIG  510
+
+#define MBR_PARTITION_BFL 0
+#define MBR_PARTITION_CHSF 1
+#define MBR_PARTITION_TYP 4
+#define MBR_PARTITION_CHSL 5
+#define MBR_PARTITION_STL 8
+#define MBR_PARTITION_SEC 12
+
+#define MBR_TYPE_PROTECTED 0xEE
+
 
 #define PHX_GPT_HEADER_SIG 0
 #define PHX_GPT_HEADER_REV 8
@@ -82,9 +91,37 @@ typedef struct
 #define PHX_GPT_ATTRIBUTE_NO_BLOCK_IO_PROTOCOL (1 << 1)
 #define PHX_GPT_ATTRIBUTE_LEGACY_BOOTABLE      (1 << 2)
 
+typedef struct
+{
+    PHX_u64 first;
+    PHX_u64 second;
+} GUID;
+
 
 #define GPT_SPECIFIC_TYPE_LEN 36
 #define GPT_TYPE "GPT-PARTITION-TABLE"
+
+
+typedef struct
+{
+    GUID type;
+    PHX_u64 attributes;
+} GPT_Partition;
+
+
+typedef struct
+{
+    PHX_SectorSize partitionArrayLba;
+    PHX_SectorSize altPartitionArrayLba;
+
+    PHX_u8* bootsectorBuffer;
+    PHX_u8* gptHeaderBuffer;
+    PHX_u8* partitionArrayBuffer;
+
+    PHX_u32 partitionEntrySize;
+
+    PHX_u8 bootsector[512];
+} GPT_Data;
 
 
 static PHX_Partition_Type_Info GPT_TypeInfos[] = {
@@ -92,6 +129,40 @@ static PHX_Partition_Type_Info GPT_TypeInfos[] = {
         PHX_PARTITION_TYPE_INFO_NAMES("unknown")
     }
 };
+
+
+static GPT_Data* GPT_AllocateData(PHX_Context* context, PHX_SectorSize bootsectorSectors, PHX_SectorSize partitionArraySectors, PHX_SectorSize sectorSize)
+{
+    GPT_Data* data = context->allocator->allocate(context->allocator, sizeof(GPT_Data) + (bootsectorSectors * 2 + partitionArraySectors) * sectorSize);
+    if (!data) return PHX_NULL;
+
+    PHX_u8* other = (PHX_u8*)(data + 1);
+
+    data->bootsectorBuffer = other;
+    data->gptHeaderBuffer = other + bootsectorSectors * sectorSize;
+    data->partitionArrayBuffer = other + bootsectorSectors * sectorSize * 2;
+
+    return data;
+}
+
+static GPT_Data* GPT_ReallocateData(PHX_Context* context, GPT_Data* data, PHX_SectorSize bootsectorSectors, PHX_SectorSize newPartitionArraySectors, PHX_SectorSize sectorSize)
+{
+    GPT_Data* newData = context->allocator->reallocate(context->allocator, data, sizeof(GPT_Data) + (bootsectorSectors * 2 + newPartitionArraySectors) * sectorSize);
+    if (!newData) return PHX_NULL;
+
+    PHX_u8* other = (PHX_u8*)(newData + 1);
+
+    newData->bootsectorBuffer = other;
+    newData->gptHeaderBuffer = other + bootsectorSectors * sectorSize;
+    newData->partitionArrayBuffer = other + bootsectorSectors * sectorSize * 2;
+
+    return newData;
+}
+
+static void GPT_FreeData(PHX_Context* context, GPT_Data* data)
+{
+    context->allocator->free(context->allocator, data);
+}
 
 
 static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
@@ -165,7 +236,55 @@ static const PHX_Partition_Table_Operations GPT_Operations = {
 
 static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
 {
+    const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;
+    if (bootsectorSectors >= device->totalSectors * 3)
+        return PHX_ERROR_SIZE;
+
+    GPT_Data* data = GPT_AllocateData(context, bootsectorSectors, 0, device->sectorSize);
+    if (!data) return PHX_ERROR_MEMORY;
+
+    if (device->read(device, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
+    {
+        GPT_FreeData(context, data);
+        return PHX_ERROR_IO;
+    }
+
+    memcpy(data->bootsector, data->bootsectorBuffer, 512);
+
+    const PHX_u16 signature = PHX_Read_Le_u16(data->bootsector + MBR_BOOTSECTOR_SIG);
+    if (signature != MBR_SIGNATURE)
+    {
+        GPT_FreeData(context, data);
+        return PHX_ERROR_FORMAT;
+    }
+
+    PHX_Bool found = PHX_FALSE;
+    for (int i = 0; i < 4; i++)
+    {
+        PHX_u8* partition = data->bootsector + MBR_BOOTSECTOR_PART + (PHX_Size)i * 16;
+
+        const PHX_u8 type = PHX_Read_Le_u8(partition + MBR_PARTITION_TYP);
+
+        PHX_u32 startLBA;
+        memcpy(&startLBA, partition + 8, 4);
+        startLBA = Endian_Convert_u32_Le(startLBA);
+
+        if (type == MBR_TYPE_PROTECTED && startLBA == 1)
+        {
+            found = PHX_TRUE;
+            break;
+        }
+    }
+
+    if (found != PHX_TRUE)
+    {
+        GPT_FreeData(context, data);
+        return PHX_FALSE;
+    }
+
     // TODO
+    GPT_FreeData(context, data);
+    (void)GPT_ReallocateData;
     (void)context;
     (void)device;
     (void)outTable;
@@ -174,7 +293,25 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
 
 static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
 {
+    const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;
+    if (bootsectorSectors >= device->totalSectors * 3)
+        return PHX_ERROR_SIZE;
+
+    const PHX_u32 partitionEntrySize = 128;
+    const PHX_u32 partitionEntries = 128;
+
+    const PHX_SectorSize partitionArraySectors = ((PHX_SectorSize)partitionEntrySize * (PHX_SectorSize)partitionEntries) / device->sectorSize;
+
+    GPT_Data* data = GPT_AllocateData(context, bootsectorSectors, partitionArraySectors, device->sectorSize);
+    if (!data) return PHX_ERROR_MEMORY;
+
+    if (bootsector)
+        memcpy(data->bootsector, bootsector, 512);
+    else
+        memcpy(data->bootsector, binary_file_data, 512);
+
     // TODO
+    GPT_FreeData(context, data);
     (void)context;
     (void)device;
     (void)outTable;
