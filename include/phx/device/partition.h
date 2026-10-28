@@ -23,8 +23,9 @@ typedef struct PHX_Partition_Signature
 } PHX_Partition_Signature;
 
 typedef PHX_u32 PHX_Partition_Flags;
-#define PHX_PARTITION_FLAGS_LEGACY_BOOTABLE (1 << 0)
-#define PHX_PARTITION_FLAGS_REQUIRED        (1 << 1)
+#define PHX_PARTITION_FLAGS_CHANGED         (1 << 0)
+#define PHX_PARTITION_FLAGS_LEGACY_BOOTABLE (1 << 1)
+#define PHX_PARTITION_FLAGS_REQUIRED        (1 << 2)
 
 typedef PHX_u32 PHX_Partition_Type;
 #define PHX_PARTITION_TYPE_UNKNOWN 0
@@ -48,16 +49,14 @@ typedef struct PHX_Partition_Table_Device PHX_Partition_Table_Device;
 
 typedef struct PHX_Partition_Table_Operations
 {
-    PHX_Result (*changeBootsector)(PHX_Partition_Table_Device* pt, const PHX_u8* bootsector);
-    void (*close)(PHX_Partition_Table_Device* pt);
+    PHX_Result (*writeChanges)(PHX_Partition_Table_Device* table);
 
-    PHX_Result (*writeChanges)(PHX_Partition_Table_Device* pt);
-
-    PHX_Result (*removePartition)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
-    PHX_Result (*addPartition)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index, const PHX_Partition* partition);
+    PHX_Result (*changeBootsector)(PHX_Partition_Table_Device* table, const PHX_u8* bootsector);
 
     // TODO: void (*getFlags)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
     // TODO: void (*getType)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
+
+    void (*close)(PHX_Partition_Table_Device* table);
 } PHX_Partition_Table_Operations;
 
 struct PHX_Partition_Table_Device
@@ -76,6 +75,7 @@ struct PHX_Partition_Table_Device
 
     void* data;
 
+    PHX_u8* partitionBuffer; // Pointer to partitionSize bytes
     PHX_u8* partitions; // Points to an array of structs with a PHX_Partition as their first element
     PHX_Size partitionSize; // Size of a struct in the partitions array
 };

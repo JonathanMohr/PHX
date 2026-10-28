@@ -11,10 +11,10 @@ extern "C" {
 
 typedef struct PHX_Partition_Interface
 {
-    PHX_Bool (*openPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable);
-    PHX_Bool (*formatPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector);
+    PHX_Result (*openPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable);
+    PHX_Result (*formatPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector);
 
-    const char* partitionType;
+    const char* deviceType;
     const char* name;
     const char* type;
 } PHX_Partition_Interface;

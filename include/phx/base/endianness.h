@@ -17,6 +17,8 @@ extern "C" {
 
 #include <phx/types.h>
 
+static inline PHX_u8 PHX_Internal_Keep8(PHX_u8 val) { return val; }
+static inline PHX_u8 PHX_Internal_Swap8(PHX_u8 val) { return val; }
 
 static inline PHX_u16 PHX_Internal_Keep16(PHX_u16 val) { return val; }
 static inline PHX_u16 PHX_Internal_Swap16(PHX_u16 val)
@@ -49,20 +51,24 @@ static inline PHX_u64 PHX_Internal_Swap64(PHX_u64 val)
 
 #ifdef PHX_INTERNAL_LITTLE_ENDIAN
 
+#define PHX_Endianness_Convert_u8_Le(val)  PHX_Internal_Keep8(val)
 #define PHX_Endianness_Convert_u16_Le(val) PHX_Internal_Keep16(val)
 #define PHX_Endianness_Convert_u32_Le(val) PHX_Internal_Keep32(val)
 #define PHX_Endianness_Convert_u64_Le(val) PHX_Internal_Keep64(val)
 
+#define PHX_Endianness_Convert_u8_Be(val)  PHX_Internal_Swap8(val)
 #define PHX_Endianness_Convert_u16_Be(val) PHX_Internal_Swap16(val)
 #define PHX_Endianness_Convert_u32_Be(val) PHX_Internal_Swap32(val)
 #define PHX_Endianness_Convert_u64_Be(val) PHX_Internal_Swap64(val)
 
 #else
 
+#define PHX_Endianness_Convert_u8_Le(val)  PHX_Internal_Swap8(val)
 #define PHX_Endianness_Convert_u16_Le(val) PHX_Internal_Swap16(val)
 #define PHX_Endianness_Convert_u32_Le(val) PHX_Internal_Swap32(val)
 #define PHX_Endianness_Convert_u64_Le(val) PHX_Internal_Swap64(val)
 
+#define PHX_Endianness_Convert_u8_Be(val)  PHX_Internal_Keep8(val)
 #define PHX_Endianness_Convert_u16_Be(val) PHX_Internal_Keep16(val)
 #define PHX_Endianness_Convert_u32_Be(val) PHX_Internal_Keep32(val)
 #define PHX_Endianness_Convert_u64_Be(val) PHX_Internal_Keep64(val)

@@ -1,28 +1,43 @@
 #include "mbr.h"
+#include "phx/base/bytes.h"
+#include "phx/context.h"
+#include "phx/device/disk.h"
+#include "phx/device/partition.h"
+#include "phx/result.h"
+#include "phx/types.h"
 
-#include <phx/base/endianness.h>
+#include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
 
 #include <embed/mbr.h>
 
 /*
-    Disk signature (4 byte)
-
-    reserved (2 bytes)
-
-    Partition (16 byte):
-        u8 bootFlag
-        u8 chsFirst[3]
-        u8 type
-        u8 chsLast[3]
-        u32 startLBA
-        u32 sectorCount
-
     MBR Bootsector:
-        u8 code[446]
-        Partition partitions[4]
-        u8 signature[2]
+        u8 code[440]            (440 bytes)
+        Disk signature          (4 bytes)
+        reserved                (2 bytes)
+        Partition partitions[4] (64 bytes)
+        u8 signature[2]         (2 bytes)
+
+    Partition (16 bytes):
+        u8 bootFlag             (1 byte)
+        u8 chsFirst[3]          (3 bytes)
+        u8 type                 (1 byte)
+        u8 chsLast[3]           (3 bytes)
+        u32 startLBA            (4 bytes)
+        u32 sectorCount         (4 bytes)
 */
+
+#define MBR_BOOTSECTOR_DSIG 440
+#define MBR_BOOTSECTOR_PART 446
+#define MBR_BOOTSECTOR_SIG  510
+
+#define MBR_PARTITION_BFL 0
+#define MBR_PARTITION_CHSF 1
+#define MBR_PARTITION_TYP 4
+#define MBR_PARTITION_CHSL 5
+#define MBR_PARTITION_STL 8
+#define MBR_PARTITION_SEC 12
 
 #define MBR_TYPE_EMPTY                  0x00
 #define MBR_TYPE_FAT12                  0x01
@@ -63,11 +78,227 @@
 #define MBR_TYPE_VMWARE_SWAP            0xFC
 #define MBR_TYPE_LINUX_RAID_AUTODETECT  0xFD
 
-
-// TODO: Maybe save unknown types somewhere so they don't become 0x7F
-
 #define MBR_TYPE "MBR-PARTITION-TABLE"
 
+
+typedef struct
+{
+    PHX_Partition partition;
+    PHX_u8 type;
+} MBR_Partition;
+
+
+typedef struct
+{
+    PHX_u8* bootsectorBuffer;
+    PHX_u8 bootsector[512];
+} MBR_Data;
+
+
+static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
+{
+    if (cylinder > 1023 || sector > 63 || sector == 0)
+    {
+        cylinder = 1023;
+        head = 254;
+        sector = 63;
+    }
+
+    out[0] = head;
+    out[1] = (PHX_Byte)(((cylinder >> 2) & 0xC0) | (sector & 0x3F));
+    out[2] = (PHX_Byte)(cylinder & 0xFF);
+}
+
+
+static void MBR_FreeData(PHX_Context* context, MBR_Data* data)
+{
+    context->allocator->free(context->allocator, data);
+}
+
+static MBR_Data* MBR_AllocateData(PHX_Context* context, PHX_SectorSize bootsectorSectors, PHX_SectorSize sectorSize)
+{
+    MBR_Data* data = context->allocator->allocate(context->allocator, sizeof(MBR_Data) + bootsectorSectors * sectorSize);
+    if (!data) return PHX_NULL;
+    data->bootsectorBuffer = (PHX_u8*)(data + 1);
+    return data;
+}
+
+
+static PHX_Result MBR_ChangeBootsector(PHX_Partition_Table_Device* table, const PHX_u8* bootsector)
+{
+    MBR_Data* data = table->data;
+    memcpy(data->bootsector, bootsector, 512);
+    return PHX_SUCCESS;
+}
+
+
+static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
+{
+    // TODO
+    (void)MBR_EncodeCHS;
+    (void)table;
+    return PHX_ERROR_INTERNAL;
+}
+
+
+static void MBR_Close(PHX_Partition_Table_Device* table)
+{
+    MBR_Data* data = table->data;
+    MBR_FreeData(table->context, data);
+    table->context->allocator->free(table->context->allocator, table->partitionBuffer);
+    table->context->allocator->free(table->context->allocator, table->partitions);
+}
+
+
+static const PHX_Partition_Table_Operations MBR_Operations = {
+    MBR_WriteChanges,
+    MBR_ChangeBootsector,
+    MBR_Close
+};
+
+
+static const char sPartitionName[] = "MBR Partition ";
+static const PHX_Size sPartitionNameToCopy = (sizeof(sPartitionName) > PHX_NAME_LEN + 1) ? PHX_NAME_LEN + 1 : sizeof(sPartitionName);
+
+static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
+{
+    const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;
+
+    MBR_Data* data = MBR_AllocateData(context, bootsectorSectors, device->sectorSize);
+    if (!data) return PHX_ERROR_MEMORY;
+
+    if (device->read(device, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
+    {
+        MBR_FreeData(context, data);
+        return PHX_ERROR_IO;
+    }
+
+    memcpy(data->bootsector, data->bootsectorBuffer, 512);
+
+    const PHX_u16 signature = PHX_Read_Le_u16(data->bootsector + MBR_BOOTSECTOR_SIG);
+    if (signature != 0xAA55)
+    {
+        MBR_FreeData(context, data);
+        return PHX_ERROR_FORMAT;
+    }
+
+    const PHX_u32 diskSignature = PHX_Read_Le_u32(data->bootsector + MBR_BOOTSECTOR_DSIG);
+
+    for (int i = 0; i < 4; i++)
+    {
+        PHX_u8* partition = data->bootsector + MBR_BOOTSECTOR_PART + (PHX_Size)i * 16;
+
+        const PHX_u8 bootFlag = PHX_Read_Le_u8(partition + MBR_PARTITION_BFL);
+        const PHX_u8 type = PHX_Read_Le_u8(partition + MBR_PARTITION_TYP);
+
+        if (bootFlag != 0x00 && bootFlag != 0x80)
+        {
+            MBR_FreeData(context, data);
+            return PHX_ERROR_FORMAT;
+        }
+
+        if (type == MBR_TYPE_PROTECTED)
+        {
+            MBR_FreeData(context, data);
+            return PHX_ERROR_FORMAT;
+        }
+    }
+
+    MBR_Partition* partitions = context->allocator->allocate(context->allocator, sizeof(MBR_Partition) * 4);
+    if (!partitions)
+    {
+        MBR_FreeData(context, data);
+        return PHX_ERROR_MEMORY;
+    }
+
+    PHX_u8* partitionBuffer = context->allocator->allocate(context->allocator, sizeof(MBR_Partition));
+    if (!partitionBuffer)
+    {
+        context->allocator->free(context->allocator, partitions);
+        MBR_FreeData(context, data);
+        return PHX_ERROR_MEMORY;
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        MBR_Partition* partition = &partitions[i];
+        PHX_u8* rawPartition = data->bootsector + MBR_BOOTSECTOR_PART + (PHX_Size)i * 16;
+
+        const PHX_u8 bootFlag = PHX_Read_Le_u8(rawPartition + MBR_PARTITION_BFL);
+        const PHX_u8 type = PHX_Read_Le_u8(rawPartition + MBR_PARTITION_TYP);
+        const PHX_u32 startLba = PHX_Read_Le_u32(rawPartition + MBR_PARTITION_STL);
+        const PHX_u32 sectorCount = PHX_Read_u32(rawPartition + MBR_PARTITION_SEC);
+
+        partition->partition.signature.first = (PHX_u64)i;
+        partition->partition.signature.second = 0;
+        partition->partition.signature.type = PHX_PARTITION_SIGNATURE_FIRST;
+
+        partition->partition.start = startLba;
+        partition->partition.size = sectorCount;
+
+        partition->partition.flags = 0;
+        if (bootFlag == 0x80)
+            partition->partition.flags |= PHX_PARTITION_FLAGS_LEGACY_BOOTABLE;
+
+        partition->partition.type = PHX_PARTITION_TYPE_UNKNOWN; // TODO
+
+        memcpy(partition->partition.name, sPartitionName, sPartitionNameToCopy);
+        if (sizeof(partition->partition.name) > sizeof(sPartitionName))
+        {
+            partition->partition.name[sizeof(sPartitionName) - 1] = (char)('0' + (unsigned char)i + 1);
+            partition->partition.name[sizeof(sPartitionName)] = '\0';
+        }
+        else
+            partition->partition.name[sizeof(partition->partition.name) - 1] = '\0';
+
+
+        partition->type = type;
+    }
+
+    outTable->signature.first = diskSignature;
+    outTable->signature.second = 0;
+    outTable->signature.type = PHX_PARTITION_SIGNATURE_FIRST;
+
+    outTable->maxPartitionCount = 4;
+
+    outTable->startUsable = 1;
+    outTable->sizeUsable = device->totalSectors - 1;
+
+    outTable->context = context;
+    outTable->disk = device;
+
+    outTable->ops = &MBR_Operations;
+
+    outTable->data = data;
+
+    outTable->partitionBuffer = partitionBuffer;
+    outTable->partitions = (PHX_u8*)partitions;
+    outTable->partitionSize = sizeof(MBR_Partition);
+    
+    return PHX_SUCCESS;
+}
+
+static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
+{
+    // TODO
+    (void)context;
+    (void)device;
+    (void)outTable;
+    (void)bootsector;
+    return PHX_ERROR_INTERNAL;
+}
+
+
+PHX_Partition_Interface PHX_Partition_MBR_Interface = {
+    MBR_OpenPartitionTable,
+    MBR_FormatPartitionTable,
+    MBR_TYPE,
+    "MBR-PARTITION-TABLE-INTERFACE",
+    "mbr"
+};
+
+
+/*
 static PHX_Partition_Type MBR_ConvertType(PHX_Byte type)
 {
     switch (type)
@@ -366,12 +597,5 @@ static PHX_Bool MBR_DefaultTable(PHX_Context* context, PHX_Disk_Device* device, 
 
     return PHX_TRUE;
 }
+*/
 
-PHX_Partition_Interface PHX_Partition_MBR_Interface = {
-    MBR_ReadTable,
-    MBR_WriteTable,
-    MBR_DefaultTable,
-    MBR_TYPE,
-    "MBR-PARTITION-TABLE-INTERFACE",
-    "mbr"
-};
