@@ -3,19 +3,16 @@ size = 536870912    # 512 MiB
 bootsector = "bootsector.hex"
 
 [[partitions]]
-type = "fat12"
 start = 512
 size = 1048576      # 1 MiB
 bootable = false
 
 [[partitions]]
-type = "fat16"
 start = 1049088
 size = 16777216     # 16 MiB
 bootable = false
 
 [[partitions]]
-type = "fat32"
 start = 17826304
 size = 519044608    # 494 MiB
 bootable = true

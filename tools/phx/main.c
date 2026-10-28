@@ -179,9 +179,8 @@ static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str
     if (!lastColon)
         return diskOut;
 
-    PHX_Partition_Interface* interface;
-    PHX_Partition_Table table;
-    if ((result = PHX_Partition_Open(context, diskOut, &interface, &table)) != PHX_SUCCESS)
+    PHX_Partition_Table_Device table;
+    if ((result = PHX_Partition_Open(context, diskOut, &table)) != PHX_SUCCESS)
     {
         if (result == PHX_ERROR_FORMAT)
             fputs("Unknown format of partition table\n", stderr);
@@ -200,31 +199,40 @@ static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str
     {
         fputs("Overflow while reading index\n", stderr);
 
-        PHX_Partition_CloseTable(context, &table);
+        table.ops->close(&table);
         diskOut->close(diskOut);
         return PHX_NULL;
     }
 
-    if (index == 0 || index - 1 >= table.partitionCount)
+    if (index == 0 || index - 1 >= table.partitionSlots)
     {
         fputs("Index out of bounds\n", stderr);
 
-        PHX_Partition_CloseTable(context, &table);
+        table.ops->close(&table);
         diskOut->close(diskOut);
         return PHX_NULL;
     }
 
-    PHX_Partition* partition = &table.partitions[index - 1];
+    PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, index - 1);
+    if (partition->type == PHX_PARTITION_TYPE_EMPTY)
+    {
+        fprintf(stderr, "Partition %" PRIu64 " is empty\n", index);
+
+        table.ops->close(&table);
+        diskOut->close(diskOut);
+        return PHX_NULL;
+    }
+
     if (PHX_Partition_CreateDevice(context, diskOut, partition, partitionOut) != PHX_TRUE)
     {
         fputs("Error while creating partition device\n", stderr);
 
-        PHX_Partition_CloseTable(context, &table);
+        table.ops->close(&table);
         diskOut->close(diskOut);
         return PHX_NULL;
     }
 
-    PHX_Partition_CloseTable(context, &table);
+    table.ops->close(&table);
     return partitionOut;
 }
 
@@ -395,27 +403,6 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     return 0;
 }
 
-static const char* partitionTypeStr(PHX_Partition_Type type)
-{
-    switch (type)
-    {
-        case PHX_PARTITION_FAT12: return "FAT12";
-        case PHX_PARTITION_FAT16: return "FAT16";
-        case PHX_PARTITION_FAT32: return "FAT32";
-        
-        case PHX_PARTITION_UNKNOWN: default:
-            return "Unknown";
-    }
-}
-
-static PHX_Partition_Type partitionGetType(const char* typeStr)
-{
-    if (strcmp(typeStr, "fat12") == 0) return PHX_PARTITION_FAT12;
-    if (strcmp(typeStr, "fat16") == 0) return PHX_PARTITION_FAT16;
-    if (strcmp(typeStr, "fat32") == 0) return PHX_PARTITION_FAT32;
-    return PHX_PARTITION_UNKNOWN;
-}
-
 static int partition(PHX_Context* context, const char* executable, const char* commandStr, const int argCount, const char** args)
 {
     PHX_Result result;
@@ -517,9 +504,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     {
         case PHX_COMMAND_PARTITION_INFO:
         {
-            PHX_Partition_Interface* interface;
-            PHX_Partition_Table table;
-            if ((result = PHX_Partition_Open(context, &diskDevice, &interface, &table)) != PHX_SUCCESS)
+            PHX_Partition_Table_Device table;
+            if ((result = PHX_Partition_Open(context, &diskDevice, &table)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
                     fputs("Unknown format of partition table\n", stderr);
@@ -530,19 +516,31 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            fprintf(stdout, "%s (%s):\n", imagePath, interface->partitionType);
-            fprintf(stdout, "  Usable start: %" PRIu64 "\n", table.startUsable * diskDevice.sectorSize);
-            fprintf(stdout, "  Usable size: %" PRIu64 "\n", table.sizeUsable * diskDevice.sectorSize);
+            fprintf(stdout, "%s (%s):\n", imagePath, table.type);
+            fprintf(stdout, "  Usable start: %" PRIu64 " (Sector: %" PRIu64 ")\n", table.startUsable * diskDevice.sectorSize, table.startUsable);
+            fprintf(stdout, "  Usable size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", table.sizeUsable * diskDevice.sectorSize, table.sizeUsable);
             fputs("  Signature: ", stdout);
             print_signature(stdout, &table.signature);
             fputc('\n', stdout);
-            fprintf(stdout, "  Max Partition Count: %" PRIu64 "\n", table.maxPartitionCount);
-            fprintf(stdout, "  Partition Count: %" PRIu64 "\n", table.partitionCount);
+            fprintf(stdout, "  Partition Slots: %" PRIu64 "\n", table.partitionSlots);
             fputs("  Partitions:\n", stdout);
-            for (PHX_PartitionSize i = 0; i < table.partitionCount; i++)
+            for (PHX_PartitionSize i = 0; i < table.partitionSlots; i++)
             {
-                PHX_Partition* partition = &table.partitions[i];
-                fprintf(stdout, "    Partition %" PRIu64 "%s%s%s:\n", i + 1, (partition->name[0] != '\0') ? " (" : "", partition->name, (partition->name[0] != '\0') ? ")" : "");
+                PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, i);
+
+                if (partition->name[0] == '\0')
+                    fprintf(stdout, "    Partition %" PRIu64 ": ", i + 1);
+                else
+                    fprintf(stdout, "    Partition %" PRIu64 " \"%s\": ", i + 1, partition->name);
+
+                if (partition->type == PHX_PARTITION_TYPE_EMPTY)
+                {
+                    fputs("Empty\n", stdout);
+                    continue;
+                }
+                else
+                    fputc('\n', stdout);
+
                 fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
                 fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
 
@@ -550,17 +548,11 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 print_signature(stdout, &partition->signature);
                 fputc('\n', stdout);
 
-                fputs("      Flags:", stdout);
-                if (partition->flags & PHX_PARTITION_BOOTABLE)
-                    fputs(" BOOTABLE", stdout);
-                fputc('\n', stdout);
-
-                fputs("      Type: ", stdout);
-                fputs(partitionTypeStr(partition->type), stdout);
-                fputc('\n', stdout);
+                // TODO: Flags
+                // TODO: Type
             }
 
-            PHX_Partition_CloseTable(context, &table);
+            table.ops->close(&table);
             break;
         }
 
@@ -576,40 +568,38 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            PHX_Partition_Table table;
-            if (interface->getDefaultTable(context, &diskDevice, &table) != PHX_TRUE )
+            PHX_Partition_Table_Device table;
+            if ((result = interface->formatPartitionTable(context, &diskDevice, &table, PHX_NULL)) != PHX_SUCCESS)
             {
-                fputs("Error getting empty partition table\n", stderr);
+                fputs("Error formatting partition table\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            if (interface->writeTable(context, &diskDevice, &table) != PHX_TRUE)
+            if ((result = table.ops->writeChanges(&table)) != PHX_SUCCESS)
             {
                 fputs("Error writing partition table to disk\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            PHX_Partition_CloseTable(context, &table);
+            table.ops->close(&table);
             break;
         }
 
         case PHX_COMMAND_PARTITION_ADD:
         {
-            const char* typeStr = args[1];
+            const char* indexStr = args[1];
             const char* startStr = args[2];
             const char* sizeStr = args[3];
 
             PHX_Bool overflow;
 
-            PHX_Partition_Interface* interface;
-            PHX_Partition_Table table;
-            if ((result = PHX_Partition_Open(context, &diskDevice, &interface, &table)) != PHX_SUCCESS)
+            PHX_Partition_Table_Device table;
+            if ((result = PHX_Partition_Open(context, &diskDevice, &table)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
                     fputs("Unknown format of partition table\n", stderr);
@@ -620,36 +610,43 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            if (table.partitionCount >= table.maxPartitionCount)
+            PHX_Size index = PHX_Size_FromStr(indexStr, &overflow, PHX_Size);
+            if (overflow == PHX_TRUE)
             {
-                fputs("Limit of partitions reached for partition table\n", stderr);
+                fputs("Overflow of index\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            if (index >= table.partitionSlots)
+            {
+                fputs("Index out of bounds\n", stderr);
+
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, index - 1);
+            if (partition->type != PHX_PARTITION_TYPE_EMPTY)
+            {
+                fprintf(stderr, "Partition slot %" PRIu64 " is not empty\n", index);
+
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
             // TODO: Validate it is not overlapping
 
-            PHX_Partition* newPartitions = context->allocator->reallocate(context->allocator, table.partitions, sizeof(PHX_Partition) * (table.partitionCount + 1));
-            if (!newPartitions)
-            {
-                fputs("Could not allocate new partition array\n", stderr);
-
-                PHX_Partition_CloseTable(context, &table);
-                diskDevice.close(&diskDevice);
-                return 1;
-            }
-
-            table.partitions = newPartitions;
-            PHX_Partition* newPartition = &table.partitions[table.partitionCount++];
-
             PHX_SectorSize start = PHX_Size_FromStr(startStr, &overflow, PHX_SectorSize);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of start\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
@@ -659,7 +656,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fputs("Overflow of size\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
@@ -668,7 +665,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fputs("Start not aligned to sector size\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
@@ -676,40 +673,44 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fputs("Size not aligned to sector size\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            newPartition->start = start / diskDevice.sectorSize;
-            newPartition->size = size / diskDevice.sectorSize;
+            // TODO
+            partition->signature.first = 0;
+            partition->signature.second = 0;
+            partition->signature.type = PHX_PARTITION_SIGNATURE_NONE;
 
-            newPartition->flags = 0;
+            partition->start = start / diskDevice.sectorSize;
+            partition->size = size / diskDevice.sectorSize;
+
+            partition->flags = PHX_PARTITION_FLAGS_CHANGED;
             if (flags_bootable == PHX_TRUE)
-                newPartition->flags |= PHX_PARTITION_BOOTABLE;
+                partition->flags |= PHX_PARTITION_FLAGS_LEGACY_BOOTABLE;
 
-            newPartition->type = partitionGetType(typeStr);
+            partition->type = PHX_PARTITION_TYPE_UNKNOWN; // TODO
 
-            memset(newPartition->name, '\0', sizeof(newPartition->name)); // TODO
+            memset(partition->name, '\0', sizeof(partition->name)); // TODO
 
-            if (interface->writeTable(context, &diskDevice, &table) != PHX_TRUE)
+            if ((result = table.ops->writeChanges(&table)) != PHX_SUCCESS)
             {
                 fputs("Error writing partition table to disk\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            PHX_Partition_CloseTable(context, &table);
+            table.ops->close(&table);
             break;
         }
 
         case PHX_COMMAND_PARTITION_REMOVE:
         {
-            PHX_Partition_Interface* interface;
-            PHX_Partition_Table table;
-            if ((result = PHX_Partition_Open(context, &diskDevice, &interface, &table)) != PHX_SUCCESS)
+            PHX_Partition_Table_Device table;
+            if ((result = PHX_Partition_Open(context, &diskDevice, &table)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
                     fputs("Unknown format of partition table\n", stderr);
@@ -726,38 +727,48 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
 
             // TODO: Better
-            PHX_Size index = PHX_Size_FromStr(indexStr, &overflow, PHX_Size) - 1;
+            PHX_Size index = PHX_Size_FromStr(indexStr, &overflow, PHX_Size);
             if (overflow == PHX_TRUE)
             {
                 fputs("Overflow of index\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            if (index >= table.partitionCount)
+            if (index >= table.partitionSlots)
             {
                 fputs("Index out of bounds\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            memmove(table.partitions + index, table.partitions + index + 1, sizeof(PHX_Partition) * (table.partitionCount - index - 1));
-            table.partitionCount--;
+            PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, index - 1);
+            if (partition->type == PHX_PARTITION_TYPE_EMPTY)
+            {
+                fprintf(stderr, "Partition slot %" PRIu64 " is already empty\n", index);
 
-            if (interface->writeTable(context, &diskDevice, &table) != PHX_TRUE)
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            partition->type = PHX_PARTITION_TYPE_EMPTY;
+            partition->flags = PHX_PARTITION_FLAGS_CHANGED;
+
+            if ((result = table.ops->writeChanges(&table)) != PHX_SUCCESS)
             {
                 fputs("Error writing partition table to disk\n", stderr);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            PHX_Partition_CloseTable(context, &table);
+            table.ops->close(&table);
             break;
         }
 
@@ -765,9 +776,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         {
             const char* bootsectorFileStr = args[1];
 
-            PHX_Partition_Interface* interface;
-            PHX_Partition_Table table;
-            if ((result = PHX_Partition_Open(context, &diskDevice, &interface, &table)) != PHX_SUCCESS)
+            PHX_Partition_Table_Device table;
+            if ((result = PHX_Partition_Open(context, &diskDevice, &table)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
                     fputs("Unknown format of partition table\n", stderr);
@@ -783,33 +793,44 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             {
                 fprintf(stderr, "Could not open file %s: %s\n", bootsectorFileStr, detailedResult.msg);
 
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
-            if (PHX_Native_File_Read(&bootsectorFileDevice, table.bootsector, 0, 512) != 512)
+            PHX_u8 bootsectorBuffer[512] = {0};
+
+            if (PHX_Native_File_Read(&bootsectorFileDevice, bootsectorBuffer, 0, 512) != 512)
             {
-                fputs("Error reading from bootsector file\n", stderr);
+                fputs("Error reading 512 bytes from bootsector file\n", stderr);
 
                 PHX_Native_File_Close(&bootsectorFileDevice);
-                PHX_Partition_CloseTable(context, &table);
-                diskDevice.close(&diskDevice);
-                return 1;
-            }
-
-            if (interface->writeTable(context, &diskDevice, &table) != PHX_TRUE)
-            {
-                fputs("Error writing partition table to disk\n", stderr);
-
-                PHX_Native_File_Close(&bootsectorFileDevice);
-                PHX_Partition_CloseTable(context, &table);
+                table.ops->close(&table);
                 diskDevice.close(&diskDevice);
                 return 1;
             }
 
             PHX_Native_File_Close(&bootsectorFileDevice);
-            PHX_Partition_CloseTable(context, &table);
+
+            if ((result = table.ops->changeBootsector(&table, bootsectorBuffer)) != PHX_SUCCESS)
+            {
+                fputs("Error reading 512 bytes from bootsector file\n", stderr);
+
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            if ((result = table.ops->writeChanges(&table)) != PHX_SUCCESS)
+            {
+                fputs("Error writing partition table to disk\n", stderr);
+
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
+            table.ops->close(&table);
             break;
         }
 
@@ -2308,19 +2329,13 @@ static void print_help(const char* name)
         "  > list                                 List supported interfaces\n"
         "  > info <image>                         Print information about the partition table\n"
         "  > create <image> <format>              Create empty partition table\n"
-        "  > add <image> <type> <start> <size> [--bootable]\n"
+        "  > add <image> <index> <start> <size> [--bootable]\n"
         "  -> Add partition to partition table\n"
         "  > remove <image> <index>               Remove partition from partition table\n"
         "  > bootsector <image> <file>            Set bootsector of partition table\n",
         stderr
     );
     // TODO: "  > signature <image> <signature>      Set signature of partition table\n"
-
-    fputs("  Types:\n", stream);
-    fputs("  - unknown\n", stream);
-    fputs("  - fat12\n", stream);
-    fputs("  - fat16\n", stream);
-    fputs("  - fat32\n", stream);
 
 
     fputs("\nArea \"filesystem\":\n", stream);
