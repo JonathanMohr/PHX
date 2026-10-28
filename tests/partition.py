@@ -27,6 +27,7 @@ types = ["unknown", "fat12", "fat16", "fat32"]
 
 @dataclass
 class Config_Partition:
+    type: str | None
     start: int
     size: int
     bootable: bool
@@ -65,9 +66,10 @@ def set_bootsector(logger: logging.Logger, phx: Path, image: Path, bootsector: P
 
     return True
 
-def add_partition(logger: logging.Logger, phx: Path, image: Path, index: int, start: int, size: int, bootable: bool) -> bool:
+def add_partition(logger: logging.Logger, phx: Path, image: Path, index: int, start: int, size: int, type: str | None, bootable: bool) -> bool:
     try:
         args = ["partition", "add", str(image), str(index), str(start), str(size)]
+        if type is not None: args.extend(["--type", type])
         if bootable: args.append("--bootable")
         subprocess.run([str(phx), *args], check=True)
 
@@ -260,18 +262,19 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
             logger.warning(f"Could not get Size of partition {index} ({name}): {data}")
             continue
 
-        # match partition.type:
-        #     case "unknown": expected_partition_content = "0x7F"
-        #     case "fat12": expected_partition_content = ["DOS_FAT_12"]
-        #     case "fat16": expected_partition_content = ["DOS_FAT_16_S", "DOS_FAT_16", "Windows_FAT_16"]
-        #     case "fat32": expected_partition_content = ["DOS_FAT_32", "Windows_FAT_32"]
-        #     case _:
-        #         logger.error(f"Unknown type of partition {index} in diskutil tests: {partition.type}")
-        #         continue
-        # 
-        # if partition_content not in expected_partition_content:
-        #     logger.error(f"Expected format of partition {index} ({expected_partition_content}) does not match actual format of partition {index}: {partition_content} ({name})")
-        #     return False
+        if partition.type is not None:
+            match partition.type:
+                case "unknown": expected_partition_content = "0x7F"
+                case "fat12": expected_partition_content = ["DOS_FAT_12"]
+                case "fat16": expected_partition_content = ["DOS_FAT_16_S", "DOS_FAT_16", "Windows_FAT_16"]
+                case "fat32": expected_partition_content = ["DOS_FAT_32", "Windows_FAT_32"]
+                case _:
+                    logger.error(f"Unknown type of partition {index} in diskutil tests: {partition.type}")
+                    continue
+
+            if partition_content not in expected_partition_content:
+                logger.error(f"Expected format of partition {index} ({expected_partition_content}) does not match actual format of partition {index}: {partition_content} ({name})")
+                return False
 
         if partition_size != partition.size:
             logger.error(f"Expected size of partition {index} ({partition.size}) does not match actual format of partition {index}: {partition_size} ({name})")
@@ -426,6 +429,12 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 skip = True
                 break
 
+            config_partition_type = config_partition.get("type", None)
+            if not isinstance(config_partition_type, str) and config_partition_type is not None:
+                logger.warning(f"Invalid type of partition specified in {config_file}")
+                skip = True
+                break
+
             config_partition_start = config_partition.get("start")
             if not isinstance(config_partition_start, int) or isinstance(config_partition_start, bool):
                 logger.warning(f"{'No' if config_partition_start is None else 'Invalid'} start of partition specified in {config_file}")
@@ -445,6 +454,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 break
 
             config.partitions.append(Config_Partition(
+                config_partition_type,
                 config_partition_start,
                 config_partition_size,
                 config_partition_bootable
@@ -495,6 +505,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                     i,
                     partition.start,
                     partition.size,
+                    partition.type,
                     partition.bootable
                 ):
                     logger.error(f"Could not add partition to image for {config_file}")

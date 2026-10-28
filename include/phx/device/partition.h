@@ -28,8 +28,9 @@ typedef PHX_u32 PHX_Partition_Flags;
 #define PHX_PARTITION_FLAGS_REQUIRED        ((PHX_Partition_Flags)(1 << 2))
 
 typedef PHX_u32 PHX_Partition_Type;
-#define PHX_PARTITION_TYPE_EMPTY   0
-#define PHX_PARTITION_TYPE_UNKNOWN 1
+#define PHX_PARTITION_TYPE_EMPTY    0
+#define PHX_PARTITION_TYPE_UNKNOWN  1
+#define PHX_PARTITION_TYPE_SPECIFIC 2
 
 typedef struct PHX_Partition
 {
@@ -44,6 +45,12 @@ typedef struct PHX_Partition
     char name[PHX_NAME_LEN + 1];
 } PHX_Partition;
 
+typedef struct PHX_Partition_Type_Info
+{
+    const char** names;
+} PHX_Partition_Type_Info;
+#define PHX_PARTITION_TYPE_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, NULL }
+
 typedef struct PHX_Partition_Table_Device PHX_Partition_Table_Device;
 
 typedef struct PHX_Partition_Table_Operations
@@ -54,10 +61,19 @@ typedef struct PHX_Partition_Table_Operations
 
     // TODO: Signature
 
-    // TODO: void (*getFlags)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
-    // TODO: void (*getType)(PHX_Partition_Table_Device* pt, PHX_PartitionSize index);
+    // TODO: void (*getFlags)(PHX_Partition_Table_Device* table, PHX_PartitionSize index);
+
+    PHX_Bool (*setType)(PHX_Partition_Table_Device* table, PHX_PartitionSize index, const char* typeName);
+
+    const char* (*getTypeName)(PHX_Partition_Table_Device* table, PHX_PartitionSize index);
+    void (*getSpecificType)(PHX_Partition_Table_Device* table, PHX_PartitionSize index, char* typeOut);
 
     void (*close)(PHX_Partition_Table_Device* table);
+
+    PHX_Partition_Type_Info* typeInfos;
+    PHX_Size typeCount;
+
+    PHX_Size specificTypeLen;
 } PHX_Partition_Table_Operations;
 
 struct PHX_Partition_Table_Device

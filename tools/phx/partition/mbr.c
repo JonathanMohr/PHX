@@ -1,5 +1,6 @@
 #include "mbr.h"
 #include "phx/device/partition.h"
+#include "phx/types.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
@@ -76,6 +77,8 @@
 #define MBR_TYPE_VMWARE_SWAP            0xFC
 #define MBR_TYPE_LINUX_RAID_AUTODETECT  0xFD
 
+
+#define MBR_SPECIFIC_TYPE_LEN 5
 #define MBR_TYPE "MBR-PARTITION-TABLE"
 
 
@@ -91,6 +94,78 @@ typedef struct
     PHX_u8* bootsectorBuffer;
     PHX_u8 bootsector[512];
 } MBR_Data;
+
+static PHX_Partition_Type_Info MBR_TypeInfos[] = {
+    {
+        PHX_PARTITION_TYPE_INFO_NAMES("unknown")
+    },
+    {
+        PHX_PARTITION_TYPE_INFO_NAMES("fat12")
+    },
+    {
+        PHX_PARTITION_TYPE_INFO_NAMES("fat16")
+    },
+    {
+        PHX_PARTITION_TYPE_INFO_NAMES("fat32")
+    }
+};
+
+static PHX_u8 MBR_GetTypeByName(const char* name)
+{
+    if (strcmp(name, "unknown") == 0)
+        return MBR_TYPE_UNKNOWN;
+
+    if (strcmp(name, "fat12") == 0)
+        return MBR_TYPE_FAT12;
+
+    if (strcmp(name, "fat16") == 0)
+        return MBR_TYPE_FAT16_LBA;
+
+    if (strcmp(name, "fat32") == 0)
+        return MBR_TYPE_FAT32_LBA;
+
+    return 0;
+}
+
+
+static const char* MBR_GetTypeName(PHX_u8 type)
+{
+    switch (type)
+    {
+        case MBR_TYPE_FAT12: return "FAT12";
+        case MBR_TYPE_FAT16_BELOW_32MB: return "FAT16 CHS";
+        case MBR_TYPE_EXTENDED_PARTITION_CHS: return "Extended Partition CHS";
+        case MBR_TYPE_FAT16_ABOVE_32MB: return "FAT16B CHS";
+        case MBR_TYPE_NTFS_exFAT_HPFS: return "NTFX/exFAT/HPFS";
+        case MBR_TYPE_FAT32_CHS: return "FAT32 CHS";
+        case MBR_TYPE_FAT32_LBA: return "FAT32 LBA";
+        case MBR_TYPE_FAT16_LBA: return "FAT16 LBA";
+        case MBR_TYPE_EXTENDED_PARTITION_LBA: return "Extended Partition LBA";
+
+        case MBR_TYPE_UNKNOWN: return "Unknown";
+        case MBR_TYPE_LINUX_SWAP: return "Linux Swap";
+        case MBR_TYPE_LINUX: return "Linux";
+        case MBR_TYPE_LINUX_EXTENDED: return "Linux extended";
+        case MBR_TYPE_LINUX_LVM: return "Linux LVM";
+
+        case MBR_TYPE_FREEBSD: return "FreeBSD";
+        case MBR_TYPE_OPENBSD: return "OpenBSD";
+
+        case MBR_TYPE_APPLE_DARWIN_UFS: return "Apple Darwin UFS";
+        
+        case MBR_TYPE_NETBSD: return "NetBSD";
+
+        case MBR_TYPE_APPLE_HFS_HFS_PLUS: return "Apple HFS/HFS+";
+
+        case MBR_TYPE_VMWARE_VMFS: return "VMWare VMFS";
+        case MBR_TYPE_VMWARE_SWAP: return "VMWare Swap";
+
+        case MBR_TYPE_LINUX_RAID_AUTODETECT: return "Linux RAID Autodetect";
+
+        default:
+            return PHX_NULL;
+    }
+}
 
 
 static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
@@ -133,7 +208,8 @@ static PHX_Result MBR_ChangeBootsector(PHX_Partition_Table_Device* table, const 
 static void MBR_UpdatePartitionInfo(MBR_Partition* partition)
 {
     // TODO
-    partition->type = MBR_TYPE_UNKNOWN;
+    if (partition->partition.type == PHX_PARTITION_TYPE_UNKNOWN)
+        partition->type = MBR_TYPE_UNKNOWN;
     partition->partition.flags &= ~PHX_PARTITION_FLAGS_CHANGED;
 }
 
@@ -172,7 +248,7 @@ static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
         PHX_u8 bootflag = 0x00;
         if (partition->partition.flags & PHX_PARTITION_FLAGS_LEGACY_BOOTABLE)
             bootflag = 0x80;
-
+        
         const PHX_u32 start = (PHX_u32)partition->partition.start; // TODO
         const PHX_u32 size = (PHX_u32)partition->partition.size; // TODO
 
@@ -184,7 +260,7 @@ static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
         const PHX_u8 lastHead = (PHX_u8)(((partition->partition.start + partition->partition.size - 1) / (PHX_SectorSize)table->disk->sectorsPerTrack) % (PHX_SectorSize)table->disk->totalHeads);
         const PHX_u8 lastSector = (PHX_u8)(((partition->partition.start + partition->partition.size - 1) % (PHX_SectorSize)table->disk->sectorsPerTrack) + 1);
 
-
+        
         PHX_Write_Le_u8(rawPartition + MBR_PARTITION_BFL, bootflag);
 
         if (firstCylinder <= 1023)
@@ -212,6 +288,66 @@ static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
 }
 
 
+static PHX_Bool MBR_SetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, const char* typeName)
+{
+    if (index > table->partitionSlots) return PHX_FALSE;
+    MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
+
+    PHX_u8 type = MBR_GetTypeByName(typeName);
+    if (type == 0) return PHX_FALSE;
+
+    partition->type = type;
+    partition->partition.type = PHX_PARTITION_TYPE_SPECIFIC;
+
+    return PHX_TRUE;
+}
+
+static const char* MBR_GetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index)
+{
+    if (index > table->partitionSlots) return PHX_NULL;
+    MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
+
+    if (partition->partition.flags & PHX_PARTITION_FLAGS_CHANGED)
+        MBR_UpdatePartitionInfo(partition);
+
+    return MBR_GetTypeName(partition->type);
+}
+
+static void MBR_GetSpecificType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, char* typeOut)
+{
+    if (index > table->partitionSlots)
+    {
+        typeOut[0] = '-';
+        typeOut[1] = '-';
+        typeOut[2] = '-';
+        typeOut[3] = '-';
+        typeOut[4] = '\0';
+    }
+
+    MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
+
+    if (partition->partition.flags & PHX_PARTITION_FLAGS_CHANGED)
+        MBR_UpdatePartitionInfo(partition);
+
+    typeOut[0] = '0';
+    typeOut[1] = 'x';
+    
+    const PHX_u8 upper = partition->type >> 4;
+    if (upper < 10)
+        typeOut[2] = '0' + upper;
+    else
+        typeOut[2] = 'A' + (upper - 10);
+
+    const PHX_u8 lower = partition->type & 0x0F;
+    if (lower < 10)
+        typeOut[3] = '0' + lower;
+    else
+        typeOut[3] = 'A' + (lower - 10);
+
+    typeOut[4] = '\0';
+}
+
+
 static void MBR_Close(PHX_Partition_Table_Device* table)
 {
     MBR_Data* data = table->data;
@@ -223,8 +359,20 @@ static void MBR_Close(PHX_Partition_Table_Device* table)
 
 static const PHX_Partition_Table_Operations MBR_Operations = {
     MBR_WriteChanges,
+
     MBR_ChangeBootsector,
-    MBR_Close
+
+    MBR_SetType,
+
+    MBR_GetType,
+    MBR_GetSpecificType,
+
+    MBR_Close,
+
+    MBR_TypeInfos,
+    sizeof(MBR_TypeInfos) / sizeof(PHX_Partition_Type_Info),
+
+    MBR_SPECIFIC_TYPE_LEN
 };
 
 
@@ -422,6 +570,7 @@ static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
 PHX_Partition_Interface PHX_Partition_MBR_Interface = {
     MBR_OpenPartitionTable,
     MBR_FormatPartitionTable,
+    &MBR_Operations,
     MBR_TYPE,
     "MBR-PARTITION-TABLE-INTERFACE",
     "mbr"

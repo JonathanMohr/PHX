@@ -16,6 +16,7 @@
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
 #include "phx/device/partition.h"
+#include "phx/interface/partition.h"
 
 static void print_help(const char* name);
 
@@ -429,6 +430,43 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         return 0;
     }
 
+    if (strcmp(commandStr, "types") == 0)
+    {
+        if (argCount < 1)
+        {
+            print_help(executable);
+            return 1;
+        }
+        
+        const char* format = args[0];
+        PHX_Partition_Interface* interface = PHX_Partition_FindInterfaceByType(format);
+        if (!interface)
+        {
+            fputs("Unknown format ", stderr);
+            fputs(format, stderr);
+            fputc('\n', stderr);
+        }
+
+        for (PHX_Size i = 0; i < interface->ops->typeCount; i++)
+        {
+            PHX_Partition_Type_Info* typeInfo = &interface->ops->typeInfos[i];
+
+            const char** names = typeInfo->names;
+            fputs(" - ", stdout);
+            while (*names)
+            {
+                if (names != typeInfo->names)
+                    fprintf(stdout, " / %s", *names);
+                else
+                    fputs(*names, stdout);
+                names++;
+            }
+            fputc('\n', stdout);
+        }
+
+        return 0;
+    }
+
     if (strcmp(commandStr, "info") == 0)
     {
         fixedArgCount = 1;
@@ -469,10 +507,32 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
     // Flags
     PHX_Bool flags_bootable = PHX_FALSE;
+    const char* flags_type = PHX_NULL;
     for (int i = fixedArgCount; i < argCount; i++)
     {
         if (strcmp(args[i], "--bootable") == 0)
+        {
+            if (flags_bootable == PHX_TRUE)
+            {
+                fputs("Warning: --bootable used multiple times\n", stderr);
+                continue;
+            }
+
             flags_bootable = PHX_TRUE;
+        }
+        else if (strcmp(args[i], "--type") == 0)
+        {
+            if (flags_type)
+            {
+                fputs("Warning: --type used multiple times\n", stderr);
+                continue;
+            }
+
+            if (i + 1 >= argCount)
+                fputs("Warning: No argument after --type\n", stderr);
+            else
+                flags_type = args[++i];
+        }
         else
         {
             fputs("Warning: Invalid argument: ", stderr);
@@ -516,6 +576,16 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
+            char* specificType = context->allocator->allocate(context->allocator, table.ops->specificTypeLen);
+            if (!specificType)
+            {
+                fputs("Could not allocate memory for specific name\n", stderr);
+
+                table.ops->close(&table);
+                diskDevice.close(&diskDevice);
+                return 1;
+            }
+
             fprintf(stdout, "%s (%s):\n", imagePath, table.type);
             fprintf(stdout, "  Usable start: %" PRIu64 " (Sector: %" PRIu64 ")\n", table.startUsable * diskDevice.sectorSize, table.startUsable);
             fprintf(stdout, "  Usable size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", table.sizeUsable * diskDevice.sectorSize, table.sizeUsable);
@@ -527,6 +597,9 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             for (PHX_PartitionSize i = 0; i < table.partitionSlots; i++)
             {
                 PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, i);
+
+                const char* typeName = table.ops->getTypeName(&table, i);
+                table.ops->getSpecificType(&table, i, specificType);
 
                 if (partition->name[0] == '\0')
                     fprintf(stdout, "    Partition %" PRIu64 ": ", i + 1);
@@ -543,15 +616,19 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
                 fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
                 fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
+                if (typeName)
+                    fprintf(stdout, "      Type: %s (%s)\n", typeName, specificType);
+                else
+                    fprintf(stdout, "      Type: %s\n", specificType);
 
                 fputs("      Signature: ", stdout);
                 print_signature(stdout, &partition->signature);
                 fputc('\n', stdout);
 
                 // TODO: Flags
-                // TODO: Type
             }
 
+            context->allocator->free(context->allocator, specificType);
             table.ops->close(&table);
             break;
         }
@@ -691,6 +768,19 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 partition->flags |= PHX_PARTITION_FLAGS_LEGACY_BOOTABLE;
 
             partition->type = PHX_PARTITION_TYPE_UNKNOWN; // TODO
+            if (flags_type)
+            {
+                if (table.ops->setType(&table, index - 1, flags_type) != PHX_TRUE)
+                {
+                    fputs("Invalid type: ", stderr);
+                    fputs(flags_type, stderr);
+                    fputc('\n', stderr);
+
+                    table.ops->close(&table);
+                    diskDevice.close(&diskDevice);
+                    return 1;
+                }
+            }
 
             memset(partition->name, '\0', sizeof(partition->name)); // TODO
 
@@ -2327,9 +2417,10 @@ static void print_help(const char* name)
         "\nArea \"partition\":\n"
         "  Commands:\n"
         "  > list                                 List supported interfaces\n"
+        "  > types <format>                       List supported types for format\n"
         "  > info <image>                         Print information about the partition table\n"
         "  > create <image> <format>              Create empty partition table\n"
-        "  > add <image> <index> <start> <size> [--bootable]\n"
+        "  > add <image> <index> <start> <size> [--bootable] [--type <type>]\n"
         "  -> Add partition to partition table\n"
         "  > remove <image> <index>               Remove partition from partition table\n"
         "  > bootsector <image> <file>            Set bootsector of partition table\n",
