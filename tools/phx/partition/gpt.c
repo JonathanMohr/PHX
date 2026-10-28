@@ -1,5 +1,6 @@
 #include "gpt.h"
 #include "phx/device/partition.h"
+#include "phx/result.h"
 #include "phx/types.h"
 
 #include <phx/base/endianness.h>
@@ -81,7 +82,118 @@ typedef struct
 #define PHX_GPT_ATTRIBUTE_NO_BLOCK_IO_PROTOCOL (1 << 1)
 #define PHX_GPT_ATTRIBUTE_LEGACY_BOOTABLE      (1 << 2)
 
+
+#define GPT_SPECIFIC_TYPE_LEN 36
 #define GPT_TYPE "GPT-PARTITION-TABLE"
+
+
+static PHX_Partition_Type_Info GPT_TypeInfos[] = {
+    {
+        PHX_PARTITION_TYPE_INFO_NAMES("unknown")
+    }
+};
+
+
+static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
+{
+    // TODO
+    (void)table;
+    return PHX_ERROR_INTERNAL;
+}
+
+
+static PHX_Result GPT_ChangeBootsector(PHX_Partition_Table_Device* table, const PHX_u8* bootsector)
+{
+    // TODO
+    (void)table;
+    (void)bootsector;
+    return PHX_ERROR_INTERNAL;
+}
+
+
+static PHX_Bool GPT_SetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, const char* typeName)
+{
+    // TODO
+    (void)table;
+    (void)index;
+    (void)typeName;
+    return PHX_FALSE;
+}
+
+static const char* GPT_GetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index)
+{
+    // TODO
+    (void)table;
+    (void)index;
+    return PHX_NULL;
+}
+
+static void GPT_GetSpecificType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, char* typeOut)
+{
+    // TODO
+    (void)table;
+    (void)index;
+    (void)typeOut;
+}
+
+
+static void GPT_Close(PHX_Partition_Table_Device* table)
+{
+    // TODO
+    (void)table;
+}
+
+
+static const PHX_Partition_Table_Operations GPT_Operations = {
+    GPT_WriteChanges,
+
+    GPT_ChangeBootsector,
+
+    GPT_SetType,
+
+    GPT_GetType,
+    GPT_GetSpecificType,
+
+    GPT_Close,
+
+    GPT_TypeInfos,
+    sizeof(GPT_TypeInfos) / sizeof(PHX_Partition_Type_Info),
+
+    GPT_SPECIFIC_TYPE_LEN
+};
+
+
+static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
+{
+    // TODO
+    (void)context;
+    (void)device;
+    (void)outTable;
+    return PHX_ERROR_INTERNAL;
+}
+
+static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
+{
+    // TODO
+    (void)context;
+    (void)device;
+    (void)outTable;
+    (void)bootsector;
+    return PHX_ERROR_INTERNAL;
+}
+
+
+PHX_Partition_Interface PHX_Partition_GPT_Interface = {
+    GPT_OpenPartitionTable,
+    GPT_FormatPartitionTable,
+    &GPT_Operations,
+    GPT_TYPE,
+    "GPT-PARTITION-TABLE-INTERFACE",
+    "gpt"
+};
+
+
+/*
 
 static inline PHX_u32 read_u32(const PHX_Byte* buffer)
 {
@@ -194,8 +306,6 @@ static PHX_u32 crc32_calculate(const void* data, PHX_Size size)
 }
 
 static int isPowerOfTwo(PHX_u32 v) { return v && !(v & (v - 1)); }
-
-#include <stdio.h>
 
 static PHX_Bool GPT_ReadTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table* outTable)
 {
@@ -488,11 +598,5 @@ static PHX_Bool GPT_DefaultTable(PHX_Context* context, PHX_Disk_Device* device, 
     return PHX_TRUE;
 }
 
-PHX_Partition_Interface PHX_Partition_GPT_Interface = {
-    GPT_ReadTable,
-    GPT_WriteTable,
-    GPT_DefaultTable,
-    GPT_TYPE,
-    "GPT-PARTITION-TABLE-INTERFACE",
-    "gpt"
-};
+*/
+
