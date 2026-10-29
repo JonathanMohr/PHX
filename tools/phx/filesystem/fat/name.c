@@ -45,30 +45,6 @@ void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nam
     }
 }
 
-PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b)
-{
-    // TODO: Actually use UTF8
-
-    while (*a && *b)
-    {
-        char ca = *a;
-        char cb = *b;
-
-        if (ca >= 'A' && ca <= 'Z')
-            ca += (char)('a' - 'A');
-        if (cb >= 'A' && cb <= 'Z')
-            cb += (char)('a' - 'A');
-
-        if (ca != cb)
-            return PHX_FALSE;
-
-        a++;
-        b++;
-    }
-
-    return (*a == *b) ? PHX_TRUE : PHX_FALSE;
-}
-
 static PHX_Result shortNameExists(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char candidate[11], PHX_Bool* existsOut)
 {
     PHX_Result result;

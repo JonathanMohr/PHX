@@ -383,7 +383,6 @@ static const PHX_Partition_Table_Operations MBR_Operations = {
 };
 
 
-#include <stdio.h>
 static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
 {
     const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;

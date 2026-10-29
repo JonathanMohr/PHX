@@ -1,5 +1,3 @@
-#include "phx/result.h"
-#include "phx/types.h"
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <phx/native/filesystem.h>
@@ -48,6 +46,7 @@ static inline PHX_Result PHX_File_IsBlockDevice(FILE* file, PHX_Bool* outIsBlock
 {
 #if defined(_WIN32)
     // TODO
+    (void)file;
     *outIsBlockDevice = PHX_FALSE;
     return PHX_SUCCESS;
 #elif defined(__APPLE__)
@@ -96,6 +95,8 @@ static inline PHX_Result PHX_File_GetBlockDeviceInfo(FILE* file, PHX_File_BlockD
 {
 #if defined(_WIN32)
     // TODO
+    (void)file;
+    (void)infoOut;
     return PHX_ERROR_INTERNAL;
 #elif defined (__APPLE__)
     const int fd = fileno(file);
@@ -175,8 +176,6 @@ static PHX_Bool PHX_File_GetSize(FILE* file, PHX_FileSize* out)
         return PHX_FALSE;
     if (PHX_File_Seek(file, 0) != PHX_TRUE)
         return PHX_FALSE;
-
-    printf("ftello: %lli\n", size);
 
     *out = (PHX_FileSize)size;
     return PHX_TRUE;

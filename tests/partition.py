@@ -378,7 +378,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
     logger.info("Starting partition tests")
 
-    formats = [Format.MBR] # TODO
+    formats = [Format.MBR] # TODO: Add GPT
 
     image_configs = [p for p in partition_dir.rglob("*.toml") if p.is_file()]
     image_map: dict[str, int] = {}

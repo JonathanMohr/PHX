@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "phx/charsets/unicode.h"
 
 PHX_Result PHX_Filesystem_FAT_LinkEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char* name, PHX_Filesystem_Node* target)
 {
@@ -32,6 +33,8 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
     PHX_Byte lfnExpected = 0;
     PHX_Byte lfnChecksum = 0;
     PHX_Byte haveLfn = PHX_FALSE;
+
+    const PHX_Size nameLen = strlen(name);
 
     while (1)
     {
@@ -144,15 +147,20 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
         char candidateName[781];
         if (useLfn == PHX_TRUE)
         {
-            PHX_u32 written = PHX_Filesystem_FAT_UTF16_To_UTF8(lfnChars, 20 * 13, candidateName, sizeof(candidateName) - 1);
-            candidateName[written] = '\0';
+            memset(candidateName, 0, sizeof(candidateName));
+            const PHX_Size lfnLen = PHX_Charsets_Unicode_UTF16_Length((const PHX_u8*)lfnChars, 20 * 13);
+            const PHX_Size cap = sizeof(candidateName) - 1;
+
+            PHX_Size written = PHX_Charsets_Unicode_UTF16_ToUTF8((const PHX_u8*)lfnChars, lfnLen, candidateName, cap, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+            if (written > cap)
+                return PHX_ERROR_NAME_TOO_LONG;
         }
         else
         {
             PHX_Filesystem_FAT_BuildShortName(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, candidateName);
         }
 
-        if (PHX_Filesystem_FAT_NameEquals(candidateName, name))
+        if (PHX_Charsets_Unicode_UTF8_CompareSimpleCaseInsensitive(candidateName, PHX_Charsets_Unicode_UTF8_Length(candidateName, sizeof(candidateName)), name, nameLen) == 0)
         {
             const PHX_u32 startCluster = (useLfn == PHX_TRUE) ? lfnStartCluster : entryCluster;
             const PHX_u32 startIndex = (useLfn == PHX_TRUE) ? lfnStartIndex : entryIndex;

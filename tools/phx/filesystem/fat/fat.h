@@ -386,7 +386,6 @@ void PHX_Filesystem_FAT_LFN_ExtractChars(const PHX_Byte* lfn, PHX_u16 out[13]);
 PHX_Byte PHX_Filesystem_FAT_LFN_Checksum(const PHX_Byte shortName[11]);
 void PHX_Filesystem_FAT_LFN_BuildEntry(const PHX_u16* utf16Name, PHX_u32 totalChars, PHX_u32 totalSlots, PHX_u32 slotIndex, PHX_Byte checksum, PHX_Byte* entryOut);
 
-PHX_Bool PHX_Filesystem_FAT_NameEquals(const char* a, const char* b);
 void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13]);
 void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_Byte outCount, char* out);
 
@@ -394,9 +393,6 @@ PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem_Device* fs, PHX_F
 
 PHX_u32 PHX_Filesystem_FAT_HashName(const char* name);
 void PHX_Filesystem_FAT_HashToChars(PHX_u32 hash, char out[4]);
-
-PHX_u32 PHX_Filesystem_FAT_UTF16_To_UTF8(const PHX_u16* units, PHX_u32 count, char* out, PHX_u32 maxOut);
-PHX_u32 PHX_Filesystem_FAT_UTF8_To_UTF16(const char* in, PHX_u32 count, PHX_u16* out, PHX_u32 maxOut);
 
 
 PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_Byte* bootsector);

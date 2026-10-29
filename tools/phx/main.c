@@ -338,7 +338,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     }
 
     PHX_File_Device fileDevice;
-    if ((detailedResult = PHX_Native_File_Open(imagePath, (readonly == PHX_TRUE) ? PHX_NATIVE_FILE_MODE_READ : PHX_NATIVE_FILE_MODE_READ_WRITE, &fileDevice, imageSize)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_Native_File_Open(imagePath, (command == PHX_COMMAND_DISK_CREATE) ? PHX_NATIVE_FILE_MODE_CREATE : ((readonly == PHX_TRUE) ? PHX_NATIVE_FILE_MODE_READ : PHX_NATIVE_FILE_MODE_READ_WRITE), &fileDevice, imageSize)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
         return 1;

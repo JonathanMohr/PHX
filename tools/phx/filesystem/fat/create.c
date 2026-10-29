@@ -1,5 +1,7 @@
 #include "fat.h"
 
+#include <phx/charsets/unicode.h>
+
 // TODO: IMPORTANT: CHECK writeWithLFN
 PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_Filesystem_Node_Type type, PHX_Filesystem_Node_Attribute attributes, const char* name, PHX_Filesystem_Node* nodeOut)
 {
@@ -17,14 +19,15 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
     while (*namePtr)
         namePtr++;
 
-    if ((namePtr - name) > 255)
+    // TODO: Check if valid
+
+    PHX_u16 utf16Name[20 * 13];
+    PHX_Size utf16Count = PHX_Charsets_Unicode_UTF8_ToUTF16(name, (PHX_Size)(namePtr - name), (PHX_u8*)utf16Name, 255, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+    if (utf16Count > 255)
     {
         if (newExtra) fs->context->allocator->free(fs->context->allocator, newExtra);
         return PHX_ERROR_NAME_TOO_LONG;
     }
-
-    PHX_u16 utf16Name[20 * 13];
-    PHX_u32 utf16Count = PHX_Filesystem_FAT_UTF8_To_UTF16(name, (PHX_u32)(namePtr - name), utf16Name, 255);
     utf16Name[utf16Count++] = 0;
 
     namePtr = name;
@@ -54,7 +57,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
     }
 
     
-    const PHX_u32 lfnSlotCount = (utf16Count + 13 - 1) / 13;
+    const PHX_u32 lfnSlotCount = (PHX_u32)((utf16Count + 13 - 1) / 13);
     const PHX_u32 totalEntries = lfnSlotCount + 1;
     const PHX_Byte lfnChecksum = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
 
@@ -135,7 +138,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
     {
         if (i < totalEntries - 1)
         {
-            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, utf16Count, lfnSlotCount, i, lfnChecksum, entries[i]);
+            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, (PHX_u32)utf16Count, lfnSlotCount, i, lfnChecksum, entries[i]);
         }
         else
         {

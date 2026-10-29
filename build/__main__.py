@@ -1,4 +1,4 @@
-from build.defs import OS, ARCH, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext, BuildMode, TESTCLASS
+from build.defs import OS, ARCH, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext, BuildMode, TESTCLASS, ThirdPartyLibrary
 
 from build.toolchain.toolchain import Toolchain
 from build.toolchain.get import Get_LLVM_Toolchain
@@ -50,11 +50,11 @@ def Build_Sources_To_Objects(logger: logging.Logger, toolchain: Toolchain, mode:
 
     return objects
 
-def Build_Static_Library(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, src_dir: Path, build_dir: Path, name: str, doCompileCommands: bool) -> Path:
+def Build_Static_Library(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, src_dir: Path, extra_objects: list[Path], build_dir: Path, name: str, doCompileCommands: bool) -> Path:
     objects = Build_Sources_To_Objects(logger, toolchain, mode, src_dir, build_dir, doCompileCommands)
     
     try:
-        lib = toolchain.Archive_Objects(mode, objects, name, build_dir)
+        lib = toolchain.Archive_Objects(mode, [*extra_objects, *objects], name, build_dir)
 
     except Exception as e:
         logger.error(f"Archiving static library {name} failed: {e}")
@@ -73,90 +73,6 @@ def Build_Dynamic_Library(logger: logging.Logger, toolchain: Toolchain, mode: Bu
         raise e
     
     return dylib, implib, debug_info
-
-# uses: target_os, target_arch, werror, portability, linking, assertions, sanitizers, host, sysroot
-# kind of: optimization, uses it for release and release_with_debug_info, sets it for debug
-# sets: lto, pic, hidden, debuginfo
-def Build_Dist_Library(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, dll_libraries: list[Path], src_dir: Path, build_dir: Path, name: str) -> tuple[list[tuple[Path, Path | None, Path | None]], list[Path]]:
-
-    dynamic_libs: list[tuple[Path, Path | None, Path | None]] = []
-    static_libs: list[Path] = []
-
-    # Release
-
-    r_name = f"{name}"
-    sr_name = f"{name}s"
-    r_build_dir = build_dir / r_name
-
-    r_mode = copy.deepcopy(mode)
-    r_mode.lto = True
-    r_mode.pic = True
-    r_mode.hidden = True
-    r_mode.debuginfo = False
-
-    sr_mode = copy.deepcopy(mode)
-    sr_mode.lto = False
-    sr_mode.pic = False
-    sr_mode.hidden = True
-    sr_mode.debuginfo = False
-
-    r_dynamic_lib, r_import_lib, r_debug_info = Build_Dynamic_Library(logger, toolchain, r_mode, dll_libraries, src_dir, r_build_dir / "dynamic", r_name, False)
-    r_static_lib = Build_Static_Library(logger, toolchain, sr_mode, src_dir, r_build_dir / "static", sr_name, False)
-
-    dynamic_libs.append((r_dynamic_lib, r_import_lib, r_debug_info))
-    static_libs.append(r_static_lib)
-
-    # Release with debug info
-
-    rd_name = f"{name}rd"
-    srd_name = f"{name}srd"
-    rd_build_dir = build_dir / rd_name
-
-    rd_mode = copy.deepcopy(mode)
-    rd_mode.lto = True
-    rd_mode.pic = True
-    rd_mode.hidden = True
-    rd_mode.debuginfo = True
-
-    srd_mode = copy.deepcopy(mode)
-    srd_mode.lto = False
-    srd_mode.pic = False
-    srd_mode.hidden = True
-    srd_mode.debuginfo = True
-
-    rd_dynamic_lib, rd_import_lib, rd_debug_info = Build_Dynamic_Library(logger, toolchain, rd_mode, dll_libraries, src_dir, rd_build_dir / "dynamic", rd_name, False)
-    rd_static_lib = Build_Static_Library(logger, toolchain, srd_mode, src_dir, rd_build_dir / "static", srd_name, False)
-
-    dynamic_libs.append((rd_dynamic_lib, rd_import_lib, rd_debug_info))
-    static_libs.append(rd_static_lib)
-
-    # Debug
-
-    d_name = f"{name}d"
-    sd_name = f"{name}sd"
-    d_build_dir = build_dir / d_name
-
-    d_mode = copy.deepcopy(mode)
-    d_mode.optimization = OPTIMIZATION.NONE
-    d_mode.lto = False
-    d_mode.pic = True
-    d_mode.hidden = True
-    d_mode.debuginfo = True
-
-    sd_mode = copy.deepcopy(mode)
-    sd_mode.optimization = OPTIMIZATION.NONE
-    sd_mode.lto = False
-    sd_mode.pic = False
-    sd_mode.hidden = True
-    sd_mode.debuginfo = True
-
-    d_dynamic_lib, d_import_lib, d_debug_info = Build_Dynamic_Library(logger, toolchain, d_mode, dll_libraries, src_dir, d_build_dir / "dynamic", d_name, True)
-    d_static_lib = Build_Static_Library(logger, toolchain, sd_mode, src_dir, d_build_dir / "static", sd_name, False)
-
-    dynamic_libs.append((d_dynamic_lib, d_import_lib, d_debug_info))
-    static_libs.append(d_static_lib)
-
-    return dynamic_libs, static_libs
 
 
 def Build_Executable(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, static_libs: list[Path], libraries: list[tuple[list[tuple[Path, Path | None, Path | None]], list[Path]]], src_dir: Path, build_dir: Path, name: str) -> tuple[Path, Path | None]:
@@ -409,6 +325,7 @@ def main() -> bool:
     libs_dir = project_dir / "libs"
     tools_dir = project_dir / "tools"
     embed_dir = project_dir / "embed"
+    third_party_dir = project_dir / "third_party"
 
     archives_path = project_dir / "archives"
 
@@ -499,6 +416,51 @@ def main() -> bool:
     toolchain.Add_Define("PHX_BUILD")
 
     try:
+        # third_party
+        third_party_libraries: list[ThirdPartyLibrary] = []
+
+        third_party_library_paths = [d for d in third_party_dir.iterdir() if d.is_dir()]
+        third_party_build_dir = build_dir / "third-party"
+
+        third_party_toolchain = copy.copy(toolchain)
+        third_party_toolchain.Add_Include_Directory(include_dir)
+        third_party_toolchain.Add_Define("UTF8PROC_STATIC")
+
+        third_party_build_mode = copy.copy(buildMode)
+        third_party_build_mode.host = HOST.HOSTED
+
+        for third_party_library in third_party_library_paths:
+            files_path = third_party_library / "files.txt"
+
+            code_build_dir = third_party_build_dir / third_party_library.name
+            code_dir = third_party_library / "code"
+
+            if files_path.exists():
+                objects: list[Path] = []
+                files = files_path.read_text()
+                for file_name in files.splitlines():
+                    if not file_name: continue
+                    file = code_dir / file_name
+                    if file.suffix == ".c":
+                        object = third_party_toolchain.Compile_C_Source(third_party_build_mode, file, file.relative_to(code_dir), code_build_dir, False)
+                    elif file.suffix == ".cpp":
+                        object = third_party_toolchain.Compile_CPP_Source(third_party_build_mode, file, file.relative_to(code_dir), code_build_dir, False)
+                    else:
+                        logger.warning(f"Invalid source extension of file {file}")
+                        continue
+                    objects.append(object)
+            else:
+                objects = Build_Sources_To_Objects(logger, third_party_toolchain, third_party_build_mode, code_dir, code_build_dir, False)
+
+            lib = ThirdPartyLibrary(
+                third_party_library.name,
+                third_party_library,
+
+                [code_dir],
+                objects
+            )
+            third_party_libraries.append(lib)
+
         # Embed
         embed_build_dir = build_dir / "embed"
         embed_include_dir = build_dir / "embed-include"
@@ -522,43 +484,67 @@ def main() -> bool:
         ## core
         base_path = libs_dir / "core"
 
-        base_toolchain = copy.copy(toolchain)
+        base_toolchain = copy.deepcopy(toolchain)
+        base_toolchain.context = toolchain.context
         base_toolchain.Add_Include_Directory(include_dir)
 
-        base_build_mode = copy.copy(buildMode)
+        base_build_mode = copy.deepcopy(buildMode)
         base_build_mode.host = HOST.HOSTED
 
-        base_lib = Build_Static_Library(logger, base_toolchain, base_build_mode, base_path, libs_build_dir / "core", "phx-core", True)
+        base_lib = Build_Static_Library(logger, base_toolchain, base_build_mode, base_path, [], libs_build_dir / "core", "phx-core", True)
+
+        ## charsets
+        charsets_path = libs_dir / "charsets"
+
+        charsets_toolchain = copy.deepcopy(toolchain)
+        charsets_toolchain.context = toolchain.context
+        charsets_toolchain.Add_Include_Directory(include_dir)
+
+        charsets_build_mode = copy.deepcopy(buildMode)
+        charsets_build_mode.host = HOST.HOSTED
+
+        charsets_objects: list[Path] = []
+
+        for third_party_library in third_party_libraries:
+            if third_party_library.name == "utf8proc":
+                for include_directory in third_party_library.include_paths:
+                    charsets_toolchain.Add_Include_Directory(include_directory)
+                charsets_objects.extend(third_party_library.objects)
+
+        charsets_lib = Build_Static_Library(logger, charsets_toolchain, charsets_build_mode, charsets_path, charsets_objects, libs_build_dir / "charsets", "phx-charsets", True)
 
         ## native
         native_path = libs_dir / "native"
 
-        native_toolchain = copy.copy(toolchain)
+        native_toolchain = copy.deepcopy(toolchain)
+        native_toolchain.context = toolchain.context
         native_toolchain.Add_Include_Directory(include_dir)
 
-        native_build_mode = copy.copy(buildMode)
+        native_build_mode = copy.deepcopy(buildMode)
         native_build_mode.host = HOST.HOSTED
 
-        native_lib = Build_Static_Library(logger, native_toolchain, native_build_mode, native_path, libs_build_dir / "native", "phx-native", True)
+        native_lib = Build_Static_Library(logger, native_toolchain, native_build_mode, native_path, [], libs_build_dir / "native", "phx-native", True)
 
 
         # PHX
-        phxToolchain = copy.copy(toolchain)
+        phxToolchain = copy.deepcopy(toolchain)
+        phxToolchain.context = toolchain.context
         phxToolchain.Add_Include_Directory(include_dir)
         phxToolchain.Add_Include_Directory(tools_dir / "phx")
         phxToolchain.Add_Include_Directory(embed_include_dir)
 
-        phxBuildMode = copy.copy(buildMode)
+        phxBuildMode = copy.deepcopy(buildMode)
         phxBuildMode.host = HOST.HOSTED
 
-        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [native_lib, base_lib], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
+        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [native_lib, base_lib, charsets_lib], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
         # PHX-LFS
-        phx_lfsToolchain = copy.copy(toolchain)
+        phx_lfsToolchain = copy.deepcopy(toolchain)
+        phx_lfsToolchain.context = toolchain.context
         phx_lfsToolchain.Add_Include_Directory(tools_dir / "phx-lfs")
 
-        phx_lfsBuildMode = copy.copy(buildMode)
+        phx_lfsBuildMode = copy.deepcopy(buildMode)
         phx_lfsBuildMode.werror = False
         phx_lfsBuildMode.host = HOST.HOSTED
 
@@ -580,6 +566,14 @@ def main() -> bool:
         license = project_dir / "LICENSES"
         dist_license = dist_dir / "LICENSES"
         Copy_Path(logger, license, dist_license)
+
+        ## third_party
+        dist_third_party = dist_dir / "third_party"
+        for third_party_library in third_party_libraries:
+            dist_third_party_dir = dist_third_party / third_party_library.name
+            extra_dir = third_party_library.dir / "extra"
+
+            Copy_Path(logger, extra_dir, dist_third_party_dir)
 
         ## docs
         docs = project_dir / "docs"

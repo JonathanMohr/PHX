@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "phx/charsets/unicode.h"
 
 PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* srcDir, const char* srcName, PHX_Filesystem_Node* dstDir, const char* dstName, PHX_Filesystem_Node_Number* newNumberOut)
 {
@@ -36,6 +37,8 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
 
     if ((namePtr - dstName) > 255)
         return PHX_ERROR_NAME_TOO_LONG;
+
+    const PHX_Size srcLen = strlen(srcName);
 
     while (1)
     {
@@ -148,15 +151,20 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
         char candidateName[781];
         if (useLfn == PHX_TRUE)
         {
-            PHX_u32 written = PHX_Filesystem_FAT_UTF16_To_UTF8(lfnChars, 20 * 13, candidateName, sizeof(candidateName) - 1);
-            candidateName[written] = '\0';
+            memset(candidateName, 0, sizeof(candidateName));
+            const PHX_Size lfnLen = PHX_Charsets_Unicode_UTF16_Length((const PHX_u8*)lfnChars, 20 * 13);
+            const PHX_Size cap = sizeof(candidateName) - 1;
+
+            PHX_Size written = PHX_Charsets_Unicode_UTF16_ToUTF8((const PHX_u8*)lfnChars, lfnLen, candidateName, cap, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+            if (written > cap)
+                return PHX_ERROR_NAME_TOO_LONG;
         }
         else
         {
             PHX_Filesystem_FAT_BuildShortName(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, candidateName);
         }
 
-        if (PHX_Filesystem_FAT_NameEquals(candidateName, srcName))
+        if (PHX_Charsets_Unicode_UTF8_CompareSimpleCaseInsensitive(candidateName, PHX_Charsets_Unicode_UTF8_Length(candidateName, sizeof(candidateName)), srcName, srcLen) == 0)
         {
             found = PHX_TRUE;
             memcpy(mainEntry, entry, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
@@ -185,7 +193,9 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
 
 
     PHX_u16 utf16Name[20 * 13];
-    PHX_u32 utf16Count = PHX_Filesystem_FAT_UTF8_To_UTF16(dstName, (PHX_u32)(namePtr - dstName), utf16Name, 255);
+    PHX_Size utf16Count = PHX_Charsets_Unicode_UTF8_ToUTF16(dstName, (PHX_Size)(namePtr - dstName), (PHX_u8*)utf16Name, 255, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+    if (utf16Count > 255)
+        return PHX_ERROR_NAME_TOO_LONG;
     utf16Name[utf16Count++] = 0;
 
     namePtr = dstName;
@@ -211,7 +221,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
     if ((result = PHX_Filesystem_FAT_GenerateShortName(fs, dstDir, firstChars, hash, ext, shortName)) != PHX_SUCCESS)
         return result;
 
-    const PHX_u32 lfnSlotCount = (utf16Count + 13 - 1) / 13;
+    const PHX_u32 lfnSlotCount = (PHX_u32)((utf16Count + 13 - 1) / 13);
     const PHX_u32 totalEntries = lfnSlotCount + 1;
     const PHX_Byte lfnChecksumNew = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
 
@@ -227,7 +237,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
     {
         if (i < totalEntries - 1)
         {
-            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, utf16Count, lfnSlotCount, i, lfnChecksumNew, entries[i]);
+            PHX_Filesystem_FAT_LFN_BuildEntry(utf16Name, (PHX_u32)utf16Count, lfnSlotCount, i, lfnChecksumNew, entries[i]);
         }
         else
         {

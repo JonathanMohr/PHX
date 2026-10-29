@@ -1,12 +1,8 @@
 #include "gpt.h"
-#include "phx/context.h"
-#include "phx/device/disk.h"
-#include "phx/device/partition.h"
-#include "phx/result.h"
-#include "phx/types.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
+#include <phx/charsets/unicode.h>
 
 #include <embed/gpt.h>
 
@@ -414,10 +410,18 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
         PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_FIL, partition->partition.start);
         PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_FIL, partition->partition.start + partition->partition.size - 1);
         PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_ATR, partition->attributes);
-        PHX_u8* name16 = rawPartition + PHX_GPT_PENTRY_NAM;
 
-        (void)name16;
-        // TODO
+        const char* name = partition->partition.name;
+        const PHX_Size nameLen = strlen(partition->partition.name);
+
+        // TODO: Validate name
+
+        memset(rawPartition + PHX_GPT_PENTRY_NAM, 0, 72);
+        PHX_Size units = PHX_Charsets_Unicode_UTF8_ToUTF16(name, nameLen, rawPartition + PHX_GPT_PENTRY_NAM, 36, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+        if (units > 36)
+        {
+            // TODO: Too long
+        }
     }
 
     const PHX_u32 partitionArrayCrc = crc32_calculate(data->partitionArrayBuffer, partitionArraySectors * table->disk->sectorSize);
@@ -830,9 +834,20 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
 
         partition->partition.type = GPT_GetPartitionType(partitionTypeGuid);
 
-        (void)name16;
-        partition->partition.name[0] = '\0'; // TODO
+        // Max: 36 * 3 = 108 UTF 8 bytes
+        const PHX_Size name16Len = PHX_Charsets_Unicode_UTF16_Length(name16, 36);
 
+        memset(partition->partition.name, 0, sizeof(partition->partition.name));
+        PHX_Size nameLen = PHX_Charsets_Unicode_UTF16_ToUTF8(name16, name16Len, partition->partition.name, sizeof(partition->partition.name) - 1, PHX_CHARSETS_UNICODE_ENDIANNESS_LITTLE);
+
+        if (nameLen > sizeof(partition->partition.name) - 1)
+        {
+            // TODO: Could not read everything
+            context->allocator->free(context->allocator, partitionBuffer);
+            context->allocator->free(context->allocator, partitions);
+            GPT_FreeData(context, data);
+            return PHX_ERROR_INTERNAL;
+        }
 
         partition->type = partitionTypeGuid;
         partition->attributes = partitionAttributes;

@@ -65,6 +65,14 @@ python -m build
 
 After building, `./.dist` will contain the install prefix (`/bin`, etc.). Copy its contents to a location of your choice (e.g. `~/.local/phx`), then either add its directories to you `PATH` (and possibly `MANPATH`, etc.), or link the necessary files and directories into a directory that's already on it.
 
+## Third-Party
+
+This distribution bundles the following third-party components:
+
+- [utf8proc](https://github.com/JuliaStrings/utf8proc) (MIT, Unicode-DFS-2016), see `third_party/utf8proc/`
+
+License texts are in `LICENSES/`.
+
 ## License
 
 This project is licensed under Apache-2.0.

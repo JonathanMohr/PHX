@@ -11,3 +11,22 @@ path = "embed/**"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Jonathan Mohr"
 SPDX-License-Identifier = "Apache-2.0 OR 0BSD"
+
+[[annotations]]
+path = ["third_party/utf8proc/code/utf8proc.c", "third_party/utf8proc/code/utf8proc.h"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+    "2014-2021 Steven G. Johnson, Jiahao Chen, Tony Kelman, Jonas Fonseca, and other contributors",
+    "2009, 2013 Public Software Group e. V., Berlin, Germany"
+]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "third_party/utf8proc/code/utf8proc_data.c"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+    "1991-2007 Unicode, Inc.",
+    "2014-2021 Steven G. Johnson, Jiahao Chen, Tony Kelman, Jonas Fonseca, and other contributors",
+    "2009, 2013 Public Software Group e. V., Berlin, Germany"
+]
+SPDX-License-Identifier = "MIT AND Unicode-DFS-2016"

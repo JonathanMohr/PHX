@@ -1,5 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
+from pathlib import Path
 import logging
 
 from build.cache import BuildCache
@@ -65,6 +66,15 @@ class BuildContext:
     logger: logging.Logger
     buildCache: BuildCache
     compileCommands: CompileCommands
+
+
+@dataclass()
+class ThirdPartyLibrary:
+    name: str
+    dir: Path
+
+    include_paths: list[Path]
+    objects: list[Path]
 
 
 class TESTCLASS(Enum):
