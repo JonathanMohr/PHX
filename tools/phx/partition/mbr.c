@@ -215,6 +215,9 @@ static PHX_Result MBR_ChangeBootsector(PHX_Partition_Table_Device* table, const 
 
 static inline void MBR_UpdatePartitionInfo(MBR_Partition* partition)
 {
+    if (partition->type == 0x00)
+        partition->type = MBR_TYPE_UNKNOWN;
+
     partition->partition.flags &= ~PHX_PARTITION_FLAGS_CHANGED;
 }
 
