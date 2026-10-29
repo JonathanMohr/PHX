@@ -578,8 +578,6 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 else
                     fputs("Error while reading partition table\n", stderr);
 
-                printf("%i\n", result);
-
                 diskDevice.close(&diskDevice);
                 return 1;
             }

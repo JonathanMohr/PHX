@@ -1,4 +1,5 @@
 #include "gpt.h"
+#include "phx/device/partition.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
@@ -370,6 +371,8 @@ static inline void GPT_WriteProtectedMBR(PHX_u8* bootsector, PHX_Disk_Device* di
 
     PHX_Write_Le_u32(rawPartition + MBR_PARTITION_STL, (start > 0xFFFFFFFF) ? 0xFFFFFFFF : (PHX_u32)start);
     PHX_Write_Le_u32(rawPartition + MBR_PARTITION_SEC, (size > 0xFFFFFFFF) ? 0xFFFFFFFF : (PHX_u32)size);
+
+    PHX_Write_Le_u16(bootsector + MBR_BOOTSECTOR_SIG, MBR_SIGNATURE);
 }
 
 static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
@@ -382,6 +385,9 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
 
     memcpy(data->bootsectorBuffer, data->bootsectorBuffer, 512);
     GPT_WriteProtectedMBR(data->bootsectorBuffer, table->disk);
+
+    if (table->disk->write(table->disk, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
+        return PHX_ERROR_IO;
 
     const GUID diskGuid = {table->signature.first, table->signature.second};
 
@@ -403,12 +409,21 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
         GPT_Partition* partition = &((GPT_Partition*)table->partitions)[i];
         PHX_u8* rawPartition = data->partitionArrayBuffer + i * partitionEntrySize;
 
+        if (partition->partition.flags & PHX_PARTITION_FLAGS_CHANGED)
+            GPT_UpdatePartitionInfo(partition);
+
+        if (partition->partition.type == PHX_PARTITION_TYPE_EMPTY)
+        {
+            memset(rawPartition, 0, partitionEntrySize);
+            break;
+        }
+
         GUID partitionGuid = {partition->partition.signature.first, partition->partition.signature.second};
 
         write_guid(rawPartition + PHX_GPT_PENTRY_TYP, partition->type);
         write_guid(rawPartition + PHX_GPT_PENTRY_PGU, partitionGuid);
         PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_FIL, partition->partition.start);
-        PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_FIL, partition->partition.start + partition->partition.size - 1);
+        PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_LAL, partition->partition.start + partition->partition.size - 1);
         PHX_Write_Le_u64(rawPartition + PHX_GPT_PENTRY_ATR, partition->attributes);
 
         const char* name = partition->partition.name;
@@ -712,7 +727,12 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
         if (partitionEntrySizeI % 128 != 0 || !isPowerOfTwo(partitionEntrySizeI / 128))
             continue;
 
-        if (firstUsableLbaI < partitionEntryArraySectors || startLbaPartitionEntryArray > firstUsableLbaI - partitionEntryArraySectors)
+        if (startLbaPartitionEntryArray > device->totalSectors || partitionEntryArraySectors > device->totalSectors - startLbaPartitionEntryArray)
+            continue;
+
+        int beforeUsable = startLbaPartitionEntryArray + partitionEntryArraySectors <= firstUsableLbaI;
+        int afterUsable  = startLbaPartitionEntryArray > lastUsableLbaI;
+        if (!beforeUsable && !afterUsable)
             continue;
 
         if (lastUsableLbaI >= device->totalSectors - 1 - partitionEntryArraySectors)
@@ -946,7 +966,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     outTable->partitionSlots = partitionEntryCount;
 
     outTable->startUsable = bootsectorSectors + 1 + partitionArraySectors;
-    outTable->sizeUsable = device->sectorSize - 1 - partitionArraySectors;
+    outTable->sizeUsable = device->totalSectors - bootsectorSectors - 2 * (1 + partitionArraySectors);
 
     outTable->context = context;
     outTable->disk = device;
