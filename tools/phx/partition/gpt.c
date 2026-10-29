@@ -383,7 +383,7 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
     if (table->disk->read(table->disk, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
         return PHX_ERROR_IO;
 
-    memcpy(data->bootsectorBuffer, data->bootsectorBuffer, 512);
+    memcpy(data->bootsectorBuffer, data->bootsector, 512);
     GPT_WriteProtectedMBR(data->bootsectorBuffer, table->disk);
 
     if (table->disk->write(table->disk, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
