@@ -5,6 +5,8 @@
 #ifdef _WIN32
 #   define WIN32_LEAN_AND_MEAN
 #   include <windows.h>
+#   include <winioctl.h>
+#   include <io.h>
 #   include <stdlib.h>
 #elif defined(__APPLE__) || defined(__linux__)
 #   ifndef _XOPEN_SOURCE
@@ -45,10 +47,39 @@ static PHX_File_Operations PHX_Native_File_Operations = {
 static inline PHX_Result PHX_File_IsBlockDevice(FILE* file, PHX_Bool* outIsBlockDevice)
 {
 #if defined(_WIN32)
-    // TODO
-    (void)file;
-    *outIsBlockDevice = PHX_FALSE;
-    return PHX_SUCCESS;
+    const int fd = _fileno(file);
+    if (fd < 0)
+        return PHX_ERROR_IO;
+
+    const intptr_t osfh = _get_osfhandle(fd);
+    if (osfh == -1)
+        return PHX_ERROR_IO;
+
+    HANDLE h = (HANDLE)osfh;
+
+    if (GetFileType(h) != FILE_TYPE_DISK)
+    {
+        *outIsBlockDevice = PHX_FALSE;
+        return PHX_SUCCESS;
+    }
+
+    DISK_GEOMETRY_EX geo;
+    DWORD returned = 0;
+    if (DeviceIoControl(h, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
+                        NULL, 0, &geo, sizeof(geo), &returned, NULL))
+    {
+        *outIsBlockDevice = (geo.Geometry.BytesPerSector != 0) ? PHX_TRUE : PHX_FALSE;
+        return PHX_SUCCESS;
+    }
+
+    const DWORD err = GetLastError();
+    if (err == ERROR_INVALID_FUNCTION || err == ERROR_NOT_SUPPORTED || err == ERROR_INVALID_PARAMETER)
+    {
+        *outIsBlockDevice = PHX_FALSE;
+        return PHX_SUCCESS;
+    }
+
+    return PHX_ERROR_IO;
 #elif defined(__APPLE__)
     const int fd = fileno(file);
 
@@ -94,10 +125,56 @@ typedef struct
 static inline PHX_Result PHX_File_GetBlockDeviceInfo(FILE* file, PHX_File_BlockDeviceInfo* infoOut)
 {
 #if defined(_WIN32)
-    // TODO
-    (void)file;
-    (void)infoOut;
-    return PHX_ERROR_INTERNAL;
+    const int fd = _fileno(file);
+    if (fd < 0)
+        return PHX_ERROR_IO;
+
+    const intptr_t osfh = _get_osfhandle(fd);
+    if (osfh == -1)
+        return PHX_ERROR_IO;
+
+    HANDLE h = (HANDLE)osfh;
+
+    if (GetFileType(h) != FILE_TYPE_DISK)
+        return PHX_ERROR_INTERNAL;
+
+    DISK_GEOMETRY_EX geo;
+    DWORD returned = 0;
+    if (!DeviceIoControl(h, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, NULL, 0, &geo, sizeof(geo), &returned, NULL))
+    {
+        const DWORD err = GetLastError();
+        if (err == ERROR_INVALID_FUNCTION || err == ERROR_NOT_SUPPORTED)
+            return PHX_ERROR_INTERNAL;
+        return PHX_ERROR_IO;
+    }
+
+    const DWORD lbs = geo.Geometry.BytesPerSector;
+    if (lbs == 0)
+        return PHX_ERROR_IO;
+
+    const unsigned long long bytes = (unsigned long long)geo.DiskSize.QuadPart;
+
+    DWORD pbs = lbs;
+    {
+        STORAGE_PROPERTY_QUERY query;
+        ZeroMemory(&query, sizeof(query));
+        query.PropertyId = StorageAccessAlignmentProperty;
+        query.QueryType  = PropertyStandardQuery;
+
+        STORAGE_ACCESS_ALIGNMENT_DESCRIPTOR align;
+        ZeroMemory(&align, sizeof(align));
+
+        DWORD ret2 = 0;
+        if (DeviceIoControl(h, IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &align, sizeof(align), &ret2, NULL) && align.BytesPerPhysicalSector != 0)
+        {
+            pbs = align.BytesPerPhysicalSector;
+        }
+    }
+
+    infoOut->blockSize = (PHX_SectorSize)lbs;
+    infoOut->blockCount = (PHX_SectorSize)(bytes / lbs);
+    infoOut->physicalBlockSize = (PHX_SectorSize)pbs;
+
 #elif defined (__APPLE__)
     const int fd = fileno(file);
 
@@ -283,6 +360,14 @@ PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode m
 
         if (isBlockDevice == PHX_TRUE)
         {
+            if (setvbuf(file, NULL, _IONBF, 0) != 0)
+            {
+                fclose(file);
+                result.msg = "Could not disable buffering";
+                result.code = PHX_ERROR_IO;
+                return result;
+            }
+
             PHX_File_BlockDeviceInfo info;
             if ((sResult = PHX_File_GetBlockDeviceInfo(file, &info)) != PHX_SUCCESS)
             {
