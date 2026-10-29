@@ -4,20 +4,27 @@
 
 ; TODO: Actually load partition
 
-start:
+entry:
     cli
 
     xor ax, ax
 
     mov ds, ax
     mov es, ax
-
     mov ss, ax
     mov sp, 0x7C00
 
-    xor di, di
+    mov si, sp
+    mov di, 0x0600
+    mov cx, 512
+    cld
+    rep movsb
 
-    jmp 0x0000:.after
+    jmp 0x0000:at_0600
+
+at_0600:
+    mov [boot_drive], dl
+    sti
 
 .after:
     sti
@@ -68,16 +75,14 @@ restart:
     test ah, ah
     js .fallback
 [cpu 286]
-    lidt [triple_fault_idt]
+    lidt [cs:.fallback + 1]
     int 3
 
 [cpu 8086]
 .fallback:
     jmp 0xFFFF:0x0000
 
-
-triple_fault_idt:
-    times 6 db 0
+boot_drive db 0
 
 not_bootable_msg db "This is not a legacy bootable GPT disk.", 0
 press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
