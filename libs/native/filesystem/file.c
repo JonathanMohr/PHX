@@ -1,3 +1,5 @@
+#include "phx/result.h"
+#include "phx/types.h"
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <phx/native/filesystem.h>
@@ -6,7 +8,7 @@
 #   define WIN32_LEAN_AND_MEAN
 #   include <windows.h>
 #   include <stdlib.h>
-#else
+#elif defined(__APPLE__) || defined(__linux__)
 #   ifndef _XOPEN_SOURCE
 #       define _XOPEN_SOURCE 700
 #   endif
@@ -14,9 +16,23 @@
 #       define _FILE_OFFSET_BITS 64
 #   endif
 #   include <sys/types.h>
+#   include <sys/ioctl.h>
 #   include <sys/stat.h>
 #   include <errno.h>
 #   include <string.h>
+
+#   ifdef __APPLE__
+#       include <sys/disk.h>
+#   endif
+
+#   ifdef __linux__
+#       include <linux/fs.h>
+#   endif
+
+#else
+
+#   error "Unknown OS"
+
 #endif
 
 #include <stdio.h>
@@ -26,6 +42,108 @@ static PHX_File_Operations PHX_Native_File_Operations = {
     PHX_Native_File_Write,
     PHX_Native_File_Close
 };
+
+
+static inline PHX_Result PHX_File_IsBlockDevice(FILE* file, PHX_Bool* outIsBlockDevice)
+{
+#if defined(_WIN32)
+    // TODO
+    *outIsBlockDevice = PHX_FALSE;
+    return PHX_SUCCESS;
+#elif defined(__APPLE__)
+    const int fd = fileno(file);
+
+    struct stat st;
+    if (fstat(fd, &st) != 0)
+        return PHX_ERROR_IO;
+
+    if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode))
+    {
+        *outIsBlockDevice = PHX_FALSE;
+        return PHX_SUCCESS;
+    }
+
+    uint32_t bs = 0;
+    if (ioctl(fd, DKIOCGETBLOCKSIZE, &bs) != 0)
+    {
+        if (errno == ENOTTY || errno == EINVAL) { *outIsBlockDevice = PHX_FALSE; return PHX_SUCCESS; }
+        return PHX_ERROR_IO;
+    }
+    *outIsBlockDevice = (bs != 0) ? PHX_TRUE : PHX_FALSE;
+#elif defined(__linux__)
+    struct stat st;
+    if (fstat(fileno(file), &st) != 0)
+        return PHX_ERROR_IO;
+
+    if (S_ISBLK(st.st_mode))
+        *outIsBlockDevice = PHX_TRUE;
+    else
+        *outIsBlockDevice = PHX_FALSE;
+#endif
+
+    return PHX_SUCCESS;
+}
+
+typedef struct
+{
+    PHX_SectorSize blockSize;
+    PHX_SectorSize blockCount;
+
+    PHX_SectorSize physicalBlockSize;
+} PHX_File_BlockDeviceInfo;
+
+static inline PHX_Result PHX_File_GetBlockDeviceInfo(FILE* file, PHX_File_BlockDeviceInfo* infoOut)
+{
+#if defined(_WIN32)
+    // TODO
+    return PHX_ERROR_INTERNAL;
+#elif defined (__APPLE__)
+    const int fd = fileno(file);
+
+    struct stat st;
+    if (fstat(fd, &st) != 0)
+        return PHX_ERROR_IO;
+
+    if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode))
+        return PHX_ERROR_INTERNAL;
+
+    uint32_t lbs = 0;
+    uint32_t pbs = 0;
+    uint64_t count = 0;
+
+    if (ioctl(fd, DKIOCGETBLOCKSIZE, &lbs) != 0 || lbs == 0) return PHX_ERROR_IO;
+    if (ioctl(fd, DKIOCGETBLOCKCOUNT, &count) != 0) return PHX_ERROR_IO;
+    if (ioctl(fd, DKIOCGETPHYSICALBLOCKSIZE, &pbs) != 0 || pbs == 0)
+        pbs = lbs;
+
+    infoOut->blockSize = lbs;
+    infoOut->blockCount = count;
+    infoOut->physicalBlockSize = pbs;
+#elif defined (__linux__)
+    const int fd = fileno(file);
+
+    struct stat st;
+    if (fstat(fd, &st) != 0)
+        return PHX_ERROR_IO;
+
+    if (!S_ISBLK(st.st_mode))
+        return PHX_ERROR_INTERNAL;
+
+    PHX_u64 bytes = 0;
+    int lbs = 0;
+    unsigned int pbs = 0;
+
+    if (ioctl(fd, BLKGETSIZE64, &bytes) != 0) return PHX_ERROR_IO;
+    if (ioctl(fd, BLKSSZGET, &lbs) != 0 || lbs <= 0) return PHX_ERROR_IO;
+    if (ioctl(fd, BLKPBSZGET, &pbs) != 0 || pbs == 0) pbs = (unsigned int)lbs;
+    
+    infoOut->blockSize = (PHX_SectorSize)lbs;
+    infoOut->blockCount = bytes / (PHX_u64)lbs;
+    infoOut->physicalBlockSize = pbs;
+#endif
+
+    return PHX_SUCCESS;
+}
 
 
 static inline PHX_Bool PHX_File_Seek(FILE* file, PHX_FileSize pos)
@@ -58,6 +176,8 @@ static PHX_Bool PHX_File_GetSize(FILE* file, PHX_FileSize* out)
     if (PHX_File_Seek(file, 0) != PHX_TRUE)
         return PHX_FALSE;
 
+    printf("ftello: %lli\n", size);
+
     *out = (PHX_FileSize)size;
     return PHX_TRUE;
 }
@@ -65,6 +185,7 @@ static PHX_Bool PHX_File_GetSize(FILE* file, PHX_FileSize* out)
 
 PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode mode, PHX_File_Device* out, PHX_FileSize size)
 {
+    PHX_Result sResult;
     PHX_DetailedResult result = {PHX_SUCCESS, "?"};
 
     const char* cMode;
@@ -146,19 +267,50 @@ PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode m
                 return result;
             }
         }
+
+        out->blockCount = fileSize;
+        out->blockSize = 1;
     }
     else
     {
-        if (PHX_File_GetSize(file, &fileSize) != PHX_TRUE)
+        PHX_Bool isBlockDevice;
+        if ((sResult = PHX_File_IsBlockDevice(file, &isBlockDevice)) != PHX_SUCCESS)
         {
             fclose(file);
-            result.msg = "Could not get size";
-            result.code = PHX_ERROR_IO;
+            result.msg = "Could not get file type";
+            result.code = sResult;
             return result;
+        }
+
+        if (isBlockDevice == PHX_TRUE)
+        {
+            PHX_File_BlockDeviceInfo info;
+            if ((sResult = PHX_File_GetBlockDeviceInfo(file, &info)) != PHX_SUCCESS)
+            {
+                fclose(file);
+                result.msg = "Could not get block size and block count";
+                result.code = PHX_ERROR_IO;
+                return result;
+            }
+
+            out->blockSize = info.blockSize;
+            out->blockCount = info.blockCount;
+        }
+        else
+        {
+            if (PHX_File_GetSize(file, &fileSize) != PHX_TRUE)
+            {
+                fclose(file);
+                result.msg = "Could not get size";
+                result.code = PHX_ERROR_IO;
+                return result;
+            }
+
+            out->blockSize = 1;
+            out->blockCount = fileSize;
         }
     }
 
-    out->fileSize = fileSize;
     out->ops = &PHX_Native_File_Operations;
     out->file = (void*)file;
     out->readonly = (mode == PHX_NATIVE_FILE_MODE_READ) ? PHX_TRUE : PHX_FALSE;

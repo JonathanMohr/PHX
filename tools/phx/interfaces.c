@@ -19,12 +19,12 @@ PHX_Disk_Interface* PHX_Disk_FindInterfaceByType(const char* type)
     return PHX_NULL;
 }
 
-PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_File_Device* fileDevice, PHX_Disk_Device* diskDeviceOut)
+PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_File_Device* fileDevice, PHX_Disk_Device* diskDeviceOut, PHX_Bool readonly)
 {
     for (PHX_Size i = 0; i < PHX_Disk_InterfaceCount; i++)
     {
         PHX_Disk_Interface* interface = PHX_Disk_Interfaces[i];
-        if (interface->getDevice(context, fileDevice, PHX_FALSE, diskDeviceOut) == PHX_TRUE)
+        if (interface->getDevice(context, fileDevice, readonly, diskDeviceOut) == PHX_TRUE)
             return PHX_SUCCESS;
     }
 

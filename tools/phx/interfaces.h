@@ -10,7 +10,7 @@ extern "C" {
 #include <phx/interface/filesystem.h>
 
 PHX_Disk_Interface* PHX_Disk_FindInterfaceByType(const char* type);
-PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_File_Device* fileDevice, PHX_Disk_Device* diskDeviceOut);
+PHX_Result PHX_Disk_Open(PHX_Context* context, PHX_File_Device* fileDevice, PHX_Disk_Device* diskDeviceOut, PHX_Bool readonly);
 
 PHX_Partition_Interface* PHX_Partition_FindInterfaceByType(const char* type);
 PHX_Result PHX_Partition_Open(PHX_Context* context, PHX_Disk_Device* diskDevice, PHX_Partition_Table_Device* partitionTableOut);

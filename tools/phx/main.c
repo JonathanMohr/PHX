@@ -15,8 +15,6 @@
 #include "disk/disk.h"
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
-#include "phx/device/partition.h"
-#include "phx/interface/partition.h"
 
 static void print_help(const char* name);
 
@@ -118,7 +116,7 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
 
-static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_File_Device* fileDevice, PHX_Disk_Device* diskOut, PHX_Disk_Device* partitionOut)
+static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_File_Device* fileDevice, PHX_Disk_Device* diskOut, PHX_Disk_Device* partitionOut, PHX_Bool readonly)
 {
     PHX_Result result;
     PHX_DetailedResult detailedResult;
@@ -154,7 +152,7 @@ static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str
         ((char*)name)[(PHX_Size)(lastColon - str)] = '\0';
     }
 
-    if ((detailedResult = PHX_Native_File_Open(lastColon ? name : str, PHX_NATIVE_FILE_MODE_READ_WRITE, fileDevice, 0)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_Native_File_Open(lastColon ? name : str, (readonly == PHX_TRUE) ? PHX_NATIVE_FILE_MODE_READ : PHX_NATIVE_FILE_MODE_READ_WRITE, fileDevice, 0)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", name, detailedResult.msg);
 
@@ -166,7 +164,7 @@ static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str
     if (lastColon)
         context->allocator->free(context->allocator, (char*)name);
     
-    if ((result = PHX_Disk_Open(context, fileDevice, diskOut)) != PHX_SUCCESS)
+    if ((result = PHX_Disk_Open(context, fileDevice, diskOut, readonly)) != PHX_SUCCESS)
     {
         if (result == PHX_ERROR_FORMAT)
             fputs("Unknown format of disk image\n", stderr);
@@ -274,6 +272,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     PHX_DetailedResult detailedResult;
 
     int fixedArgCount;
+    PHX_Bool readonly;
     enum
     {
         PHX_COMMAND_DISK_CREATE,
@@ -295,11 +294,13 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_DISK_CREATE;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "info") == 0)
     {
         fixedArgCount = 1;
         command = PHX_COMMAND_DISK_INFO;
+        readonly = PHX_TRUE;
     }
     else
     {
@@ -336,10 +337,8 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
         }
     }
 
-    const PHX_Native_File_Mode imageMode = (command == PHX_COMMAND_DISK_CREATE) ? PHX_NATIVE_FILE_MODE_CREATE : PHX_NATIVE_FILE_MODE_READ_WRITE;
-
     PHX_File_Device fileDevice;
-    if ((detailedResult = PHX_Native_File_Open(imagePath, imageMode, &fileDevice, imageSize)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_Native_File_Open(imagePath, (readonly == PHX_TRUE) ? PHX_NATIVE_FILE_MODE_READ : PHX_NATIVE_FILE_MODE_READ_WRITE, &fileDevice, imageSize)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
         return 1;
@@ -377,7 +376,7 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             PHX_Result result;
 
             PHX_Disk_Device diskDevice;
-            if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice)) != PHX_SUCCESS)
+            if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice, readonly)) != PHX_SUCCESS)
             {
                 if (result == PHX_ERROR_FORMAT)
                     fputs("Unknown format of disk image\n", stderr);
@@ -410,6 +409,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     PHX_DetailedResult detailedResult;
 
     int fixedArgCount;
+    PHX_Bool readonly = PHX_TRUE;
     enum
     {
         PHX_COMMAND_PARTITION_INFO,
@@ -471,25 +471,31 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     {
         fixedArgCount = 1;
         command = PHX_COMMAND_PARTITION_INFO;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "create") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_PARTITION_CREATE;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "add") == 0)
     {
         fixedArgCount = 4;
         command = PHX_COMMAND_PARTITION_ADD;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "remove") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_PARTITION_REMOVE;
-    }else if (strcmp(commandStr, "bootsector") == 0)
+        readonly = PHX_FALSE;
+    }
+    else if (strcmp(commandStr, "bootsector") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_PARTITION_BOOTSECTOR;
+        readonly = PHX_FALSE;
     }
     else
     {
@@ -542,14 +548,14 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     }
 
     PHX_File_Device fileDevice;
-    if ((detailedResult = PHX_Native_File_Open(imagePath, PHX_NATIVE_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
+    if ((detailedResult = PHX_Native_File_Open(imagePath, (readonly == PHX_TRUE) ? PHX_NATIVE_FILE_MODE_READ : PHX_NATIVE_FILE_MODE_READ_WRITE, &fileDevice, 0)).code != PHX_SUCCESS)
     {
         fprintf(stderr, "Could not open file %s: %s\n", imagePath, detailedResult.msg);
         return 1;
     }
 
     PHX_Disk_Device diskDevice;
-    if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice)) != PHX_SUCCESS)
+    if ((result = PHX_Disk_Open(context, &fileDevice, &diskDevice, readonly)) != PHX_SUCCESS)
     {
         if (result == PHX_ERROR_FORMAT)
             fputs("Unknown format of disk image\n", stderr);
@@ -571,6 +577,8 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                     fputs("Unknown format of partition table\n", stderr);
                 else
                     fputs("Error while reading partition table\n", stderr);
+
+                printf("%i\n", result);
 
                 diskDevice.close(&diskDevice);
                 return 1;
@@ -602,9 +610,9 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 table.ops->getSpecificType(&table, i, specificType);
 
                 if (partition->name[0] == '\0')
-                    fprintf(stdout, "    Partition %" PRIu64 ": ", i + 1);
+                    fprintf(stdout, "    Partition Slot %" PRIu64 ": ", i + 1);
                 else
-                    fprintf(stdout, "    Partition %" PRIu64 " \"%s\": ", i + 1, partition->name);
+                    fprintf(stdout, "    Partition Slot %" PRIu64 " \"%s\": ", i + 1, partition->name);
 
                 if (partition->type == PHX_PARTITION_TYPE_EMPTY)
                 {
@@ -709,7 +717,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, index - 1);
             if (partition->type != PHX_PARTITION_TYPE_EMPTY)
             {
-                fprintf(stderr, "Partition slot %" PRIu64 " is not empty\n", index);
+                fprintf(stderr, "Partition slot %zu is not empty\n", index);
 
                 table.ops->close(&table);
                 diskDevice.close(&diskDevice);
@@ -839,7 +847,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, index - 1);
             if (partition->type == PHX_PARTITION_TYPE_EMPTY)
             {
-                fprintf(stderr, "Partition slot %" PRIu64 " is already empty\n", index);
+                fprintf(stderr, "Partition slot %zu is already empty\n", index);
 
                 table.ops->close(&table);
                 diskDevice.close(&diskDevice);
@@ -929,6 +937,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     }
 
     diskDevice.close(&diskDevice);
+
     return 0;
 }
 
@@ -1323,7 +1332,7 @@ static int insert(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* parent
                 if (exists) filesystem->ops->cleanupNode(filesystem, &tmpNode);
                 return 1;
             }
-            const PHX_FileSize size = fileDevice.fileSize;
+            const PHX_FileSize size = fileDevice.blockSize * fileDevice.blockCount;
 
             if ((result = filesystem->ops->createNode(filesystem, parentDir, PHX_FILESYSTEM_NODE_TYPE_FILE, attributes, name, &newNode)) != PHX_SUCCESS)
             {
@@ -1493,6 +1502,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     // TODO: Check for every single command if the targeted file already exists
 
     int fixedArgCount;
+    PHX_Bool readonly = PHX_TRUE;
     enum
     {
         PHX_COMMAND_FILESYSTEM_INFO,
@@ -1532,71 +1542,85 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     {
         fixedArgCount = 1;
         command = PHX_COMMAND_FILESYSTEM_INFO;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "format") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_FORMAT;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "extract") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_EXTRACT;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "insert") == 0)
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_INSERT;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "mkdir") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_MKDIR;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "touch") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_TOUCH;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "list") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_LIST;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "tree") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_TREE;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "cat") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_CAT;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "write") == 0)
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_WRITE;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "read") == 0)
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_READ;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "remove") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_REMOVE;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "move") == 0)
     {
         fixedArgCount = 3;
         command = PHX_COMMAND_FILESYSTEM_MOVE;
+        readonly = PHX_FALSE;
     }
     else if (strcmp(commandStr, "bootsector") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_FILESYSTEM_BOOTSECTOR;
+        readonly = PHX_FALSE;
     }
     else
     {
@@ -1615,7 +1639,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
     PHX_File_Device inFileDevice;
     PHX_Disk_Device diskDevice;
     PHX_Disk_Device partitionDevice;
-    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice, readonly);
     if (!device) return 1;
 
     PHX_Filesystem_Device filesystem;
@@ -1975,8 +1999,8 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
             }
             else // write
             {
-                expected = fileDevice.fileSize;
-                while (read > 0 && written < fileDevice.fileSize)
+                expected = fileDevice.blockSize * fileDevice.blockCount;
+                while (read > 0 && written < fileDevice.blockSize * fileDevice.blockCount)
                 {
                     read = PHX_Native_File_Read(&fileDevice, buffer, written, sizeof(buffer));
                     written += filesystem.ops->file_write(&filesystem, &node, &openNode, read, buffer);
@@ -2231,6 +2255,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
     PHX_DetailedResult detailedResult;
 
     int fixedArgCount;
+    PHX_Bool readonly = PHX_TRUE;
     enum
     {
         PHX_COMMAND_RAW_READ,
@@ -2241,11 +2266,13 @@ static int raw(PHX_Context* context, const char* executable, const char* command
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_RAW_READ;
+        readonly = PHX_TRUE;
     }
     else if (strcmp(commandStr, "write") == 0)
     {
         fixedArgCount = 2;
         command = PHX_COMMAND_RAW_WRITE;
+        readonly = PHX_FALSE;
     }
     else
     {
@@ -2264,7 +2291,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
     PHX_File_Device inFileDevice;
     PHX_Disk_Device diskDevice;
     PHX_Disk_Device partitionDevice;
-    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice);
+    PHX_Disk_Device* device = PHX_Device_FromStr(context, deviceStr, &inFileDevice, &diskDevice, &partitionDevice, readonly);
     if (!device) return 1;
 
     switch (command)

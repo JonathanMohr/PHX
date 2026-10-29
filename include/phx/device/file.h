@@ -19,7 +19,8 @@ typedef struct PHX_File_Operations
 
 struct PHX_File_Device
 {
-    PHX_FileSize fileSize;
+    PHX_SectorSize blockSize;
+    PHX_FileSize blockCount;
 
     const PHX_File_Operations* ops;
     void* file;

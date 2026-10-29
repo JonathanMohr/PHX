@@ -3,13 +3,13 @@
 static PHX_SectorSize PHX_Disk_Device_File_Read(PHX_Disk_Device* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_File_Device* fileDevice = device->data;
-    return fileDevice->ops->read(fileDevice, buffer, block, count);
+    return fileDevice->ops->read(fileDevice, buffer, block * device->sectorSize, count * device->sectorSize) / device->sectorSize;
 }
 
 static PHX_SectorSize PHX_Disk_Device_File_Write(PHX_Disk_Device* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_File_Device* fileDevice = device->data;
-    return fileDevice->ops->write(fileDevice, buffer, block, count);
+    return fileDevice->ops->write(fileDevice, buffer, block * device->sectorSize, count * device->sectorSize) / device->sectorSize;
 }
 
 static void PHX_Disk_Device_File_Close(PHX_Disk_Device* device)
@@ -20,8 +20,8 @@ static void PHX_Disk_Device_File_Close(PHX_Disk_Device* device)
 
 void PHX_File_GetDiskDevice(PHX_File_Device* fileDevice, PHX_Disk_Device* out)
 {
-    out->sectorSize = 1;
-    out->totalSectors = fileDevice->fileSize;
+    out->sectorSize = fileDevice->blockSize;
+    out->totalSectors = fileDevice->blockCount;
     out->data = fileDevice;
 
     out->sectorOffset = 0;

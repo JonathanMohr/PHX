@@ -17,9 +17,11 @@ import shutil
 
 class Format(Enum):
     MBR = 1
+    GPT = 2
 
 format_str_map = {
-    Format.MBR: "mbr"
+    Format.MBR: "mbr",
+    Format.GPT: "gpt"
 }
 
 types = ["unknown", "fat12", "fat16", "fat32"]
@@ -185,6 +187,7 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
 
     match format:
         case Format.MBR: expected_content = "FDisk_partition_scheme"
+        case Format.GPT: expected_content = "GUID_partition_scheme"
         case _:
             logger.error(f"Invalid format for diskutil tests: {format}")
             return False
@@ -290,6 +293,7 @@ def check_with_tsk(logger: logging.Logger, image_path: Path, config: Config, for
 
     match format:
         case Format.MBR: expected_vstype = pytsk3.TSK_VS_TYPE_DOS
+        case Format.GPT: expected_vstype = pytsk3.TSK_VS_TYPE_GPT
         case _:
             logger.error(f"Invalid format for tsk tests: {format}")
             return False
@@ -374,7 +378,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
     logger.info("Starting partition tests")
 
-    formats = [Format.MBR]
+    formats = [Format.MBR] # TODO
 
     image_configs = [p for p in partition_dir.rglob("*.toml") if p.is_file()]
     image_map: dict[str, int] = {}

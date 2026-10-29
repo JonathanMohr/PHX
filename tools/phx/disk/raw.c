@@ -1,4 +1,5 @@
 #include "raw.h"
+#include "phx/types.h"
 
 #include <phx/base/intrinsic.h>
 #include <phx/utility/file.h>
@@ -21,7 +22,8 @@ typedef struct PHX_RAW_Data
 static PHX_SectorSize PHX_RAW_Read(PHX_Disk_Device* device, void* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     PHX_RAW_Data* data = device->data;
-    return data->transformedDevice.read(&data->transformedDevice, buffer, block, count);
+    PHX_SectorSize c = data->transformedDevice.read(&data->transformedDevice, buffer, block, count);
+    return c;
 }
 
 static PHX_SectorSize PHX_RAW_Write(PHX_Disk_Device* device, const void* buffer, PHX_SectorSize block, PHX_SectorSize count)
@@ -120,6 +122,7 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_File_Device* devi
 
     out->readonly = readonly;
 
+    /* TODO: Implement again
     if (!context->fast)
     {
         const PHX_Byte* buffer = zeroBuffer;
@@ -151,6 +154,7 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_File_Device* devi
 
         if (tmpBuffer) context->allocator->free(context->allocator, tmpBuffer);
     }
+    */
 
     return PHX_TRUE;
 }

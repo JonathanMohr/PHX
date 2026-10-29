@@ -168,6 +168,14 @@ static const char* MBR_GetTypeName(PHX_u8 type)
 }
 
 
+static PHX_Partition_Type MBR_GetPartitionType(PHX_u8 type)
+{
+    if (type == MBR_TYPE_UNKNOWN)
+        return PHX_PARTITION_TYPE_UNKNOWN;
+    return PHX_PARTITION_TYPE_SPECIFIC;
+}
+
+
 static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
 {
     if (cylinder > 1023 || sector > 63 || sector == 0)
@@ -205,11 +213,8 @@ static PHX_Result MBR_ChangeBootsector(PHX_Partition_Table_Device* table, const 
 }
 
 
-static void MBR_UpdatePartitionInfo(MBR_Partition* partition)
+static inline void MBR_UpdatePartitionInfo(MBR_Partition* partition)
 {
-    // TODO
-    if (partition->partition.type == PHX_PARTITION_TYPE_UNKNOWN)
-        partition->type = MBR_TYPE_UNKNOWN;
     partition->partition.flags &= ~PHX_PARTITION_FLAGS_CHANGED;
 }
 
@@ -290,21 +295,21 @@ static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
 
 static PHX_Bool MBR_SetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, const char* typeName)
 {
-    if (index > table->partitionSlots) return PHX_FALSE;
+    if (index >= table->partitionSlots) return PHX_FALSE;
     MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
 
     PHX_u8 type = MBR_GetTypeByName(typeName);
     if (type == 0) return PHX_FALSE;
 
     partition->type = type;
-    partition->partition.type = PHX_PARTITION_TYPE_SPECIFIC;
+    partition->partition.type = MBR_GetPartitionType(type);
 
     return PHX_TRUE;
 }
 
 static const char* MBR_GetType(PHX_Partition_Table_Device* table, PHX_PartitionSize index)
 {
-    if (index > table->partitionSlots) return PHX_NULL;
+    if (index >= table->partitionSlots) return PHX_NULL;
     MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
 
     if (partition->partition.flags & PHX_PARTITION_FLAGS_CHANGED)
@@ -315,13 +320,11 @@ static const char* MBR_GetType(PHX_Partition_Table_Device* table, PHX_PartitionS
 
 static void MBR_GetSpecificType(PHX_Partition_Table_Device* table, PHX_PartitionSize index, char* typeOut)
 {
-    if (index > table->partitionSlots)
+    if (index >= table->partitionSlots)
     {
-        typeOut[0] = '-';
-        typeOut[1] = '-';
-        typeOut[2] = '-';
-        typeOut[3] = '-';
-        typeOut[4] = '\0';
+        memset(typeOut, '-', MBR_SPECIFIC_TYPE_LEN - 1);
+        typeOut[MBR_SPECIFIC_TYPE_LEN - 1] = '\0';
+        return;
     }
 
     MBR_Partition* partition = &((MBR_Partition*)table->partitions)[index];
@@ -351,9 +354,10 @@ static void MBR_GetSpecificType(PHX_Partition_Table_Device* table, PHX_Partition
 static void MBR_Close(PHX_Partition_Table_Device* table)
 {
     MBR_Data* data = table->data;
-    MBR_FreeData(table->context, data);
+
     table->context->allocator->free(table->context->allocator, table->partitionBuffer);
     table->context->allocator->free(table->context->allocator, table->partitions);
+    MBR_FreeData(table->context, data);
 }
 
 
@@ -376,6 +380,7 @@ static const PHX_Partition_Table_Operations MBR_Operations = {
 };
 
 
+#include <stdio.h>
 static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
 {
     const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;
@@ -464,7 +469,7 @@ static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
         if (bootFlag == 0x80)
             partition->partition.flags |= PHX_PARTITION_FLAGS_LEGACY_BOOTABLE;
 
-        partition->partition.type = PHX_PARTITION_TYPE_UNKNOWN; // TODO
+        partition->partition.type = MBR_GetPartitionType(type);
 
         partition->partition.name[0] = '\0';
 
