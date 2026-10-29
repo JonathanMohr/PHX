@@ -29,6 +29,8 @@ at_0600:
 .after:
     sti
 
+    ; TODO
+
     mov si, not_bootable_msg
     jmp short print_error
 
