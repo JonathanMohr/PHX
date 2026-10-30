@@ -1,5 +1,5 @@
 [bits 16]
-[org 0x7C00]
+[org 0x0600]
 [cpu 8086]
 
 ; TODO: Actually load partition
@@ -26,14 +26,168 @@ at_0600:
     mov [boot_drive], dl
     sti
 
-.after:
-    sti
+check_disk:
+    ; check lba
+    mov ah, 0x41
+    mov bx, 0x55AA
+    ; dl is still set
+    int 0x13
+    jc short .no_lba
+    cmp bx, 0xAA55
+    jne short .no_lba
 
+    test cl, 1
+    jz short .no_lba
+
+.use_lba:
+    mov si, drive_params
+    mov word [si], 0x1A
+    mov ah, 0x48
+    mov dl, [boot_drive]
+    int 0x13
+    mov ax, 512
+    jc .store_lba
+    mov bx, [drive_params + 0x18]
+    cmp bx, 512
+    jb .store_lba
+    mov ax, bx
+.store_lba:
+    mov word [bytes_per_sector], ax
+    mov byte [lba], 1
+    jmp short .after
+
+.no_lba:
+    mov word [bytes_per_sector], 512
+    mov byte [lba], 0
+
+.after:
     ; TODO
 
-    mov si, not_bootable_msg
-    jmp short print_error
+    mov si, disk_error_msg
+    jmp near print_error
 
+
+
+;
+; 64-bit LBA on stack
+;
+
+%define RETRIES 3
+read_sectors:
+    pop word [read_return_address]
+    cmp byte [lba], 1
+    jz .lba
+
+.chs:
+    push es
+    xor di, di
+    mov es, di
+    mov ah, 0x08
+    mov dl, [boot_drive]
+    int 0x13
+    pop es
+    mov si, sp
+    jc disk_error
+
+    mov ax, [si + 4]
+    or ax, [si + 6]
+    jnz lba_too_high_error
+
+    and cx, 0x3F
+    jz disk_error
+    inc dh
+    jz disk_error
+    mov bx, cx
+    mov cl, dh
+    mov di, cx
+
+    mov ax, [si + 2]
+    xor dx, dx
+    div bx
+    xchg ax, cx
+    mov ax, [si]
+    div bx
+    inc dx
+    push dx
+
+    cmp cx, di
+    jae lba_too_high_error
+    mov dx, cx
+    div di
+    cmp ax, 1023
+    ja lba_too_high_error
+
+    mov dh, dl
+    mov dl, [boot_drive]
+    pop cx
+    mov ch, al
+    ror ah, 1
+    ror ah, 1
+    or cl, ah
+
+    mov di, RETRIES
+.chs_retry:
+    push di
+    push cx
+    push dx
+
+    mov bx, 0x7C00
+    mov ax, 0x0201
+    int 0x13
+    jnc .chs_finish
+
+    pop dx
+    push dx
+    xor ah, ah
+    int 0x13
+
+    pop dx
+    pop cx
+    pop di
+    dec di
+    jnz .chs_retry
+    jmp disk_error
+
+.chs_finish:
+    add sp, 6
+    jmp word [read_return_address]
+
+.lba:
+    xor ax, ax
+    
+    push ax ; segment
+
+    mov bx, 0x7C00
+    push bx ; offset
+
+    inc ax
+    push ax ; sector count
+
+    mov ax, 0x0010
+    push ax
+
+    mov cx, RETRIES
+
+.lba_retry:
+    mov si, sp
+    mov byte [si + 2], 1
+    push cx
+    mov ah, 0x42
+    mov dl, [boot_drive]
+    int 0x13
+    jnc short .lba_finish
+
+    xor ah, ah
+    mov dl, [boot_drive]
+    int 0x13
+    pop cx
+    loop .lba_retry
+
+    jmp short disk_error
+
+.lba_finish:
+    push word [read_return_address]
+    ret 10
 
 print_char:
     int 10h
@@ -44,6 +198,14 @@ print_raw:
     test al, al
     jnz short print_char
     ret
+
+lba_too_high_error:
+    mov si, lba_too_high_error_msg
+    jmp short print_error
+
+disk_error:
+    mov si, disk_error_msg
+    ; jmp short print_error
 
 print_error:
     call print_raw
@@ -84,10 +246,9 @@ restart:
 .fallback:
     jmp 0xFFFF:0x0000
 
-boot_drive db 0
-
-not_bootable_msg db "This is not a legacy bootable GPT disk.", 0
-press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
+disk_error_msg db "Disk error", 0
+lba_too_high_error_msg db "LBA too high", 0
+press_enter_to_restart_msg db '!', 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
 
 times 440 - ($ - $$) db 0
 
@@ -106,3 +267,15 @@ partition4:
 
 
 dw 0xAA55
+
+
+; byte
+lba equ 0x900
+
+; word
+read_return_address equ 0x900
+bytes_per_sector equ 0x902
+boot_drive equ 0x904
+
+; other
+drive_params equ 0xA00  ; 26 byte
