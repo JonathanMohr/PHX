@@ -3,19 +3,24 @@ size = 536870912    # 512 MiB
 bootsector = "bootsector.hex"
 
 [[partitions]]
-type = "fat12"
+mbr-type = "fat12"
+gpt-type = "microsoft-basic-data"
 start = 512
+gpt-start = 24576
 size = 1048576      # 1 MiB
+gpt-size = 1024512  # ~0,977 MiB
 bootable = false
 
 [[partitions]]
-type = "fat16"
+mbr-type = "fat16"
+gpt-type = "microsoft-basic-data"
 start = 1049088
 size = 16777216     # 16 MiB
 bootable = false
 
 [[partitions]]
-type = "fat32"
+mbr-type = "fat32"
+gpt-type = "microsoft-basic-data"
 start = 17826304
 size = 519044608    # 494 MiB
 bootable = true

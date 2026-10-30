@@ -1,9 +1,12 @@
 [image]
-size = 1024 # 1 KiB
+size = 1024         # 1 KiB
+gpt-size = 41984    # 41 KiB
 bootsector = "bootsector.hex"
 
 [[partitions]]
-type = "unknown"
+mbr-type = "unknown"
+gpt-type = "unknown"
 start = 512
-size = 512          # 1 KiB
+gpt-start = 24576
+size = 512          # 0.5 KiB
 bootable = false

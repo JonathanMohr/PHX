@@ -29,15 +29,22 @@ types = ["unknown", "fat12", "fat16", "fat32"]
 
 @dataclass
 class Config_Partition:
-    type: str | None
-    start: int
-    size: int
     bootable: bool
+
+    mbr_type: str | None
+    mbr_start: int
+    mbr_size: int
+
+    gpt_type: str | None
+    gpt_start: int
+    gpt_size: int
 
 @dataclass
 class Config:
-    size: int
     bootsector: Path | None
+
+    mbr_size: int
+    gpt_size: int
 
     partitions: list[Config_Partition]
 
@@ -179,15 +186,65 @@ def unmount(logger: logging.Logger, device_path: Path, host_os: OS) -> bool:
     return True
 
 
+def config_get_size(config: Config, format: Format) -> int:
+    match format:
+        case Format.MBR: return config.mbr_size
+        case Format.GPT: return config.gpt_size
+        case _:
+            raise RuntimeError("Invalid format for config_get_size")
+
+def partition_get_type(partition: Config_Partition, format: Format) -> str | None:
+    match format:
+        case Format.MBR: return partition.mbr_type
+        case Format.GPT: return partition.gpt_type
+        case _:
+            raise RuntimeError("Invalid format for partition_get_type")
+
+def partition_get_start(partition: Config_Partition, format: Format) -> int:
+    match format:
+        case Format.MBR: return partition.mbr_start
+        case Format.GPT: return partition.gpt_start
+        case _:
+            raise RuntimeError("Invalid format for partition_get_start")
+
+def partition_get_size(partition: Config_Partition, format: Format) -> int:
+    match format:
+        case Format.MBR: return partition.mbr_size
+        case Format.GPT: return partition.gpt_size
+        case _:
+            raise RuntimeError("Invalid format for partition_get_size")
+
+
 def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Config, format: Format, name: str) -> bool:
+    GPT_SECTOR_SIZE = 512 # TODO
+
+    mbr_types: dict[str, list[str]] = {
+        "unknown": ["0x7F"],
+        "fat12": ["DOS_FAT_12"],
+        "fat16": ["DOS_FAT_16_S", "DOS_FAT_16", "Windows_FAT_16"],
+        "fat32": ["DOS_FAT_32", "Windows_FAT_32"]
+    }
+
+    gpt_types: dict[str, list[str]] = {
+        "unknown": ["Linux Filesystem"],
+        "efi": ["EFI"], "esp": ["EFI"],
+        "microsoft-basic-data": ["Microsoft Basic Data"], "ms-basic-data": ["Microsoft Basic Data"], "ms": ["Microsoft Basic Data"],
+        "linux-filesystem-data": ["Linux Filesystem"], "linux-fs-data": ["Linux Filesystem"], "linux-data": ["Linux Filesystem"],
+        "apple-filesystem-container": ["Apple_APFS"], "apfs-container": ["Apple_APFS"], "apfs": ["Apple_APFS"]
+    }
+
     diskutil = shutil.which("diskutil")
     if diskutil is None:
         logger.error("Could not find diskutil")
         return False
 
     match format:
-        case Format.MBR: expected_content = "FDisk_partition_scheme"
-        case Format.GPT: expected_content = "GUID_partition_scheme"
+        case Format.MBR:
+            expected_content = "FDisk_partition_scheme"
+            type_map = mbr_types
+        case Format.GPT:
+            expected_content = "GUID_partition_scheme"
+            type_map = gpt_types
         case _:
             logger.error(f"Invalid format for diskutil tests: {format}")
             return False
@@ -213,10 +270,10 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
         return False
 
     if len(disks_data) < 1:
-        logger.error(f"No elements in array ({name}): {disk_data}")
+        logger.error(f"No elements in array ({name}): {disks_data}")
         return False
     if len(disks_data) > 1:
-        logger.error(f"Too many elements in array (should have only one) ({name}): {disk_data}")
+        logger.error(f"Too many elements in array (should have only one) ({name}): {disks_data}")
         return False
 
     disk_data = disks_data[0]
@@ -229,7 +286,7 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
     if format == Format.MBR and len(config.partitions) == 0:
         # It throws an error for empty MBR partition tables
         return True
-    
+
     if disk_content != expected_content:
         logger.error(f"Expected format ({expected_content}) does not match actual format: {disk_content} ({name})")
         return False
@@ -239,16 +296,29 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
         logger.error(f"Could not get Size from output of diskutil for image ({name}): {data}")
         return False
 
-    if disk_size != config.size:
-        logger.error(f"Expected Size ({config.size}) does not match actual size: {disk_size} ({name})")
+    if disk_size != config_get_size(config, format):
+        logger.error(f"Expected Size ({config_get_size(config, format)}) does not match actual size: {disk_size} ({name})")
         return False
 
     disk_partitions = disk_data.get("Partitions", [])
-    if len(disk_partitions) != len(config.partitions):
-        logger.error(f"Expected partition count ({len(config.partitions)}) does not match actual partitio count: {len(disk_partitions)} ({name})")
 
-    index: int = 0
-    for disk_partition, partition in zip(disk_partitions, config.partitions):
+    expected_partitions = config.partitions
+    if format == Format.GPT:
+        expected_partitions = [
+            p for p in config.partitions
+            if partition_get_size(p, format) != GPT_SECTOR_SIZE
+        ]
+        skipped = len(config.partitions) - len(expected_partitions)
+        if skipped:
+            logger.info(f"Ignoring {skipped} one-sector partition(s) that macOS does not like... ({name})")
+
+    if len(disk_partitions) != len(expected_partitions):
+        logger.error(f"Expected partition count ({len(expected_partitions)}) does not match actual partition count: {len(disk_partitions)} ({name})")
+        return False
+
+    for index, (disk_partition, partition) in enumerate(zip(disk_partitions, expected_partitions)):
+        expected_partition_type = partition_get_type(partition, format) or "unknown"
+        expected_partition_size = partition_get_size(partition, format)
         # TODO: Also check start by maybe reading or something
 
         if not isinstance(disk_partition, dict):
@@ -265,25 +335,19 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
             logger.warning(f"Could not get Size of partition {index} ({name}): {data}")
             continue
 
-        if partition.type is not None:
-            match partition.type:
-                case "unknown": expected_partition_content = "0x7F"
-                case "fat12": expected_partition_content = ["DOS_FAT_12"]
-                case "fat16": expected_partition_content = ["DOS_FAT_16_S", "DOS_FAT_16", "Windows_FAT_16"]
-                case "fat32": expected_partition_content = ["DOS_FAT_32", "Windows_FAT_32"]
-                case _:
-                    logger.error(f"Unknown type of partition {index} in diskutil tests: {partition.type}")
-                    continue
+        expected_partition_content = type_map.get(expected_partition_type)
 
-            if partition_content not in expected_partition_content:
-                logger.error(f"Expected format of partition {index} ({expected_partition_content}) does not match actual format of partition {index}: {partition_content} ({name})")
-                return False
+        if expected_partition_content is None:
+            logger.error(f"Unknown type of partition {index} in diskutil tests: {expected_partition_type}")
+            continue
 
-        if partition_size != partition.size:
-            logger.error(f"Expected size of partition {index} ({partition.size}) does not match actual format of partition {index}: {partition_size} ({name})")
+        if partition_content not in expected_partition_content:
+            logger.error(f"Expected type of partition {index} ({expected_partition_content}) does not match actual type of partition {index}: {partition_content} ({name})")
             return False
 
-        index += 1
+        if partition_size != expected_partition_size:
+            logger.error(f"Expected size of partition {index} ({expected_partition_size}) does not match actual format of partition {index}: {partition_size} ({name})")
+            return False
 
     return True
 
@@ -304,7 +368,7 @@ def check_with_tsk(logger: logging.Logger, image_path: Path, config: Config, for
         logger.error(f"Could not open image {name}: {error}")
         return False
 
-    if image.get_size() != config.size:
+    if image.get_size() != config_get_size(config, format):
         logger.error(f"Size of image {name} does not match")
         return False
 
@@ -333,15 +397,17 @@ def check_with_tsk(logger: logging.Logger, image_path: Path, config: Config, for
             continue
 
         config_partition = config.partitions[index]
+        config_partition_start = partition_get_start(config_partition, format)
+        config_partition_size = partition_get_size(config_partition, format)
 
         pstart = partition.start * sector_size
-        if pstart != config_partition.start:
-            logger.error(f"Start of partition {index} does not match. Expected: {config_partition.start}; Found: {pstart}")
+        if pstart != config_partition_start:
+            logger.error(f"Start of partition {index} does not match. Expected: {config_partition_start}; Found: {pstart}")
             return False
 
         psize = partition.len * sector_size
-        if psize != config_partition.size:
-            logger.error(f"Size of partition {index} does not match. Expected: {config_partition.size}; Found: {psize}")
+        if psize != config_partition_size:
+            logger.error(f"Size of partition {index} does not match. Expected: {config_partition_size}; Found: {psize}")
             return False
 
         # TODO: Type and bootable
@@ -378,7 +444,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
 
     logger.info("Starting partition tests")
 
-    formats = [Format.MBR] # TODO: Add GPT
+    formats = [Format.MBR, Format.GPT]
 
     image_configs = [p for p in partition_dir.rglob("*.toml") if p.is_file()]
     image_map: dict[str, int] = {}
@@ -404,11 +470,6 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
             logger.warning(f"{'No' if config_data_image is None else 'Invalid'} 'image' field in {config_file}")
             continue
 
-        size = config_data_image.get("size")
-        if not isinstance(size, int) or isinstance(size, bool):
-            logger.warning(f"{'No' if size is None else 'Invalid'} size specified in {config_file}")
-            continue
-
         bootsector = config_data_image.get("bootsector")
         if isinstance(bootsector, str):
             bootsector = Path(bootsector)
@@ -416,8 +477,18 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
             logger.warning(f"Invalid bootsector specified in {config_file}")
             continue
 
+        size = config_data_image.get("size")
+        if not isinstance(size, int) or isinstance(size, bool):
+            logger.warning(f"{'No' if size is None else 'Invalid'} size specified in {config_file}")
+            continue
 
-        config = Config(size, bootsector, [])
+        mbr_size = config_data_image.get("mbr-size")
+        if not isinstance(mbr_size, int): mbr_size = None
+
+        gpt_size = config_data_image.get("gpt-size")
+        if not isinstance(gpt_size, int): gpt_size = None
+
+        config = Config(bootsector, mbr_size or size, gpt_size or size, [])
 
 
         config_partitions = config_data.get("partitions")
@@ -433,9 +504,20 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 skip = True
                 break
 
-            config_partition_type = config_partition.get("type", None)
-            if not isinstance(config_partition_type, str) and config_partition_type is not None:
-                logger.warning(f"Invalid type of partition specified in {config_file}")
+            config_partition_mbr_type = config_partition.get("mbr-type", None)
+            if not isinstance(config_partition_mbr_type, str) and config_partition_mbr_type is not None:
+                logger.warning(f"Invalid mbr type of partition specified in {config_file}")
+                skip = True
+                break
+
+            config_partition_gpt_type = config_partition.get("gpt-type", None)
+            if not isinstance(config_partition_gpt_type, str) and config_partition_gpt_type is not None:
+                logger.warning(f"Invalid gpt type of partition specified in {config_file}")
+                skip = True
+                break
+
+            if (config_partition_mbr_type is None or config_partition_gpt_type is None) and config_partition_mbr_type != config_partition_gpt_type:
+                logger.warning(f"Type of partition only specified for one format in {config_file}")
                 skip = True
                 break
 
@@ -445,11 +527,23 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 skip = True
                 break
 
+            config_partition_mbr_start = config_partition.get("mbr-start")
+            if not isinstance(config_partition_mbr_start, int): config_partition_mbr_start = None
+
+            config_partition_gpt_start = config_partition.get("gpt-start")
+            if not isinstance(config_partition_gpt_start, int): config_partition_gpt_start = None
+
             config_partition_size = config_partition.get("size")
             if not isinstance(config_partition_size, int) or isinstance(config_partition_size, bool):
                 logger.warning(f"{'No' if config_partition_size is None else 'Invalid'} size of partition specified in {config_file}")
                 skip = True
                 break
+
+            config_partition_mbr_size = config_partition.get("mbr-size")
+            if not isinstance(config_partition_mbr_size, int): config_partition_mbr_size = None
+
+            config_partition_gpt_size = config_partition.get("gpt-size")
+            if not isinstance(config_partition_gpt_size, int): config_partition_gpt_size = None
 
             config_partition_bootable = config_partition.get("bootable", False)
             if not isinstance(config_partition_bootable, bool):
@@ -458,10 +552,13 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                 break
 
             config.partitions.append(Config_Partition(
-                config_partition_type,
-                config_partition_start,
-                config_partition_size,
-                config_partition_bootable
+                config_partition_bootable,
+                config_partition_mbr_type,
+                config_partition_mbr_start or config_partition_start,
+                config_partition_mbr_size or config_partition_size,
+                config_partition_gpt_type,
+                config_partition_gpt_start or config_partition_start,
+                config_partition_gpt_size or config_partition_size
             ))
 
         if skip: continue
@@ -479,7 +576,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
             else:
                 image = build_dir / f"{image_name}-{format_str}.img"
             
-            if not create_image(logger, phx, image, format, config.size):
+            if not create_image(logger, phx, image, format, config_get_size(config, format)):
                 logger.error(f"Could not create image for {config_file}")
                 failed = True
                 continue
@@ -507,16 +604,16 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                     phx,
                     image,
                     i,
-                    partition.start,
-                    partition.size,
-                    partition.type,
+                    partition_get_start(partition, format),
+                    partition_get_size(partition, format),
+                    partition_get_type(partition, format),
                     partition.bootable
                 ):
                     logger.error(f"Could not add partition to image for {config_file}")
                     local_failed = True
                     break
 
-                get_random_file(data_in_file, partition.size)
+                get_random_file(data_in_file, partition_get_size(partition, format))
 
                 if not write_partition(logger, phx, image, i, data_in_file):
                     logger.error(f"Could not write data to partition for {config_file}")
