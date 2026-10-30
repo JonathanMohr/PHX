@@ -26,6 +26,8 @@ at_0600:
     mov [boot_drive], dl
     sti
 
+partition_search:
+
 check_disk:
     ; check lba
     mov ah, 0x41
