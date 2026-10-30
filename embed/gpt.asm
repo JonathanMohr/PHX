@@ -46,10 +46,10 @@ check_disk:
     mov dl, [boot_drive]
     int 0x13
     mov ax, 512
-    jc .store_lba
+    jc short .store_lba
     mov bx, [drive_params + 0x18]
     cmp bx, 512
-    jb .store_lba
+    jb short .store_lba
     mov ax, bx
 .store_lba:
     mov word [bytes_per_sector], ax
@@ -76,7 +76,7 @@ check_disk:
 read_sectors:
     pop word [read_return_address]
     cmp byte [lba], 1
-    jz .lba
+    jz short read_lba
 
 .chs:
     push es
@@ -87,16 +87,16 @@ read_sectors:
     int 0x13
     pop es
     mov si, sp
-    jc disk_error
+    jc short disk_error
 
     mov ax, [si + 4]
     or ax, [si + 6]
-    jnz lba_too_high_error
+    jnz short lba_too_high_error
 
     and cx, 0x3F
-    jz disk_error
+    jz short disk_error
     inc dh
-    jz disk_error
+    jz short disk_error
     mov bx, cx
     mov cl, dh
     mov di, cx
@@ -111,11 +111,11 @@ read_sectors:
     push dx
 
     cmp cx, di
-    jae lba_too_high_error
+    jae short lba_too_high_error
     mov dx, cx
     div di
     cmp ax, 1023
-    ja lba_too_high_error
+    ja short lba_too_high_error
 
     mov dh, dl
     mov dl, [boot_drive]
@@ -125,34 +125,20 @@ read_sectors:
     ror ah, 1
     or cl, ah
 
-    mov di, RETRIES
-.chs_retry:
-    push di
-    push cx
-    push dx
-
     mov bx, 0x7C00
     mov ax, 0x0201
-    int 0x13
-    jnc .chs_finish
-
-    pop dx
-    push dx
-    xor ah, ah
-    int 0x13
-
-    pop dx
-    pop cx
-    pop di
-    dec di
-    jnz .chs_retry
-    jmp disk_error
-
-.chs_finish:
-    add sp, 6
+    call read_int13_retry
     jmp word [read_return_address]
 
-.lba:
+lba_too_high_error:
+    mov si, lba_too_high_error_msg
+    jmp short print_error
+    
+disk_error:
+    mov si, disk_error_msg
+    jmp short print_error
+
+read_lba:
     xor ax, ax
     
     push ax ; segment
@@ -166,46 +152,37 @@ read_sectors:
     mov ax, 0x0010
     push ax
 
-    mov cx, RETRIES
-
-.lba_retry:
     mov si, sp
-    mov byte [si + 2], 1
-    push cx
     mov ah, 0x42
-    mov dl, [boot_drive]
-    int 0x13
-    jnc short .lba_finish
+    call read_int13_retry
+    add sp, 8
+    jmp word [read_return_address]
 
+read_int13_retry:
+    mov di, RETRIES
+.again:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    int 0x13
+    jnc short read_ok
+    mov dl, [boot_drive]
     xor ah, ah
-    mov dl, [boot_drive]
     int 0x13
+    pop di
+    pop si
+    pop dx
     pop cx
-    loop .lba_retry
+    pop bx
+    pop ax
+    dec di
+    jnz short .again
 
-    jmp short disk_error
-
-.lba_finish:
-    push word [read_return_address]
-    ret 10
-
-print_char:
-    int 10h
-print_raw:
-    mov ah, 0eh
-    mov bx, 0x07
-    lodsb
-    test al, al
-    jnz short print_char
-    ret
-
-lba_too_high_error:
-    mov si, lba_too_high_error_msg
-    jmp short print_error
-
-disk_error:
+    ; jmp short disk_error
     mov si, disk_error_msg
-    ; jmp short print_error
 
 print_error:
     call print_raw
@@ -215,7 +192,6 @@ print_error:
     cbw
     int 16h
     ; jmp short restart
-
 
 restart:
     cli
@@ -245,6 +221,20 @@ restart:
 [cpu 8086]
 .fallback:
     jmp 0xFFFF:0x0000
+
+read_ok:
+    add sp, 10
+    ret
+
+print_char:
+    int 10h
+print_raw:
+    mov ah, 0eh
+    mov bx, 0x07
+    lodsb
+    test al, al
+    jnz short print_char
+    ret
 
 disk_error_msg db "Disk error", 0
 lba_too_high_error_msg db "LBA too high", 0
