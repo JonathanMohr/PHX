@@ -603,6 +603,8 @@ static int isPowerOfTwo(PHX_u32 v) { return v && !(v & (v - 1)); }
 
 static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable)
 {
+    // TODO: Partition entry array at least 16384 byte, check
+    
     if (device->sectorSize < 92)
         return PHX_ERROR_SIZE; // TODO
 
@@ -904,6 +906,8 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
 
 static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
 {
+    // TODO: Partition entry array at least 16384 byte, check
+    
     if (device->sectorSize < 92)
         return PHX_ERROR_SIZE; // TODO
 
