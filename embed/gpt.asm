@@ -63,7 +63,23 @@ check_disk:
     mov byte [lba], 0
 
 .after:
-    ; TODO
+    xor ax, ax
+    push ax
+    push ax
+    push ax
+    inc ax
+    push ax
+
+    mov word [read_target_address], sector_buffer
+    call read_sectors
+
+.validate_header:
+    cld
+    mov si, sector_buffer
+    mov di, header_signature
+    mov cx, 2
+    repe cmpsd
+    
 
     jmp short disk_error
 
@@ -120,7 +136,6 @@ read_sectors:
     ja short lba_too_high_error
 
     mov dh, dl
-    mov dl, [boot_drive]
     pop cx
     mov ch, al
     ror ah, 1
@@ -169,6 +184,7 @@ read_int13_retry:
     push dx
     push si
     push di
+    mov dl, [boot_drive]
     int 0x13
     jnc short read_ok
     mov dl, [boot_drive]
@@ -225,7 +241,7 @@ restart:
     jmp 0xFFFF:0x0000
 
 read_ok:
-    add sp, 10
+    add sp, 12
     ret
 
 print_char:
@@ -238,9 +254,18 @@ print_raw:
     jnz short print_char
     ret
 
+;
+; a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z
+; a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w     y
+;
+
+no_partition_found_msg db "No bootable partition found", 0
 disk_error_msg db "Disk error", 0
+format_error_msg db "Format error", 0
 lba_too_high_error_msg db "LBA too high", 0
 press_enter_to_restart_msg db '!', 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
+
+header_signature db "EFI PART"
 
 times 440 - ($ - $$) db 0
 
@@ -262,13 +287,15 @@ dw 0xAA55
 
 
 ; byte
-lba equ 0x900
+lba equ 0x800
+boot_drive equ 0x801
 
 ; word
 read_return_address equ 0x900
 bytes_per_sector equ 0x902
-boot_drive equ 0x904
-read_target_address equ 0x906
+read_target_address equ 0x904
 
 ; other
 drive_params equ 0xA00  ; 26 byte
+
+sector_buffer equ 0x1000  ; up to 24576 byte

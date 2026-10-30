@@ -94,6 +94,9 @@
 #define PHX_GPT_ATTRIBUTE_LEGACY_BOOTABLE      (PHX_u64)(1 << 2)
 
 
+#define GPT_TYPE_EMPTY \
+    0x00000000, 0x0000, 0x0000, 0x0000, 0x000000000000
+
 #define GPT_TYPE_ESP \
     0xC12A7328, 0xF81F, 0x11D2, 0xBA4B, 0x00A0C93EC93B
 
@@ -188,7 +191,7 @@ static GUID GPT_GetTypeByName(const char* name)
     if (strcmp(name, "apple-filesystem-container") == 0 || strcmp(name, "apfs-container") == 0 || strcmp(name, "apfs") == 0)
         return GUID_Create(GPT_TYPE_APPLE_APFS_CONTAINER);
 
-    return GUID_Create(GPT_TYPE_LINUX_FILESYSTEM_DATA);
+    return GUID_Create(GPT_TYPE_EMPTY);
 }
 
 
