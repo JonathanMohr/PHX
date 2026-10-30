@@ -12,9 +12,9 @@ entry:
     mov ds, ax
     mov es, ax
     mov ss, ax
-    mov sp, 0x7C00
+    mov sp, 0x0600
 
-    mov si, sp
+    mov si, 0x7C00
     mov di, 0x0600
     mov cx, 512
     cld
@@ -71,6 +71,7 @@ check_disk:
 
 ;
 ; 64-bit LBA on stack
+; target offset in read_target_address
 ;
 
 %define RETRIES 3
@@ -126,7 +127,7 @@ read_sectors:
     ror ah, 1
     or cl, ah
 
-    mov bx, 0x7C00
+    mov bx, [read_target_address]
     mov ax, 0x0201
     call read_int13_retry
     jmp word [read_return_address]
@@ -144,7 +145,7 @@ read_lba:
     
     push ax ; segment
 
-    mov bx, 0x7C00
+    mov bx, [read_target_address]
     push bx ; offset
 
     inc ax
@@ -267,6 +268,7 @@ lba equ 0x900
 read_return_address equ 0x900
 bytes_per_sector equ 0x902
 boot_drive equ 0x904
+read_target_address equ 0x906
 
 ; other
 drive_params equ 0xA00  ; 26 byte
