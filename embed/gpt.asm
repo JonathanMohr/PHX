@@ -63,8 +63,7 @@ check_disk:
 .after:
     ; TODO
 
-    mov si, disk_error_msg
-    jmp near print_error
+    jmp short disk_error
 
 
 
