@@ -17,7 +17,6 @@ entry:
     mov si, 0x7C00
     mov di, 0x0600
     mov cx, 512
-    cld
     rep movsb
 
     jmp 0x0000:at_0600
@@ -63,23 +62,23 @@ check_disk:
     mov byte [lba], 0
 
 .after:
-    xor ax, ax
-    push ax
-    push ax
-    push ax
-    inc ax
-    push ax
+;     xor ax, ax
+;     push ax
+;     push ax
+;     push ax
+;     inc ax
+;     push ax
+; 
+;     mov word [read_target_address], sector_buffer
+;     call read_sectors
+; 
+; .validate_header:
+;     cld
+;     mov si, sector_buffer
+;     mov di, header_signature
+;     mov cx, 2
+;     repe cmpsd
 
-    mov word [read_target_address], sector_buffer
-    call read_sectors
-
-.validate_header:
-    cld
-    mov si, sector_buffer
-    mov di, header_signature
-    mov cx, 2
-    repe cmpsd
-    
 
     jmp short disk_error
 
@@ -207,7 +206,7 @@ print_error:
     mov si, press_enter_to_restart_msg
     call print_raw
 
-    cbw
+    xor ah, ah
     int 16h
     ; jmp short restart
 
@@ -244,28 +243,71 @@ read_ok:
     add sp, 12
     ret
 
-print_char:
-    int 10h
+
+
+;
+; one 16 bit word:
+;   5 bit: first char
+;   5 bit: second char
+;   5 bit: third char
+;   1 bit: end marker
+;
+
 print_raw:
-    mov ah, 0eh
+    cld
+    lodsw
+    mov cx, 0x0305
+.char:
+    rol ax, cl
+    push ax
+    and al, 0x1F
+    add al, 'a'
+    cmp al, 'z' + 1
+    jb .out
+    mov bx, spec - ('z' + 1)
+    xlat
+.out:
+    mov ah, 0x0E
     mov bx, 0x07
-    lodsb
-    test al, al
-    jnz short print_char
+    int 0x10
+    pop ax
+    dec ch
+    jnz .char
+    test ax, ax
+    jns print_raw
     ret
 
+spec: db ' ', '.', '!', '?', 0x0A, 0x0D
+
 ;
-; a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z
-; a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w     y
+; print_char:
+;     int 10h
+; print_raw:
+;     mov ah, 0eh
+;     mov bx, 0x07
+;     lodsb
+;     test al, al
+;     jnz short print_char
+;     ret
 ;
 
-no_partition_found_msg db "No bootable partition found", 0
-disk_error_msg db "Disk error", 0
-format_error_msg db "Format error", 0
-lba_too_high_error_msg db "LBA too high", 0
-press_enter_to_restart_msg db '!', 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
+; "no partition found."
+; no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa346, 0xdeb5
+; "disk error!"
+disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8f35
+; "format error!"
+; format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba2, 0xe6b5
+; "lba too high!"
+lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418e, 0xe6b5
+; "\r\npress any key to restart...\r\n"
+press_enter_to_restart_msg dw 0xff9e, 0x8924, 0x9680, 0x6e34, 0x5130, 0xd4dc, 0xd448, 0x94c0, 0x8cf6, 0xdef4, 0xd7fd
+
+
+
 
 header_signature db "EFI PART"
+
+
 
 times 440 - ($ - $$) db 0
 
