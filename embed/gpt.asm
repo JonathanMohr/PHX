@@ -85,6 +85,8 @@ read_header:
     ; Maybe check CRC at sector_buffer + 16
 
     ; Maybe check if entry size is bigger than sector size
+    ; TODO: Maybe check if entry size is bigger than 512,
+    ;       because then it could overwrite important stuff
 
     cmp word [sector_buffer + 86], 0
     jnz format_error
