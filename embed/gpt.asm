@@ -100,11 +100,14 @@ read_header:
     mov bx, partition_entry_buffer
     call read_sector
 
-    add word [sector_buffer + 72], 1
-    adc word [sector_buffer + 74], 0
-    adc word [sector_buffer + 76], 0
-    adc word [sector_buffer + 78], 0
+    mov si, sector_buffer + 72
+    mov cx, 4
+.sector_loop:
+    inc word [si]
+    lodsw
+    loopz .sector_loop
 
+.sector_after_add:
     mov di, partition_entry_buffer
 .entry:
     mov ax, [sector_buffer + 80]
@@ -171,18 +174,23 @@ read_header:
     mov [0x07C6], ax
     mov [0x07C8], dx
 
-    mov ax, [0x07FA]
-    sub ax, [0x07F2]
-    mov dx, [0x07FC]
-    sbb dx, [0x07F4]
-    mov cx, [0x07FE]
-    sbb cx, [0x07F6]
-    mov di, [0x0800]
-    sbb di, [0x07F8]
-    add ax, 1
-    adc dx, 0
-    adc cx, 0
-    adc di, 0
+    mov si, 0x07FA
+    lodsw
+    sub ax, [si - 10]
+    mov dx, [si]
+    sbb dx, [si - 8]
+    mov cx, [si + 2]
+    sbb cx, [si - 6]
+    mov di, [si + 4]
+    sbb di, [si - 4]
+    inc ax
+    jnz short .start_ok_done
+    inc dx
+    jnz short .start_ok_done
+    inc cx
+    jnz short .start_ok_done
+    inc di
+.start_ok_done:
     or cx, di
     jz .count_ok
     mov ax, 0xFFFF
