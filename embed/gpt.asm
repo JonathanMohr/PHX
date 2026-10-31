@@ -71,7 +71,7 @@ check_disk:
 
 
 read_header:
-    mov word [read_target_address], sector_buffer
+    mov bx, sector_buffer
     call read_sector
 
 .validate_header:
@@ -97,7 +97,7 @@ read_header:
 
     mov sp, sector_buffer + 72
 .sector:
-    mov word [read_target_address], partition_entry_buffer
+    mov bx, partition_entry_buffer
     call read_sector
 
     add word [sector_buffer + 72], 1
@@ -139,7 +139,7 @@ read_header:
     rep movsb
     mov di, [partition_entry]
 
-    mov word [read_target_address], 0x7C00
+    mov bx, 0x7C00
     lea sp, [di + 32]
     call read_sector
 
@@ -272,7 +272,7 @@ print_error_alias:
 
 ;
 ; 64-bit LBA on stack
-; target offset in read_target_address
+; target offset in bx
 ;
 
 %define RETRIES 3
@@ -284,7 +284,9 @@ read_dispatch:
 read_chs:
     mov ah, 0x08
     mov dl, [boot_drive]
+    push bx
     int 0x13
+    pop bx
     mov si, sp
     jc short disk_error
 
@@ -296,16 +298,16 @@ read_chs:
     jz short disk_error
     inc dh
     jz short disk_error
-    mov bx, cx
+    mov bp, cx
     mov cl, dh
     mov di, cx
 
     cwd
     mov ax, [si + 2]
-    div bx
+    div bp
     xchg ax, cx
     mov ax, [si]
-    div bx
+    div bp
     xchg cx, dx
     inc cx
 
@@ -321,7 +323,6 @@ read_chs:
     ror ah, 1
     or cl, ah
 
-    mov bx, [read_target_address]
     mov ax, 0x0201
     sub sp, 8
     jmp short read_int13_retry
@@ -364,8 +365,7 @@ read_lba:
     xor ax, ax
     
     push ax ; segment
-
-    push word [read_target_address]
+    push bx ; offset
 
     inc ax
     push ax ; sector count
@@ -455,10 +455,9 @@ boot_drive equ 0x500                ; byte
 pnp equ 0x501                       ; 2 words
 bytes_per_sector equ 0x505          ; word
 read_return_address equ 0x507       ; word
-read_target_address equ 0x509       ; word
-buffer_end equ 0x50B                ; word
-partition_entry equ 0x50D           ; word
-drive_params equ 0x50F              ; 26 byte
+buffer_end equ 0x509                ; word
+partition_entry equ 0x50B           ; word
+drive_params equ 0x50D              ; 26 byte
 
 
 ; other
