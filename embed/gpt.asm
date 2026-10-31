@@ -5,17 +5,17 @@
 entry:
     cli
 
-    xor ax, ax
-
     mov [pnp], es
     mov [pnp + 2], di
+
+    xor ax, ax
 
     mov ds, ax
     mov es, ax
     mov ss, ax
-    mov sp, 0x0600
+    mov sp, 0x7C00
 
-    mov si, 0x7C00
+    mov si, sp
     mov di, sp
     mov cx, 512
     rep movsb
@@ -460,5 +460,6 @@ drive_params equ 0x50D              ; 26 byte
 
 
 ; other
-sector_buffer equ 0xA00             ; up to 29184 byte
-partition_entry_buffer equ 0xB00    ; up to 28928 byte
+sector_buffer equ 0x7E00             ; up to 607,5 KiB
+partition_entry_buffer equ 0x8000    ; up to 607 KiB
+
