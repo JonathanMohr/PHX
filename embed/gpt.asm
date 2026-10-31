@@ -7,6 +7,9 @@ entry:
 
     xor ax, ax
 
+    mov [pnp], es
+    mov [pnp + 2], di
+
     mov ds, ax
     mov es, ax
     mov ss, ax
@@ -66,8 +69,10 @@ check_disk:
     inc ax
     push ax
 
+
+read_header:
     mov word [read_target_address], sector_buffer
-    call read_sectors
+    call read_sector
 
 .validate_header:
     cld
@@ -77,9 +82,149 @@ check_disk:
     repe cmpsw
     jne format_error
 
+    ; Maybe check CRC at sector_buffer + 16
 
-    jmp near lba_too_high_error
+    ; Maybe check if entry size is bigger than sector size
 
+    cmp word [sector_buffer + 86], 0
+    jnz format_error
+
+    mov bx, [bytes_per_sector]
+    add bx, partition_entry_buffer
+    mov [buffer_end], bx
+
+    mov sp, sector_buffer + 72
+.sector:
+    mov word [read_target_address], partition_entry_buffer
+    call read_sector
+
+    add word [sector_buffer + 72], 1
+    adc word [sector_buffer + 74], 0
+    adc word [sector_buffer + 76], 0
+    adc word [sector_buffer + 78], 0
+
+    mov di, partition_entry_buffer
+.entry:
+    mov ax, [sector_buffer + 80]
+    or ax, [sector_buffer + 82]
+    jz no_partition_found
+
+    push di
+    xor ax, ax
+    mov cx, 8
+    repe scasw
+    pop di
+    je .next
+
+    test byte [di + 48], 4
+    jnz .candidate
+
+.next:
+    sub word [sector_buffer + 80], 1
+    sbb word [sector_buffer + 82], 0
+    add di, [sector_buffer + 84]
+    cmp di, [buffer_end]
+    jb .entry
+    jmp .sector
+
+.candidate:
+    mov si, di
+    mov [partition_entry], di
+    mov di, 0x07D2
+    mov cx, [sector_buffer + 84]
+    mov [0x07CE], cx
+    mov word [0x07D0], 0
+    rep movsb
+    mov di, [partition_entry]
+
+    mov word [read_target_address], 0x7C00
+    lea sp, [di + 32]
+    call read_sector
+
+    mov di, [partition_entry]
+
+    cmp word [0x7DFE], 0xAA55
+    je .found
+
+    mov sp, sector_buffer + 72
+    jmp .next
+
+.found:
+    mov di, 0x07BE
+    xor ax, ax
+    mov cx, 8
+    rep stosw
+
+    mov byte [0x07BE], 0x80
+    mov byte [0x07C2], 0xEE
+
+    mov ax, [0x07F2]
+    mov dx, [0x07F4]
+    mov cx, [0x07F6]
+    or cx, [0x07F8]
+    jz .start_ok
+    mov ax, 0xFFFF
+    mov dx, ax
+.start_ok:
+    mov [0x07C6], ax
+    mov [0x07C8], dx
+
+    mov ax, [0x07FA]
+    sub ax, [0x07F2]
+    mov dx, [0x07FC]
+    sbb dx, [0x07F4]
+    mov cx, [0x07FE]
+    sbb cx, [0x07F6]
+    mov di, [0x0800]
+    sbb di, [0x07F8]
+    add ax, 1
+    adc dx, 0
+    adc cx, 0
+    adc di, 0
+    or cx, di
+    jz .count_ok
+    mov ax, 0xFFFF
+    mov dx, ax
+.count_ok:
+    mov [0x07CA], ax
+    mov [0x07CC], dx    
+
+
+    mov es, [pnp]
+    mov di, [pnp + 2]
+    mov si, 0x07BE
+    mov sp, 0x7C00
+    mov dl, [boot_drive]
+
+    xor ax, ax
+    push ax
+    popf
+    pushf
+    pop ax
+    and ah, 0xF0
+    cmp ah, 0xF0
+    je .go
+
+    mov ax, 0x7000
+    push ax
+    popf
+    pushf
+    pop ax
+    and ah, 0x70
+    jz .go
+
+[cpu 386]
+    mov eax, 0x54504721 ; "!GPT"
+
+.go:
+[cpu 8086]
+    sti
+    jmp sp
+
+
+no_partition_found:
+    mov si, no_partition_found_msg
+    jmp short print_error
 
 format_error:
     mov si, format_error_msg
@@ -136,7 +281,7 @@ print_error_alias:
 ;
 
 %define RETRIES 3
-read_sectors:
+read_sector:
     pop word [read_return_address]
 read_dispatch:
     jz short read_chs
@@ -248,6 +393,7 @@ read_lba:
 
 print_raw:
     cld
+.word:
     lodsw
     mov cx, 0x0305
 .char:
@@ -267,13 +413,13 @@ print_raw:
     dec ch
     jnz .char
     test ax, ax
-    jns print_raw
+    jns .word
     ret
 
 spec db ' ', '.', '!', '?', 0x0A, 0x0D
 
 ; "no partition found."
-; no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa346, 0xdeb5
+no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa346, 0xdeb5
 ; "disk error!"
 disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8f35
 ; "format error!"
@@ -310,12 +456,16 @@ dw 0xAA55
 
 
 ; byte
-boot_drive equ 0x800            ; byte
-bytes_per_sector equ 0x801      ; word
-read_return_address equ 0x803   ; word
-read_target_address equ 0x805   ; word
+boot_drive equ 0x500                ; byte
+pnp equ 0x501                       ; 2 words
+bytes_per_sector equ 0x505          ; word
+read_return_address equ 0x507       ; word
+read_target_address equ 0x509       ; word
+buffer_end equ 0x50B                ; word
+partition_entry equ 0x50D           ; word
+drive_params equ 0x50F              ; 26 byte
+
 
 ; other
-drive_params equ 0x900          ; 26 byte
-
-sector_buffer equ 0x1000  ; up to 24576 byte
+sector_buffer equ 0xA00             ; up to 29184 byte
+partition_entry_buffer equ 0xB00    ; up to 28928 byte
