@@ -155,34 +155,34 @@ read_header:
     jmp .next
 
 .found:
-    mov di, 0x07BE
+    mov si, 0x07BE
+    mov di, si
     xor ax, ax
     mov cx, 8
     rep stosw
 
-    mov byte [0x07BE], 0x80
-    mov byte [0x07C2], 0xEE
+    mov byte [si], 0x80
+    mov byte [si + 4], 0xEE
 
-    mov ax, [0x07F2]
-    mov dx, [0x07F4]
-    mov cx, [0x07F6]
-    or cx, [0x07F8]
+    mov ax, [si + 0x34]
+    mov dx, [si + 0x36]
+    mov cx, [si + 0x38]
+    or cx, [si + 0x3A]
     jz .start_ok
     mov ax, 0xFFFF
     mov dx, ax
 .start_ok:
-    mov [0x07C6], ax
-    mov [0x07C8], dx
+    mov [si + 8], ax
+    mov [si + 10], dx
 
-    mov si, 0x07FA
-    lodsw
-    sub ax, [si - 10]
-    mov dx, [si]
-    sbb dx, [si - 8]
-    mov cx, [si + 2]
-    sbb cx, [si - 6]
-    mov di, [si + 4]
-    sbb di, [si - 4]
+    mov ax, [si + 0x3C]
+    sub ax, [si + 0x34]
+    mov dx, [si + 0x3E]
+    sbb dx, [si + 0x36]
+    mov cx, [si + 0x40]
+    sbb cx, [si + 0x38]
+    mov di, [si + 0x42]
+    sbb di, [si + 0x3A]
     inc ax
     jnz short .start_ok_done
     inc dx
@@ -196,13 +196,12 @@ read_header:
     mov ax, 0xFFFF
     mov dx, ax
 .count_ok:
-    mov [0x07CA], ax
-    mov [0x07CC], dx    
+    mov [si + 12], ax
+    mov [si + 14], dx
 
 
     mov es, [pnp]
     mov di, [pnp + 2]
-    mov si, 0x07BE
     mov sp, 0x7C00
     mov dl, [boot_drive]
 
