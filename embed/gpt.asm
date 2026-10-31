@@ -202,6 +202,7 @@ read_header:
 
     mov es, [pnp]
     mov di, [pnp + 2]
+    ; mov si, 0x07BE
     mov sp, 0x7C00
     mov dl, [boot_drive]
 
