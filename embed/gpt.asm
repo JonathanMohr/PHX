@@ -70,158 +70,158 @@ check_disk:
     push ax
 
 
-read_header:
-    mov word [read_target_address], sector_buffer
-    call read_sector
-
-.validate_header:
-    cld
-    mov si, sector_buffer
-    mov di, header_signature
-    mov cx, 4
-    repe cmpsw
-    jne format_error
-
-    ; Maybe check CRC at sector_buffer + 16
-
-    ; Maybe check if entry size is bigger than sector size
-    ; TODO: Maybe check if entry size is bigger than 512,
-    ;       because then it could overwrite important stuff
-
-    cmp word [sector_buffer + 86], 0
-    jnz format_error
-
-    mov bx, [bytes_per_sector]
-    add bx, partition_entry_buffer
-    mov [buffer_end], bx
-
-    mov sp, sector_buffer + 72
-.sector:
-    mov word [read_target_address], partition_entry_buffer
-    call read_sector
-
-    add word [sector_buffer + 72], 1
-    adc word [sector_buffer + 74], 0
-    adc word [sector_buffer + 76], 0
-    adc word [sector_buffer + 78], 0
-
-    mov di, partition_entry_buffer
-.entry:
-    mov ax, [sector_buffer + 80]
-    or ax, [sector_buffer + 82]
-    jz no_partition_found
-
-    push di
-    xor ax, ax
-    mov cx, 8
-    repe scasw
-    pop di
-    je .next
-
-    test byte [di + 48], 4
-    jnz .candidate
-
-.next:
-    sub word [sector_buffer + 80], 1
-    sbb word [sector_buffer + 82], 0
-    add di, [sector_buffer + 84]
-    cmp di, [buffer_end]
-    jb .entry
-    jmp .sector
-
-.candidate:
-    mov si, di
-    mov [partition_entry], di
-    mov di, 0x07D2
-    mov cx, [sector_buffer + 84]
-    mov [0x07CE], cx
-    mov word [0x07D0], 0
-    rep movsb
-    mov di, [partition_entry]
-
-    mov word [read_target_address], 0x7C00
-    lea sp, [di + 32]
-    call read_sector
-
-    mov di, [partition_entry]
-
-    cmp word [0x7DFE], 0xAA55
-    je .found
-
-    mov sp, sector_buffer + 72
-    jmp .next
-
-.found:
-    mov di, 0x07BE
-    xor ax, ax
-    mov cx, 8
-    rep stosw
-
-    mov byte [0x07BE], 0x80
-    mov byte [0x07C2], 0xEE
-
-    mov ax, [0x07F2]
-    mov dx, [0x07F4]
-    mov cx, [0x07F6]
-    or cx, [0x07F8]
-    jz .start_ok
-    mov ax, 0xFFFF
-    mov dx, ax
-.start_ok:
-    mov [0x07C6], ax
-    mov [0x07C8], dx
-
-    mov ax, [0x07FA]
-    sub ax, [0x07F2]
-    mov dx, [0x07FC]
-    sbb dx, [0x07F4]
-    mov cx, [0x07FE]
-    sbb cx, [0x07F6]
-    mov di, [0x0800]
-    sbb di, [0x07F8]
-    add ax, 1
-    adc dx, 0
-    adc cx, 0
-    adc di, 0
-    or cx, di
-    jz .count_ok
-    mov ax, 0xFFFF
-    mov dx, ax
-.count_ok:
-    mov [0x07CA], ax
-    mov [0x07CC], dx    
-
-
-    mov es, [pnp]
-    mov di, [pnp + 2]
-    mov si, 0x07BE
-    mov sp, 0x7C00
-    mov dl, [boot_drive]
-
-    xor ax, ax
-    push ax
-    popf
-    pushf
-    pop ax
-    and ah, 0xF0
-    cmp ah, 0xF0
-    je .go
-
-    mov ax, 0x7000
-    push ax
-    popf
-    pushf
-    pop ax
-    and ah, 0x70
-    jz .go
-
-[cpu 386]
-    mov eax, 0x54504721 ; "!GPT"
-
-.go:
-[cpu 8086]
-    sti
-    jmp sp
+;read_header:
+;    mov word [read_target_address], sector_buffer
+;    call read_sector
+;
+;.validate_header:
+;    cld
+;    mov si, sector_buffer
+;    mov di, header_signature
+;    mov cx, 4
+;    repe cmpsw
+;    jne format_error
+;
+;    ; Maybe check CRC at sector_buffer + 16
+;
+;    ; Maybe check if entry size is bigger than sector size
+;    ; TODO: Maybe check if entry size is bigger than 512,
+;    ;       because then it could overwrite important stuff
+;
+;    cmp word [sector_buffer + 86], 0
+;    jnz format_error
+;
+;    mov bx, [bytes_per_sector]
+;    add bx, partition_entry_buffer
+;    mov [buffer_end], bx
+;
+;    mov sp, sector_buffer + 72
+;.sector:
+;    mov word [read_target_address], partition_entry_buffer
+;    call read_sector
+;
+;    add word [sector_buffer + 72], 1
+;    adc word [sector_buffer + 74], 0
+;    adc word [sector_buffer + 76], 0
+;    adc word [sector_buffer + 78], 0
+;
+;    mov di, partition_entry_buffer
+;.entry:
+;    mov ax, [sector_buffer + 80]
+;    or ax, [sector_buffer + 82]
+;    jz no_partition_found
+;
+;    push di
+;    xor ax, ax
+;    mov cx, 8
+;    repe scasw
+;    pop di
+;    je .next
+;
+;    test byte [di + 48], 4
+;    jnz .candidate
+;
+;.next:
+;    sub word [sector_buffer + 80], 1
+;    sbb word [sector_buffer + 82], 0
+;    add di, [sector_buffer + 84]
+;    cmp di, [buffer_end]
+;    jb .entry
+;    jmp .sector
+;
+;.candidate:
+;    mov si, di
+;    mov [partition_entry], di
+;    mov di, 0x07D2
+;    mov cx, [sector_buffer + 84]
+;    mov [0x07CE], cx
+;    mov word [0x07D0], 0
+;    rep movsb
+;    mov di, [partition_entry]
+;
+;    mov word [read_target_address], 0x7C00
+;    lea sp, [di + 32]
+;    call read_sector
+;
+;    mov di, [partition_entry]
+;
+;    cmp word [0x7DFE], 0xAA55
+;    je .found
+;
+;    mov sp, sector_buffer + 72
+;    jmp .next
+;
+;.found:
+;    mov di, 0x07BE
+;    xor ax, ax
+;    mov cx, 8
+;    rep stosw
+;
+;    mov byte [0x07BE], 0x80
+;    mov byte [0x07C2], 0xEE
+;
+;    mov ax, [0x07F2]
+;    mov dx, [0x07F4]
+;    mov cx, [0x07F6]
+;    or cx, [0x07F8]
+;    jz .start_ok
+;    mov ax, 0xFFFF
+;    mov dx, ax
+;.start_ok:
+;    mov [0x07C6], ax
+;    mov [0x07C8], dx
+;
+;    mov ax, [0x07FA]
+;    sub ax, [0x07F2]
+;    mov dx, [0x07FC]
+;    sbb dx, [0x07F4]
+;    mov cx, [0x07FE]
+;    sbb cx, [0x07F6]
+;    mov di, [0x0800]
+;    sbb di, [0x07F8]
+;    add ax, 1
+;    adc dx, 0
+;    adc cx, 0
+;    adc di, 0
+;    or cx, di
+;    jz .count_ok
+;    mov ax, 0xFFFF
+;    mov dx, ax
+;.count_ok:
+;    mov [0x07CA], ax
+;    mov [0x07CC], dx    
+;
+;
+;    mov es, [pnp]
+;    mov di, [pnp + 2]
+;    mov si, 0x07BE
+;    mov sp, 0x7C00
+;    mov dl, [boot_drive]
+;
+;    xor ax, ax
+;    push ax
+;    popf
+;    pushf
+;    pop ax
+;    and ah, 0xF0
+;    cmp ah, 0xF0
+;    je .go
+;
+;    mov ax, 0x7000
+;    push ax
+;    popf
+;    pushf
+;    pop ax
+;    and ah, 0x70
+;    jz .go
+;
+;[cpu 386]
+;    mov eax, 0x54504721 ; "!GPT"
+;
+;.go:
+;[cpu 8086]
+;    sti
+;    jmp sp
 
 
 no_partition_found:
