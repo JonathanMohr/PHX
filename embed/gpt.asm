@@ -70,10 +70,10 @@ check_disk:
     push ax
 
 
-;read_header:
+read_header:
 ;    mov word [read_target_address], sector_buffer
 ;    call read_sector
-;
+
 ;.validate_header:
 ;    cld
 ;    mov si, sector_buffer
