@@ -176,6 +176,8 @@ after_read:
     cmp word [0x7DFE], 0xAA55
     jne short partition_no_marker
 
+    xor ax, ax
+
     mov sp, 0x7C00
 
     mov dl, [boot_drive]
@@ -249,10 +251,10 @@ partition_no_marker:
 
 partition dw 0
 
-no_partition_found_msg db "No bootable partition found.", 0
-disk_error_msg db "Disk error!", 0
-lba_too_high_error_msg db "LBA too high!", 0
-press_enter_to_restart_msg db 0x0D, 0x0A, "Press any key to restart... ", 0x0D, 0x0A, 0
+no_partition_found_msg db "no bootable partition found", 0
+disk_error_msg db "disk error", 0
+lba_too_high_error_msg db "lba too high", 0
+press_enter_to_restart_msg db '!', 0x0D, 0x0A, "press any key to restart... ", 0x0D, 0x0A, 0
 
 times 440 - ($ - $$) db 0
 

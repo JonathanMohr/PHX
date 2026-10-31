@@ -266,7 +266,10 @@ restart:
 
 lba_too_high_error:
     mov si, lba_too_high_error_msg
-print_error_alias:
+    jmp short print_error
+
+disk_error:
+    mov si, disk_error_msg
     jmp short print_error
 
 
@@ -325,11 +328,7 @@ read_chs:
 
     mov ax, 0x0201
     sub sp, 8
-    jmp short read_int13_retry
-
-disk_error:
-    mov si, disk_error_msg
-    jmp short print_error_alias
+    ; jmp short read_int13_retry
 
 read_int13_retry:
     mov di, RETRIES
