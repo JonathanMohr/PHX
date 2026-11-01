@@ -110,7 +110,7 @@ check_disk:
     jnc short .no_lba
 
 .use_lba:
-    mov byte [read_dispatch + 1], read_lba - read_chs
+    mov byte [read_dispatch + 1], read_lba - read_dispatch_after
     mov si, drive_params
     mov word [si], 0x1A
     mov ah, 0x48
@@ -124,7 +124,7 @@ check_disk:
 
 .store:
     push ax ; 0x7FB8
-    sub sp, 6 ; read_return_address, buffer_end, partition_entry
+    sub sp, 6 ; read_return_address, buffer_end, saved_di
 
 .after:
     mov bp, 0x7C00
@@ -142,8 +142,6 @@ read_header:
     mov bx, bp
     call read_sector
 
-    jmp format_error
-
 sector_buffer equ 0x7C00             ; up to 608 KiB
 partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
@@ -153,7 +151,8 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     ; TODO: Maybe check if entry size is bigger than 512,
     ;       because then it could overwrite important stuff
 
-    cmp word [bp + 86], 0
+    mov ax, [bp + 82]
+    or ax, [bp + 86]
     jnz format_error
 
     mov bx, [bp - 8]
@@ -174,39 +173,31 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
 .sector_after_add:
     mov di, partition_entry_buffer
-;    mov si, bp
-;.entry:
-;    mov ax, [si + 80]
-;    or ax, [si + 82]
-;    jz no_partition_found
-;
-;    push di
-;    xor ax, ax
-;    mov cx, 8
-;    repe scasw
-;    pop di
-;    je .next
-;
-;    test byte [di + 48], 4
-;    jnz .candidate
-;
-.next:
-;    sub word [si + 80], 1
-;    sbb word [si + 82], 0
-;    add di, [si + 84]
-;    cmp di, [bp - 12]
-;    jb .entry
-    jmp .sector
+    mov si, bp
+.entry:
+    cmp word [si + 80], 0
+    jz no_partition_found
+
+    push di
+    xor ax, ax
+    mov cx, 8
+    repe scasw
+    pop di
+    je .next
+
+    test byte [di + 48], 4
+    jz .next
 
 .candidate:
-    mov si, di
-    mov [bp - 14], di
+    xchg ax, di
+    lea si, [bp + 84]
     mov di, 0x07D2
-    mov cx, [bp + 84]
-    mov [di - 4], cx
-    mov word [di - 2], 0
+    movsw
+    movsw
+    mov cx, [si - 4]
+    mov si, ax
     rep movsb
-    mov di, [bp - 14]
+    xchg ax, di
 
     mov bx, bp
     lea sp, [di + 32]
@@ -216,7 +207,13 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     je found_partition
 
     mov sp, sector_buffer + 72
-    jmp .next
+
+.next:
+    dec word [si + 80]
+    add di, [si + 84]
+    cmp di, [bp - 12]
+    jb .entry
+    jmp .sector
 
 
 no_partition_found:
@@ -256,12 +253,6 @@ restart:
     jmp 0xFFFF:0x0000
 
 
-lba_too_high_error:
-    mov si, lba_too_high_error_msg
-print_error_alias:
-    jmp short print_error
-
-
 ;
 ; 64-bit LBA on stack
 ; target offset in bx
@@ -270,10 +261,16 @@ print_error_alias:
 %define RETRIES 3
 read_sector:
     pop word [bp - 10]
-    push di
-    push bp
+    mov [bp - 14], di
 read_dispatch:
     jmp short read_chs
+read_dispatch_after:
+
+lba_too_high_error:
+    mov si, lba_too_high_error_msg
+print_error_alias:
+    jmp short print_error
+
 read_chs:
     jmp word [bp - 10]
     mov ah, 0x08
@@ -333,8 +330,8 @@ read_int13_retry:
     jc short .read_not_ok
 
     add sp, 20
-    pop bp
-    pop di
+    mov bp, 0x7C00
+    mov di, [bp - 14]
     jmp word [bp - 10]
 
 .read_not_ok:
@@ -409,7 +406,7 @@ spec db ' ', '.', '!', 0x0A, 0x0D
 ; ; "no bootable partition found"
 ; no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa347
 ; ; "disk error"
-; disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
+disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 ; ; "format error"
 ; format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
 ; ; "lba too high"
@@ -418,7 +415,6 @@ spec db ' ', '.', '!', 0x0A, 0x0D
 ; press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 
 no_partition_found_msg dw 0x7823
-disk_error_msg dw 0x1a25
 format_error_msg dw 0x2ba3
 lba_too_high_error_msg dw 0x5841
 press_enter_to_restart_msg dw 0xf777
