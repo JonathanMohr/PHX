@@ -84,11 +84,11 @@ one_offset equ $ + 1 - entry
 ;    test ah, 0x80
 ;    jz short .go
 ;
-;[cpu 386]
+[cpu 386]
 ;    mov eax, 0x54504721 ; "!GPT"
 ;
-;.go:
-;[cpu 8086]
+.go:
+[cpu 8086]
     sti
     jmp sp
 
