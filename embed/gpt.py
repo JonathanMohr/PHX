@@ -1,7 +1,7 @@
 import sys
 
 CODES = {chr(97 + i): i for i in range(26)}
-CODES.update({" ": 26, ".": 27, "!": 28, "?": 29, "\n": 30, "\r": 31})
+CODES.update({" ": 26, ".": 27, "!": 28, "\n": 29, "\r": 30})
 
 def pack(s: str):
     s = s.replace("\\r", "\r").replace("\\n", "\n").lower()

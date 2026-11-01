@@ -25,7 +25,72 @@ entry:
 
     jmp 0x0000:at_0600
 
-one: db 1
+found_partition:
+    mov si, 0x07BE
+    mov di, si
+    xor ax, ax
+    mov cx, 8
+    rep stosw
+
+    mov byte [si], 0x80
+    mov byte [si + 4], 0xEE
+
+    mov ax, [si + 0x34]
+    mov dx, [si + 0x36]
+    mov cx, [si + 0x38]
+    or cx, [si + 0x3A]
+    jz .start_ok
+    mov ax, 0xFFFF
+    mov dx, ax
+.start_ok:
+    mov [si + 8], ax
+    mov [si + 10], dx
+
+one_offset equ $ + 1 - entry
+    mov ax, 1
+    cwd
+    xor cx, cx
+    xor di, di
+    add ax, [si + 0x3C]
+    adc dx, [si + 0x3E]
+    adc cx, [si + 0x40]
+    adc di, [si + 0x42]
+    sub ax, [si + 0x34]
+    sbb dx, [si + 0x36]
+    sbb cx, [si + 0x38]
+    sbb di, [si + 0x3A]
+    or cx, di
+    jz .count_ok
+    mov ax, 0xFFFF
+    mov dx, ax
+.count_ok:
+    mov [si + 12], ax
+    mov [si + 14], dx
+
+
+    mov sp, 0x7BFA
+    pop dx
+    pop es
+    pop di
+    ; mov si, 0x07BE
+
+    pushf
+    pop ax
+    or ah, 0x80
+    push ax
+    popf
+    pushf
+    pop ax
+    test ah, 0x80
+    jz .go
+
+[cpu 386]
+    mov eax, 0x54504721 ; "!GPT"
+
+.go:
+[cpu 8086]
+    sti
+    jmp sp
 
 at_0600:
     sti
@@ -67,7 +132,7 @@ check_disk:
     push ds
     push ds
     push ds
-    push word [bp + one - entry]
+    push word [bp + one_offset]
 
 read_header:
     mov bx, bp
@@ -142,76 +207,10 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     call read_sector
 
     cmp word [0x7DFE], 0xAA55
-    je .found
+    je found_partition
 
     mov sp, sector_buffer + 72
     jmp .next
-
-.found:
-    mov si, 0x07BE
-    mov di, si
-    xor ax, ax
-    mov cx, 8
-    rep stosw
-
-    mov byte [si], 0x80
-    mov byte [si + 4], 0xEE
-
-    mov ax, [si + 0x34]
-    mov dx, [si + 0x36]
-    mov cx, [si + 0x38]
-    or cx, [si + 0x3A]
-    jz .start_ok
-    mov ax, 0xFFFF
-    mov dx, ax
-.start_ok:
-    mov [si + 8], ax
-    mov [si + 10], dx
-
-    mov ax, 1
-    cwd
-    xor cx, cx
-    xor di, di
-    add ax, [si + 0x3C]
-    adc dx, [si + 0x3E]
-    adc cx, [si + 0x40]
-    adc di, [si + 0x42]
-    sub ax, [si + 0x34]
-    sbb dx, [si + 0x36]
-    sbb cx, [si + 0x38]
-    sbb di, [si + 0x3A]
-    or cx, di
-    jz .count_ok
-    mov ax, 0xFFFF
-    mov dx, ax
-.count_ok:
-    mov [si + 12], ax
-    mov [si + 14], dx
-
-
-    mov sp, 0x7BFA
-    pop dx
-    pop es
-    pop di
-    ; mov si, 0x07BE
-
-    pushf
-    pop ax
-    or ah, 0x80
-    push ax
-    popf
-    pushf
-    pop ax
-    test ah, 0x80
-    jz .go
-
-[cpu 386]
-    mov eax, 0x54504721 ; "!GPT"
-
-.go:
-[cpu 8086]
-    sti
-    jmp sp
 
 
 no_partition_found:
@@ -234,14 +233,6 @@ print_error:
 restart:
     xor cx, cx
 
-.wait:
-    in al, 0x64
-    test al, 2
-    loopnz .wait
-
-    mov al, 0xFE
-    out 0x64, al
-
 .delay:
     in al, 0x64
     loop .delay
@@ -261,10 +252,7 @@ restart:
 
 lba_too_high_error:
     mov si, lba_too_high_error_msg
-    jmp short print_error
-
-disk_error:
-    mov si, disk_error_msg
+print_error_alias:
     jmp short print_error
 
 
@@ -287,48 +275,46 @@ read_chs:
     push bx
     int 0x13
     pop bx
-    mov si, sp
     jc short disk_error
 
-    mov ax, [si + 4]
-    or ax, [si + 6]
+    pop si
+    pop di
+    pop ax
+    pop bp
+    or ax, bp
     jnz short lba_too_high_error
 
     and cx, 0x3F
-disk_error_alias_zero:
     jz short disk_error
-    inc dh
-    jz short disk_error
-    mov bp, cx
-    mov cl, dh
-    mov di, cx
-
+    mov al, dh
+    inc ax
+    xchg ax, bp
     cwd
-    mov ax, [si + 2]
-    div bp
-    xchg ax, cx
-    mov ax, [si]
-    div bp
-    xchg cx, dx
-    inc cx
-
-    cmp dx, di
+    xchg ax, di
+    div cx
+    xchg ax, si
+    div cx
+    xchg dx, si
+    cmp dx, bp
     jae short lba_too_high_error
-    div di
+    div bp
     cmp ax, 1023
     ja short lba_too_high_error
 
     mov dh, dl
+    inc si
+    mov cx, si
     mov ch, al
     ror ah, 1
     ror ah, 1
     or cl, ah
 
     mov ax, 0x0201
-    sub sp, 8
+    sub sp, 16
     ; jmp short read_int13_retry
 
 read_int13_retry:
+    mov dl, [bp - 6]
     mov di, RETRIES
 .again:
     push ax
@@ -337,7 +323,6 @@ read_int13_retry:
     push dx
     push si
     push di
-    mov dl, [0x7BFA]
     int 0x13
     jc short .read_not_ok
 
@@ -359,7 +344,11 @@ read_int13_retry:
     dec di
     jnz short .again
 
-    jmp short disk_error_alias_zero
+    ; jmp short disk_error
+
+disk_error:
+    mov si, disk_error_msg
+    jmp short print_error_alias
 
 read_lba:
     xor ax, ax
@@ -409,18 +398,18 @@ print_raw:
     jns print_raw
     ret
 
-spec db ' ', '.', '!', '?', 0x0A, 0x0D
+spec db ' ', '.', '!', 0x0A, 0x0D
 
-; "no partition found."
-no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa346, 0xdeb5
-; "disk error!"
-disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8f35
-; "format error!"
-format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba2, 0xe6b5
-; "lba too high!"
-lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418e, 0xe6b5
-; "\r\npress any key to restart...\r\n"
-press_enter_to_restart_msg dw 0xff9e, 0x8924, 0x9680, 0x6e34, 0x5130, 0xd4dc, 0xd448, 0x94c0, 0x8cf6, 0xdef4, 0xd7fd
+; "no bootable partition found"
+no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa347
+; "disk error"
+disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
+; "format error"
+format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
+; "lba too high"
+lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
+; "!\r\npress any key to restart...\r\n"
+press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 
 
 times 440 - ($ - $$) db 0
