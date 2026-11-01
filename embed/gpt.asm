@@ -76,14 +76,6 @@ read_header:
     mov bx, sector_buffer
     call read_sector
 
-.validate_header:
-    cld
-    mov si, sector_buffer
-    mov di, header_signature
-    mov cx, 4
-    repe cmpsw
-    jne format_error
-
     ; Maybe check CRC at sector_buffer + 16
 
     ; Maybe check if entry size is bigger than sector size
@@ -435,12 +427,6 @@ format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba2, 0xe6b5
 lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418e, 0xe6b5
 ; "\r\npress any key to restart...\r\n"
 press_enter_to_restart_msg dw 0xff9e, 0x8924, 0x9680, 0x6e34, 0x5130, 0xd4dc, 0xd448, 0x94c0, 0x8cf6, 0xdef4, 0xd7fd
-
-
-
-
-header_signature db "EFI PART"
-
 
 
 times 440 - ($ - $$) db 0
