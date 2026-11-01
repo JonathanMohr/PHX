@@ -26,67 +26,69 @@ entry:
     jmp 0x0000:at_0600
 
 found_partition:
-;    mov si, 0x07BE
-;    mov di, si
-;    xor ax, ax
-;    mov cx, 8
-;    rep stosw
-;
-;    mov byte [si], 0x80
-;    mov byte [si + 4], 0xEE
-;
-;    mov ax, [si + 0x34]
-;    mov dx, [si + 0x36]
-;    mov cx, [si + 0x38]
-;    or cx, [si + 0x3A]
-;    jz short .start_ok
-;    mov ax, 0xFFFF
-;    mov dx, ax
-;.start_ok:
-;    mov [si + 8], ax
-;    mov [si + 10], dx
-;
+    mov di, 0x07BE
+    mov ax, 0x80
+    stosw
+    xor ax, ax
+    mov al, 0xEE
+    stosw
+    xor ax, ax
+    stosw
+
+    mov si, 0x07F2
+    movsw
+    movsw
+    lodsw
+    or ax, [si]
+    jz short .start_ok
+    mov ax, 0xFFFF
+    sub di, 4
+    stosw
+    stosw
+.start_ok:
+
 one_offset equ $ + 1 - entry
     mov ax, 1
-;    cwd
-;    xor cx, cx
-;    xor di, di
-;    add ax, [si + 0x3C]
-;    adc dx, [si + 0x3E]
-;    adc cx, [si + 0x40]
-;    adc di, [si + 0x42]
-;    sub ax, [si + 0x34]
-;    sbb dx, [si + 0x36]
-;    sbb cx, [si + 0x38]
-;    sbb di, [si + 0x3A]
-;    or cx, di
-;    jz short .count_ok
-;    mov ax, 0xFFFF
-;    mov dx, ax
-;.count_ok:
-;    mov [si + 12], ax
-;    mov [si + 14], dx
-;
-;
-    mov sp, 0x7BFA
+    cwd
+    xor cx, cx
+    xor bx, bx
+    add ax, [si + 2]
+    adc dx, [si + 4]
+    adc cx, [si + 6]
+    adc bx, [si + 8]
+    sub ax, [si - 6]
+    sbb dx, [si - 4]
+    sbb cx, [si - 2]
+    sbb bx, [si]
+    or cx, bx
+    jz short .count_ok
+    mov ax, 0xFFFF
+    cwd
+.count_ok:
+    stosw
+    xchg ax, dx
+    stosw
+
+
+    lea sp, [bp - 6]
     pop dx
     pop es
     pop di
-;    ; mov si, 0x07BE
-;
-;    pushf
-;    pop ax
-;    or ah, 0x80
-;    push ax
-;    popf
-;    pushf
-;    pop ax
-;    test ah, 0x80
-;    jz short .go
-;
+    ; mov si, 0x07BE
+
+    pushf
+    pop ax
+    or ah, 0x80
+    push ax
+    popf
+    pushf
+    pop ax
+    test ah, 0x80
+    jz short .go
+
 [cpu 386]
-;    mov eax, 0x54504721 ; "!GPT"
-;
+    mov eax, 0x54504721 ; "!GPT"
+
 .go:
 [cpu 8086]
     sti
@@ -123,8 +125,10 @@ check_disk:
     mov ax, 512
 
 .store:
+    add ax, partition_entry_buffer
     push ax ; 0x7FB8
-    sub sp, 6 ; read_return_address, buffer_end, saved_di
+    push ds ; read_return_address
+    push ds ; saved_di
 
 .after:
     mov bp, 0x7C00
@@ -155,27 +159,21 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     or ax, [bp + 86]
     jnz short format_error
 
-    mov bx, [bp - 8]
-    add bx, partition_entry_buffer
-    mov [bp - 12], bx
-
-    mov sp, sector_buffer + 72
 .sector:
+    mov sp, sector_buffer + 72
     mov bx, partition_entry_buffer
     call read_sector
 
-    mov si, sector_buffer + 72
+    mov si, sp
     mov cx, 4
 .sector_loop:
     inc word [si]
     lodsw
     loopz .sector_loop
 
-.sector_after_add:
     mov di, partition_entry_buffer
-    mov si, bp
 .entry:
-    cmp word [si + 80], 0
+    cmp word [bp + 80], 0
     jz short no_partition_found
 
     push di
@@ -206,12 +204,10 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     cmp word [0x7DFE], 0xAA55
     je short .found_partition
 
-    mov sp, sector_buffer + 72
-
 .next:
-    dec word [si + 80]
-    add di, [si + 84]
-    cmp di, [bp - 12]
+    dec word [bp + 80]
+    add di, [bp + 84]
+    cmp di, [bp - 8]
     jb short .entry
     jmp short .sector
 
@@ -263,7 +259,7 @@ restart:
 %define RETRIES 3
 read_sector:
     pop word [bp - 10]
-    mov [bp - 14], di
+    mov [bp - 12], di
 read_dispatch:
     jmp short read_chs
 read_dispatch_after:
@@ -333,7 +329,7 @@ read_int13_retry:
 
     add sp, 20
     mov bp, 0x7C00
-    mov di, [bp - 14]
+    mov di, [bp - 12]
     jmp word [bp - 10]
 
 .read_not_ok:
@@ -406,20 +402,15 @@ print_raw:
 spec db ' ', '.', '!', 0x0A, 0x0D
 
 ; ; "no bootable partition found"
-; no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa347
+no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa347
 ; ; "disk error"
 disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 ; ; "format error"
-; format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
+format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
 ; ; "lba too high"
-; lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
+lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
 ; ; "!\r\npress any key to restart...\r\n"
-; press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
-
-no_partition_found_msg dw 0x7823
-format_error_msg dw 0x2ba3
-lba_too_high_error_msg dw 0x5841
-press_enter_to_restart_msg dw 0xf777
+press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 
 times 440 - ($ - $$) db 0
 
