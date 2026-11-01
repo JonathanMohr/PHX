@@ -132,8 +132,8 @@ read_header:
     mov [bp + partition_entry], di
     mov di, 0x07D2
     mov cx, [sector_buffer + 84]
-    mov [0x07CE], cx
-    mov word [0x07D0], 0
+    mov [di - 4], cx
+    mov word [di - 2], 0
     rep movsb
     mov di, [bp + partition_entry]
 
@@ -301,6 +301,7 @@ read_chs:
     jnz short lba_too_high_error
 
     and cx, 0x3F
+disk_error_alias_zero:
     jz short disk_error
     inc dh
     jz short disk_error
@@ -344,7 +345,14 @@ read_int13_retry:
     push di
     mov dl, [base_data + boot_drive]
     int 0x13
-    jnc short read_ok
+    jc short .read_not_ok
+
+    add sp, 20
+    pop bp
+    pop di
+    jmp word [bp + read_return_address]
+
+.read_not_ok:
     mov dl, [base_data + boot_drive]
     xor ah, ah
     int 0x13
@@ -357,13 +365,7 @@ read_int13_retry:
     dec di
     jnz short .again
 
-    jmp short disk_error
-
-read_ok:
-    add sp, 20
-    pop bp
-    pop di
-    jmp word [bp + read_return_address]
+    jmp short disk_error_alias_zero
 
 read_lba:
     xor ax, ax
