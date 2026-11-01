@@ -4,77 +4,77 @@
 
 entry:
     cli
-
-    mov [base_data + pnp], es
-    mov [base_data + pnp + 2], di
+    cld
 
     xor ax, ax
 
-    mov ds, ax
-    mov es, ax
     mov ss, ax
     mov sp, 0x7C00
-
     mov si, sp
-    mov di, sp
+
+    push di
+    push es
+    push dx
+
+    mov ds, ax
+    mov es, ax
+
+    mov di, 0x0600
     mov cx, 512
     rep movsb
 
     jmp 0x0000:at_0600
 
-at_0600:
-    xchg ax, dx
-    stosb
-    sti
+one: db 1
 
-partition_search:
+at_0600:
+    sti
 
 check_disk:
     ; check lba
     mov ah, 0x41
     mov bx, 0x55AA
     ; dl is still set
+    push dx
+    stc
     int 0x13
+    pop dx
     jc short .no_lba
-    cmp bx, 0xAA55
-    jne short .no_lba
 
     shr cl, 1
     jnc short .no_lba
 
 .use_lba:
     mov byte [read_dispatch + 1], read_lba - read_chs
-    mov si, base_data + drive_params
+    mov si, drive_params
     mov word [si], 0x1A
     mov ah, 0x48
-    mov dl, [si - drive_params + boot_drive]
+    ; dl is still set
     int 0x13
-    jc short .no_lba
-    mov ax, [base_data + drive_params + 0x18]
-    cmp ah, 2
-    jae short .store
+    mov ax, [drive_params + 0x18]
+    jnc short .store
 
 .no_lba:
     mov ax, 512
 
 .store:
-    mov di, base_data + bytes_per_sector
-    stosw
+    push ax ; 0x7FB8
+    sub sp, 6 ; read_return_address, buffer_end, partition_entry
 
 .after:
-    xor ax, ax
-    push ax
-    push ax
-    push ax
-    inc ax
-    push ax
+    mov bp, 0x7C00
 
+    push ds
+    push ds
+    push ds
+    push word [bp + one - entry]
 
 read_header:
-    mov bp, base_data
-
-    mov bx, sector_buffer
+    mov bx, bp
     call read_sector
+
+sector_buffer equ 0x7C00             ; up to 608 KiB
+partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
     ; Maybe check CRC at sector_buffer + 16
 
@@ -82,12 +82,12 @@ read_header:
     ; TODO: Maybe check if entry size is bigger than 512,
     ;       because then it could overwrite important stuff
 
-    cmp word [sector_buffer + 86], 0
+    cmp word [bp + 86], 0
     jnz format_error
 
-    mov bx, [bp + bytes_per_sector]
+    mov bx, [bp - 8]
     add bx, partition_entry_buffer
-    mov [bp + buffer_end], bx
+    mov [bp - 12], bx
 
     mov sp, sector_buffer + 72
 .sector:
@@ -103,7 +103,7 @@ read_header:
 
 .sector_after_add:
     mov di, partition_entry_buffer
-    mov si, sector_buffer
+    mov si, bp
 .entry:
     mov ax, [si + 80]
     or ax, [si + 82]
@@ -123,21 +123,21 @@ read_header:
     sub word [si + 80], 1
     sbb word [si + 82], 0
     add di, [si + 84]
-    cmp di, [bp + buffer_end]
+    cmp di, [bp - 12]
     jb .entry
     jmp .sector
 
 .candidate:
     mov si, di
-    mov [bp + partition_entry], di
+    mov [bp - 14], di
     mov di, 0x07D2
-    mov cx, [sector_buffer + 84]
+    mov cx, [bp + 84]
     mov [di - 4], cx
     mov word [di - 2], 0
     rep movsb
-    mov di, [bp + partition_entry]
+    mov di, [bp - 14]
 
-    mov bx, 0x7C00
+    mov bx, bp
     lea sp, [di + 32]
     call read_sector
 
@@ -189,11 +189,11 @@ read_header:
     mov [si + 14], dx
 
 
-    mov es, [bp + pnp]
-    mov di, [bp + pnp + 2]
+    mov sp, 0x7BFA
+    pop dx
+    pop es
+    pop di
     ; mov si, 0x07BE
-    mov sp, 0x7C00
-    mov dl, [bp + boot_drive]
 
     pushf
     pop ax
@@ -232,7 +232,6 @@ print_error:
     ; jmp short restart
 
 restart:
-    cli
     xor cx, cx
 
 .wait:
@@ -243,7 +242,6 @@ restart:
     mov al, 0xFE
     out 0x64, al
 
-    xor cx, cx
 .delay:
     in al, 0x64
     loop .delay
@@ -253,8 +251,8 @@ restart:
     test ah, ah
     js .fallback
 [cpu 286]
-    lidt [cs:.fallback + 1]
-    int 3
+    lidt [.fallback + 1]
+    int3
 
 [cpu 8086]
 .fallback:
@@ -277,15 +275,15 @@ disk_error:
 
 %define RETRIES 3
 read_sector:
+    pop word [bp - 10]
     push di
     push bp
-    pop word [bp + read_return_address]
 read_dispatch:
     jz short read_chs
 
 read_chs:
     mov ah, 0x08
-    mov dl, [bp + boot_drive]
+    mov dl, [bp - 6]
     push bx
     int 0x13
     pop bx
@@ -339,17 +337,17 @@ read_int13_retry:
     push dx
     push si
     push di
-    mov dl, [base_data + boot_drive]
+    mov dl, [0x7BFA]
     int 0x13
     jc short .read_not_ok
 
     add sp, 20
     pop bp
     pop di
-    jmp word [bp + read_return_address]
+    jmp word [bp - 10]
 
 .read_not_ok:
-    mov dl, [base_data + boot_drive]
+    mov dl, [0x7BFA]
     xor ah, ah
     int 0x13
     pop di
@@ -365,7 +363,7 @@ read_int13_retry:
 
 read_lba:
     xor ax, ax
-    
+
     push ax ; segment
     push bx ; offset
 
@@ -389,8 +387,6 @@ read_lba:
 ;
 
 print_raw:
-    cld
-.word:
     lodsw
     mov cx, 0x0305
 .char:
@@ -410,7 +406,7 @@ print_raw:
     dec ch
     jnz .char
     test ax, ax
-    jns .word
+    jns print_raw
     ret
 
 spec db ' ', '.', '!', '?', 0x0A, 0x0D
@@ -441,23 +437,6 @@ partition3:
 partition4:
     times 16 db 0
 
-
-
 dw 0xAA55
 
-
-; byte
-base_data equ 0x500
-boot_drive equ 0x0          ; byte
-pnp equ 0x1                 ; 2 words
-bytes_per_sector equ 0x5    ; word
-read_return_address equ 0x7 ; word
-buffer_end equ 0x9          ; word
-partition_entry equ 0xB     ; word
-drive_params equ 0xD        ; 26 byte
-
-
-; other
-sector_buffer equ 0x7E00             ; up to 607,5 KiB
-partition_entry_buffer equ 0x8000    ; up to 607 KiB
-
+drive_params equ 0x500 ; 26 byte
