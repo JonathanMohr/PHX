@@ -39,7 +39,7 @@ found_partition:
 ;    mov dx, [si + 0x36]
 ;    mov cx, [si + 0x38]
 ;    or cx, [si + 0x3A]
-;    jz .start_ok
+;    jz short .start_ok
 ;    mov ax, 0xFFFF
 ;    mov dx, ax
 ;.start_ok:
@@ -60,7 +60,7 @@ one_offset equ $ + 1 - entry
 ;    sbb cx, [si + 0x38]
 ;    sbb di, [si + 0x3A]
 ;    or cx, di
-;    jz .count_ok
+;    jz short .count_ok
 ;    mov ax, 0xFFFF
 ;    mov dx, ax
 ;.count_ok:
@@ -82,7 +82,7 @@ one_offset equ $ + 1 - entry
 ;    pushf
 ;    pop ax
 ;    test ah, 0x80
-;    jz .go
+;    jz short .go
 ;
 ;[cpu 386]
 ;    mov eax, 0x54504721 ; "!GPT"
@@ -153,7 +153,7 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
     mov ax, [bp + 82]
     or ax, [bp + 86]
-    jnz format_error
+    jnz short format_error
 
     mov bx, [bp - 8]
     add bx, partition_entry_buffer
@@ -176,17 +176,17 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     mov si, bp
 .entry:
     cmp word [si + 80], 0
-    jz no_partition_found
+    jz short no_partition_found
 
     push di
     xor ax, ax
     mov cx, 8
     repe scasw
     pop di
-    je .next
+    je short .next
 
     test byte [di + 48], 4
-    jz .next
+    jz short .next
 
 .candidate:
     xchg ax, di
@@ -204,7 +204,7 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     call read_sector
 
     cmp word [0x7DFE], 0xAA55
-    je found_partition
+    je short .found_partition
 
     mov sp, sector_buffer + 72
 
@@ -212,9 +212,11 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     dec word [si + 80]
     add di, [si + 84]
     cmp di, [bp - 12]
-    jb .entry
-    jmp .sector
+    jb short .entry
+    jmp short .sector
 
+.found_partition:
+    jmp near found_partition
 
 no_partition_found:
     mov si, no_partition_found_msg
