@@ -168,22 +168,18 @@ read_header:
     mov [si + 8], ax
     mov [si + 10], dx
 
-    mov ax, [si + 0x3C]
+    mov ax, 1
+    cwd
+    xor cx, cx
+    xor di, di
+    add ax, [si + 0x3C]
+    adc dx, [si + 0x3E]
+    adc cx, [si + 0x40]
+    adc di, [si + 0x42]
     sub ax, [si + 0x34]
-    mov dx, [si + 0x3E]
     sbb dx, [si + 0x36]
-    mov cx, [si + 0x40]
     sbb cx, [si + 0x38]
-    mov di, [si + 0x42]
     sbb di, [si + 0x3A]
-    inc ax
-    jnz short .start_ok_done
-    inc dx
-    jnz short .start_ok_done
-    inc cx
-    jnz short .start_ok_done
-    inc di
-.start_ok_done:
     or cx, di
     jz .count_ok
     mov ax, 0xFFFF
@@ -193,11 +189,11 @@ read_header:
     mov [si + 14], dx
 
 
-    mov es, [base_data + pnp]
-    mov di, [base_data + pnp + 2]
+    mov es, [bp + pnp]
+    mov di, [bp + pnp + 2]
     ; mov si, 0x07BE
     mov sp, 0x7C00
-    mov dl, [base_data + boot_drive]
+    mov dl, [bp + boot_drive]
 
     pushf
     pop ax
