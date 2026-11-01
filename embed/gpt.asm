@@ -47,7 +47,7 @@ check_disk:
     mov si, base_data + drive_params
     mov word [si], 0x1A
     mov ah, 0x48
-    mov dl, [base_data + boot_drive]
+    mov dl, [si - drive_params + boot_drive]
     int 0x13
     jc short .no_lba
     mov ax, [base_data + drive_params + 0x18]
