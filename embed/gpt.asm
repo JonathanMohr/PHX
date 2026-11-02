@@ -25,75 +25,6 @@ entry:
 
     jmp 0x0000:at_0600
 
-found_partition:
-    mov di, 0x07BE
-    mov ax, 0x80
-    stosw
-    xor ax, ax
-    mov al, 0xEE
-    stosw
-    xor ax, ax
-    stosw
-
-    mov si, 0x07F2
-    movsw
-    movsw
-    lodsw
-    or ax, [si]
-    jz short .start_ok
-    mov ax, 0xFFFF
-    sub di, 4
-    stosw
-    stosw
-.start_ok:
-
-one_offset equ $ + 1 - entry
-    mov ax, 1
-    cwd
-    xor cx, cx
-    xor bx, bx
-    add ax, [si + 2]
-    adc dx, [si + 4]
-    adc cx, [si + 6]
-    adc bx, [si + 8]
-    sub ax, [si - 6]
-    sbb dx, [si - 4]
-    sbb cx, [si - 2]
-    sbb bx, [si]
-    or cx, bx
-    jz short .count_ok
-    mov ax, 0xFFFF
-    cwd
-.count_ok:
-    stosw
-    xchg ax, dx
-    stosw
-
-
-    lea sp, [bp - 6]
-    pop dx
-    pop es
-    pop di
-    ; mov si, 0x07BE
-
-    pushf
-    pop ax
-    or ah, 0x80
-    push ax
-    popf
-    pushf
-    pop ax
-    test ah, 0x80
-    jz short .go
-
-[cpu 386]
-    mov eax, 0x54504721 ; "!GPT"
-
-.go:
-[cpu 8086]
-    sti
-    jmp sp
-
 at_0600:
     sti
 
@@ -134,11 +65,9 @@ check_disk:
     mov bp, 0x7C00
 
     xor ax, ax
-
     push ax
     push ax
     push ax
-
     inc ax
     push ax
 
@@ -146,8 +75,8 @@ read_header:
     mov bx, bp
     call read_sector
 
-sector_buffer equ 0x7C00             ; up to 608 KiB
-partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
+sector_buffer equ 0x7C00             ; up to 33 KiB sectors
+partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
 
     ; Maybe check CRC at sector_buffer + 16
 
@@ -157,7 +86,7 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
     mov ax, [bp + 82]
     or ax, [bp + 86]
-    jnz short format_error
+    jnz short disk_error_alias ; TODO: Maybe format_error
 
 .sector:
     mov sp, sector_buffer + 72
@@ -178,31 +107,14 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
 
     push di
     xor ax, ax
+    mov es, ax
     mov cx, 8
     repe scasw
     pop di
     je short .next
 
     test byte [di + 48], 4
-    jz short .next
-
-.candidate:
-    xchg ax, di
-    lea si, [bp + 84]
-    mov di, 0x07D2
-    movsw
-    movsw
-    mov cx, [si - 4]
-    mov si, ax
-    rep movsb
-    xchg ax, di
-
-    mov bx, bp
-    lea sp, [di + 32]
-    call read_sector
-
-    cmp word [0x7DFE], 0xAA55
-    je short .found_partition
+    jnz short found
 
 .next:
     dec word [bp + 80]
@@ -211,18 +123,23 @@ partition_entry_buffer equ 0x7E00    ; up to 607,5 KiB
     jb short .entry
     jmp short .sector
 
-.found_partition:
-    jmp near found_partition
-
 no_partition_found:
-    mov si, no_partition_found_msg
-    jmp short print_error
+    call print_error
+    ; "no active partition"
+    dw 0x6bb4, 0x00a6, 0x4548, 0xd3c0, 0x8cd0, 0x9a1c, 0x6eb5
 
-format_error:
-    mov si, format_error_msg
-    ; jmp short print_error
+; format_error:
+;     call print_error
+;     ; "format error"
+;     dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
 
+disk_error_alias:
+    jmp near disk_error
+
+; "!\r\npress any key to restart...\r\n"
+press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 print_error:
+    pop si
     call print_raw
     mov si, press_enter_to_restart_msg
     call print_raw
@@ -250,6 +167,92 @@ restart:
 .fallback:
     jmp 0xFFFF:0x0000
 
+found:
+    push di
+    push di
+    lea si, [bp + 84]
+    mov di, 0x07CE
+    lodsw
+    stosw
+    xchg ax, cx
+    movsw
+    pop si
+    rep movsb
+    pop di
+
+    mov bx, bp
+    lea sp, [di + 32]
+    call read_sector
+
+
+    ; TODO: CHS
+    push ds
+    pop es
+
+    mov di, 0x07BE
+    mov ax, 0x80
+    stosw
+    xor ax, ax
+    stosw
+    mov al, 0xED ; synthetic entry
+    stosw
+    xor ax, ax
+    stosw
+
+    mov si, 0x07F2
+    movsw
+    movsw
+    lodsw
+    or ax, [si]
+    jz short .start_ok
+    mov ax, 0xFFFF
+    sub di, 4
+    stosw
+    stosw
+.start_ok:
+    mov ax, 1
+    cwd
+    xor cx, cx
+    xor bx, bx
+    add ax, [si + 2]
+    adc dx, [si + 4]
+    adc cx, [si + 6]
+    adc bx, [si + 8]
+    sub ax, [si - 6]
+    sbb dx, [si - 4]
+    sbb cx, [si - 2]
+    sbb bx, [si]
+    or cx, bx
+    jz short .count_ok
+    mov ax, 0xFFFF
+    cwd
+.count_ok:
+    stosw
+    xchg ax, dx
+    stosw
+
+
+    lea sp, [bp - 6]
+    pop dx
+    pop es
+    pop di
+    mov si, 0x07BE
+
+    pushf
+    mov ah, 0x70
+    push ax
+    popf
+    pushf
+    pop ax
+    cmp ah, 0x70
+    jne short .go
+
+[cpu 386]
+    mov eax, 0x54504721 ; "!GPT"
+
+.go:
+[cpu 8086]
+    jmp sp
 
 ;
 ; 64-bit LBA on stack
@@ -265,12 +268,16 @@ read_dispatch:
 read_dispatch_after:
 
 lba_too_high_error:
-    mov si, lba_too_high_error_msg
-print_error_alias:
-    jmp short print_error
+    call print_error
+    ; "lba too high"
+    lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
+
+disk_error:
+    call print_error
+    ; "disk error"
+    disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 
 read_chs:
-    jmp word [bp - 10]
     mov ah, 0x08
     mov dl, [bp - 6]
     push bx
@@ -289,33 +296,32 @@ read_chs:
     jz short disk_error
     mov al, dh
     inc ax
-    xchg ax, bp
     cwd
     xchg ax, di
     div cx
     xchg ax, si
     div cx
     xchg dx, si
-    cmp dx, bp
+    cmp dx, di
     jae short lba_too_high_error
-    div bp
+    div di
     cmp ax, 1023
     ja short lba_too_high_error
 
     mov dh, dl
     inc si
-    mov cx, si
-    mov ch, al
+    xchg al, ah
     ror ah, 1
     ror ah, 1
-    or cl, ah
+    or ax, si
+    xchg ax, cx
 
     mov ax, 0x0201
     sub sp, 16
     ; jmp short read_int13_retry
 
 read_int13_retry:
-    mov dl, [bp - 6]
+    mov dl, [0x7C00 - 6]
     mov di, RETRIES
 .again:
     push ax
@@ -324,16 +330,18 @@ read_int13_retry:
     push dx
     push si
     push di
+    push ds
+    pop es
     int 0x13
+    mov bp, 0x7C00
     jc short .read_not_ok
 
     add sp, 20
-    mov bp, 0x7C00
     mov di, [bp - 12]
     jmp word [bp - 10]
 
 .read_not_ok:
-    mov dl, [0x7BFA]
+    mov dl, [bp - 6]
     xor ah, ah
     int 0x13
     pop di
@@ -345,11 +353,7 @@ read_int13_retry:
     dec di
     jnz short .again
 
-    ; jmp short disk_error
-
-disk_error:
-    mov si, disk_error_msg
-    jmp short print_error_alias
+    jmp short disk_error
 
 read_lba:
     xor ax, ax
@@ -400,17 +404,6 @@ print_raw:
     ret
 
 spec db ' ', '.', '!', 0x0A, 0x0D
-
-; ; "no bootable partition found"
-no_partition_found_msg dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439a, 0xd15c, 0xa347
-; ; "disk error"
-disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
-; ; "format error"
-format_error_msg dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
-; ; "lba too high"
-lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
-; ; "!\r\npress any key to restart...\r\n"
-press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 
 times 440 - ($ - $$) db 0
 

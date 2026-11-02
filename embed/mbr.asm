@@ -13,14 +13,20 @@ entry:
 boot_drive:
     cli
 
+pnp_segment:
     xor ax, ax
+
+pnp_offset:
+    mov ss, ax
+    mov sp, 0x7C00
+    mov si, sp
+
+    mov [pnp_segment], es
+    mov [pnp_offset], di
 
     mov ds, ax
     mov es, ax
-    mov ss, ax
-    mov sp, 0x7C00
 
-    mov si, sp
     mov di, 0x0600
     mov cx, 512
     cld
@@ -101,13 +107,11 @@ partition_found:
     jmp near after_read
 
 .no_lba:
-    push es
     xor di, di
     mov es, di
     mov ah, 0x08
     mov dl, [boot_drive]
     int 0x13
-    pop es
     mov si, [partition]
     jc short .disk_error_short
 
@@ -173,14 +177,15 @@ disk_error:
     jmp short print_error
 
 after_read:
-    cmp word [0x7DFE], 0xAA55
-    jne short partition_no_marker
-
     xor ax, ax
 
     mov sp, 0x7C00
 
     mov dl, [boot_drive]
+
+    mov es, [pnp_segment]
+    mov di, [pnp_offset]
+
     mov si, [partition]
     jmp sp
 
@@ -240,13 +245,6 @@ restart:
 [cpu 8086]
 .fallback:
     jmp 0xFFFF:0x0000
-
-
-partition_no_marker:
-    mov si, [partition]
-    mov byte [si], 0x00
-
-    jmp near init_check_loop
 
 
 partition dw 0
