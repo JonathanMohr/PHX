@@ -529,7 +529,7 @@ static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
     else
-        memcpy(data->bootsector, binary_file_data, 512);
+        memcpy(data->bootsector, embed_mbr_binary_data, 512);
 
     for (int i = 0; i < 4; i++)
     {

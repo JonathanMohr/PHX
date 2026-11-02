@@ -1,5 +1,6 @@
 #include "gpt.h"
 #include "phx/device/partition.h"
+#include "phx/types.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
@@ -92,6 +93,9 @@
 #define PHX_GPT_ATTRIBUTE_REQUIRED_PARTITION   (PHX_u64)(1 << 0)
 #define PHX_GPT_ATTRIBUTE_NO_BLOCK_IO_PROTOCOL (PHX_u64)(1 << 1)
 #define PHX_GPT_ATTRIBUTE_LEGACY_BOOTABLE      (PHX_u64)(1 << 2)
+
+
+#define PHX_GPT_PEA_MINSIZE 16384
 
 
 #define GPT_TYPE_EMPTY \
@@ -402,7 +406,9 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
     if (partitionEntrySize == 0)
         partitionEntrySize = 128;
 
-    const PHX_SectorSize partitionArraySectors = ((PHX_SectorSize)partitionEntrySize * table->partitionSlots) / table->disk->sectorSize;
+    PHX_SectorSize partitionArrayBytes = (PHX_SectorSize)partitionEntrySize * table->partitionSlots;
+    if (partitionArrayBytes < PHX_GPT_PEA_MINSIZE) partitionArrayBytes = PHX_GPT_PEA_MINSIZE;
+    const PHX_SectorSize partitionArraySectors = (partitionArrayBytes + table->disk->sectorSize - 1) / table->disk->sectorSize;
 
     const PHX_SectorSize partitionEntryArrayLba = data->partitionArrayLba ? data->partitionArrayLba : 2;
     const PHX_SectorSize altPartitionEntryArrayLba = data->altPartitionArrayLba ? data->altPartitionArrayLba : (table->disk->totalSectors - partitionArraySectors - 1);
@@ -916,7 +922,9 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     const PHX_u32 partitionEntrySize = 128;
     const PHX_u32 partitionEntryCount = 128;
 
-    const PHX_SectorSize partitionArraySectors = ((PHX_SectorSize)partitionEntrySize * (PHX_SectorSize)partitionEntryCount + device->sectorSize - 1) / device->sectorSize;
+    PHX_u64 partitionArrayBytes = (PHX_u64)partitionEntrySize * (PHX_u64)partitionEntryCount;
+    if (partitionArrayBytes < PHX_GPT_PEA_MINSIZE) partitionArrayBytes = PHX_GPT_PEA_MINSIZE;
+    const PHX_SectorSize partitionArraySectors = (partitionArrayBytes + device->sectorSize - 1) / device->sectorSize;
 
     if (device->totalSectors < bootsectorSectors + 2 + partitionArraySectors * 2 + 1)
         return PHX_ERROR_SIZE;
@@ -927,7 +935,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
     else
-        memcpy(data->bootsector, binary_file_data, 512);
+        memcpy(data->bootsector, embed_gpt_binary_data, 512);
 
     GPT_Partition* partitions = context->allocator->allocate(context->allocator, sizeof(GPT_Partition) * partitionEntryCount);
     if (!partitions)
@@ -944,7 +952,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         return PHX_ERROR_MEMORY;
     }
 
-    data->partitionArrayLba = 2;
+    data->partitionArrayLba = bootsectorSectors + 1;
     data->altPartitionArrayLba = device->totalSectors - 1 - partitionArraySectors;
 
     for (PHX_u32 i = 0; i < partitionEntryCount; i++)

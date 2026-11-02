@@ -475,7 +475,7 @@ def main() -> bool:
 
             header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
             header.parent.mkdir(parents=True, exist_ok=True)
-            generate_header(str(binary), str(header), "binary_file")
+            generate_header(str(binary), str(header), f"embed_{embed_file.with_suffix('').name}_binary")
 
 
         # libs

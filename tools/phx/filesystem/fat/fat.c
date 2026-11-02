@@ -179,7 +179,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
     else
-        memcpy(data->bootsector, binary_file_data, 512);
+        memcpy(data->bootsector, embed_fat_binary_data, 512);
 
     PHX_Bool jmpCorrect = PHX_FALSE;
     if (data->bootsector[0] == 0xEB && data->bootsector[2] == 0x90)

@@ -25,8 +25,58 @@ entry:
 
     jmp 0x0000:at_0600
 
-disk_error_alias:
-    jmp near disk_error
+;
+; 64-bit LBA on stack
+; target offset in bx
+;
+
+%define RETRIES 3
+read_sector:
+    pop word [bp - 10]
+
+    xor ax, ax
+
+    push ax ; segment
+    push bx ; offset
+
+    inc ax
+    push ax ; sector count
+
+    mov al, 0x10
+    push ax
+
+    mov cx, RETRIES
+.again:
+    mov si, sp
+    push cx
+    mov ah, 0x42
+    mov dl, [0x7C00 - 6]
+    int 0x13
+    mov bp, 0x7C00
+    jc short .read_not_ok
+
+    push ds
+    pop es
+    pop ax
+    pop ax
+    pop ax
+    pop di
+    pop ax
+    jmp word [bp - 10]
+
+.read_not_ok:
+    mov dl, [bp - 6]
+    xor ah, ah
+    int 0x13
+    pop cx
+    loop .again
+
+    ; jmp short disk_error
+
+disk_error:
+    call print_error
+    ; "disk error"
+    disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 
 at_0600:
     sti
@@ -39,25 +89,21 @@ check_disk:
     stc
     int 0x13
     pop dx
-    jc short disk_error_alias
+    jc short disk_error
     shr cl, 1
-    jnc short disk_error_alias
+    jnc short disk_error
 
     mov si, drive_params
     mov word [si], 0x1A
     mov ah, 0x48
     ; dl is still set
     int 0x13
+    jc short disk_error
     mov ax, [drive_params + 0x18]
-    jnc short .store
 
-    mov ax, 512
-
-.store:
     add ax, partition_entry_buffer
     push ax ; 0x7FB8
     push ds ; read_return_address
-    push ds ; saved_di
 
 .after:
     mov bp, 0x7C00
@@ -84,7 +130,7 @@ partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
 
     mov ax, [bp + 82]
     or ax, [bp + 86]
-    jnz short disk_error_alias ; TODO: Maybe format_error
+    jnz short disk_error ; TODO: Maybe format_error
 
 .sector:
     mov sp, sector_buffer + 72
@@ -97,15 +143,9 @@ partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
     inc word [si]
     lodsw
     loopz .sector_loop
-
-    mov di, partition_entry_buffer
 .entry:
-    cmp word [bp + 80], 0
-    jz short no_partition_found
-
     push di
     xor ax, ax
-    mov es, ax
     mov cx, 8
     repe scasw
     pop di
@@ -116,6 +156,7 @@ partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
 
 .next:
     dec word [bp + 80]
+    jz short no_partition_found
     add di, [bp + 84]
     cmp di, [bp - 8]
     jb short .entry
@@ -123,16 +164,16 @@ partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
 
 no_partition_found:
     call print_error
-    ; "no active partition"
-    dw 0x6bb4, 0x00a6, 0x4548, 0xd3c0, 0x8cd0, 0x9a1c, 0x6eb5
+    ; "no bootable partition"
+    dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439b
 
 ; format_error:
 ;     call print_error
 ;     ; "format error"
 ;     dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
 
-; "!\r\npress any key to restart...\r\n"
-press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
+; "!\r\npress any key to restart..."
+press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef7
 print_error:
     pop si
     call print_raw
@@ -167,9 +208,6 @@ found:
 
 
     ; TODO: CHS
-    push ds
-    pop es
-
     mov di, 0x07BE
     mov ax, 0x80
     stosw
@@ -225,6 +263,7 @@ found:
     popf
     pushf
     pop ax
+    popf
     cmp ah, 0x70
     jne short .go
 
@@ -234,64 +273,6 @@ found:
 .go:
 [cpu 8086]
     jmp sp
-
-lba_too_high_error:
-    call print_error
-    ; "lba too high"
-    lba_too_high_error_msg dw 0x5840, 0xd4dc, 0x768e, 0x418f
-
-disk_error:
-    call print_error
-    ; "disk error"
-    disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
-
-;
-; 64-bit LBA on stack
-; target offset in bx
-;
-
-%define RETRIES 3
-read_sector:
-    pop word [bp - 10]
-    mov [bp - 12], di
-
-    xor ax, ax
-
-    push ax ; segment
-    push bx ; offset
-
-    inc ax
-    push ax ; sector count
-
-    mov al, 0x10
-    push ax
-
-    mov si, sp
-
-    mov di, RETRIES
-.again:
-    push di
-    push si
-    mov ah, 0x42
-    mov dl, [0x7C00 - 6]
-    int 0x13
-    mov bp, 0x7C00
-    jc short .read_not_ok
-
-    add sp, 12
-    mov di, [bp - 12]
-    jmp word [bp - 10]
-
-.read_not_ok:
-    mov dl, [bp - 6]
-    xor ah, ah
-    int 0x13
-    pop si
-    pop di
-    dec di
-    jnz short .again
-
-    jmp short disk_error
 
 ;
 ; one 16 bit word:
@@ -310,18 +291,22 @@ print_raw:
     and al, 0x1F
     add al, 'a'
     cmp al, 'z' + 1
-    jb .out
+    jb short .out
     mov bx, spec - ('z' + 1)
     xlat
 .out:
     mov ah, 0x0E
     mov bx, 0x07
+    push cx
+    push si
     int 0x10
+    pop si
+    pop cx
     pop ax
     dec ch
-    jnz .char
+    jnz short .char
     test ax, ax
-    jns print_raw
+    jns short print_raw
     ret
 
 spec db ' ', '.', '!', 0x0A, 0x0D
