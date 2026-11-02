@@ -102,7 +102,7 @@ check_disk:
     mov ax, [drive_params + 0x18]
 
     add ax, partition_entry_buffer
-    push ax ; 0x7FB8
+    push ax ; 0x7E00 + sector size
     push ds ; read_return_address
 
 .after:
