@@ -25,11 +25,13 @@ entry:
 
     jmp 0x0000:at_0600
 
+disk_error_alias:
+    jmp near disk_error
+
 at_0600:
     sti
 
 check_disk:
-    ; check lba
     mov ah, 0x41
     mov bx, 0x55AA
     ; dl is still set
@@ -37,13 +39,10 @@ check_disk:
     stc
     int 0x13
     pop dx
-    jc short .no_lba
-
+    jc short disk_error_alias
     shr cl, 1
-    jnc short .no_lba
+    jnc short disk_error_alias
 
-.use_lba:
-    mov byte [read_dispatch + 1], read_lba - read_dispatch_after
     mov si, drive_params
     mov word [si], 0x1A
     mov ah, 0x48
@@ -52,7 +51,6 @@ check_disk:
     mov ax, [drive_params + 0x18]
     jnc short .store
 
-.no_lba:
     mov ax, 512
 
 .store:
@@ -133,9 +131,6 @@ no_partition_found:
 ;     ; "format error"
 ;     dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
 
-disk_error_alias:
-    jmp near disk_error
-
 ; "!\r\npress any key to restart...\r\n"
 press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef6, 0xd7bb
 print_error:
@@ -149,22 +144,8 @@ print_error:
     ; jmp short restart
 
 restart:
-    xor cx, cx
-
-.delay:
-    in al, 0x64
-    loop .delay
-
-    pushf
-    pop ax
-    test ah, ah
-    js .fallback
-[cpu 286]
-    lidt [.fallback + 1]
-    int3
-
-[cpu 8086]
-.fallback:
+    mov al, 0xFE
+    out 0x64, al
     jmp 0xFFFF:0x0000
 
 found:
@@ -254,19 +235,6 @@ found:
 [cpu 8086]
     jmp sp
 
-;
-; 64-bit LBA on stack
-; target offset in bx
-;
-
-%define RETRIES 3
-read_sector:
-    pop word [bp - 10]
-    mov [bp - 12], di
-read_dispatch:
-    jmp short read_chs
-read_dispatch_after:
-
 lba_too_high_error:
     call print_error
     ; "lba too high"
@@ -277,85 +245,16 @@ disk_error:
     ; "disk error"
     disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 
-read_chs:
-    mov ah, 0x08
-    mov dl, [bp - 6]
-    push bx
-    int 0x13
-    pop bx
-    jc short disk_error
+;
+; 64-bit LBA on stack
+; target offset in bx
+;
 
-    pop si
-    pop di
-    pop ax
-    pop bp
-    or ax, bp
-    jnz short lba_too_high_error
+%define RETRIES 3
+read_sector:
+    pop word [bp - 10]
+    mov [bp - 12], di
 
-    and cx, 0x3F
-    jz short disk_error
-    mov al, dh
-    inc ax
-    cwd
-    xchg ax, di
-    div cx
-    xchg ax, si
-    div cx
-    xchg dx, si
-    cmp dx, di
-    jae short lba_too_high_error
-    div di
-    cmp ax, 1023
-    ja short lba_too_high_error
-
-    mov dh, dl
-    inc si
-    xchg al, ah
-    ror ah, 1
-    ror ah, 1
-    or ax, si
-    xchg ax, cx
-
-    mov ax, 0x0201
-    sub sp, 16
-    ; jmp short read_int13_retry
-
-read_int13_retry:
-    mov dl, [0x7C00 - 6]
-    mov di, RETRIES
-.again:
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push ds
-    pop es
-    int 0x13
-    mov bp, 0x7C00
-    jc short .read_not_ok
-
-    add sp, 20
-    mov di, [bp - 12]
-    jmp word [bp - 10]
-
-.read_not_ok:
-    mov dl, [bp - 6]
-    xor ah, ah
-    int 0x13
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    dec di
-    jnz short .again
-
-    jmp short disk_error
-
-read_lba:
     xor ax, ax
 
     push ax ; segment
@@ -368,9 +267,31 @@ read_lba:
     push ax
 
     mov si, sp
-    mov ah, 0x42
-    jmp short read_int13_retry
 
+    mov di, RETRIES
+.again:
+    push di
+    push si
+    mov ah, 0x42
+    mov dl, [0x7C00 - 6]
+    int 0x13
+    mov bp, 0x7C00
+    jc short .read_not_ok
+
+    add sp, 12
+    mov di, [bp - 12]
+    jmp word [bp - 10]
+
+.read_not_ok:
+    mov dl, [bp - 6]
+    xor ah, ah
+    int 0x13
+    pop si
+    pop di
+    dec di
+    jnz short .again
+
+    jmp short disk_error
 
 ;
 ; one 16 bit word:
