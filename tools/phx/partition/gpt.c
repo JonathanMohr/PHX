@@ -6,7 +6,7 @@
 #include <phx/base/intrinsic.h>
 #include <phx/charsets/unicode.h>
 
-#include <embed/gpt.h>
+#include <embed/gpt/single.h>
 
 /*
 
@@ -935,7 +935,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
     else
-        memcpy(data->bootsector, embed_gpt_binary_data, 512);
+        memcpy(data->bootsector, embed_gpt_single_binary_data, 512);
 
     GPT_Partition* partitions = context->allocator->allocate(context->allocator, sizeof(GPT_Partition) * partitionEntryCount);
     if (!partitions)

@@ -150,7 +150,7 @@ def to_c_identifier(name: str) -> str:
         ident = "_" + ident
     return ident
 
-def generate_header(input_path: str, output_path: str, var_name: str = None, bytes_per_line: int = 12):
+def generate_header(input_path: str, output_path: str, var_name: str = None, bytes_per_line: int = 16):
     with open(input_path, "rb") as f:
         data = f.read()
 
@@ -465,18 +465,41 @@ def main() -> bool:
         embed_build_dir = build_dir / "embed"
         embed_include_dir = build_dir / "embed-include"
 
-        if embed_include_dir.exists():
-            shutil.rmtree(str(embed_include_dir))
+        expected_headers: set[Path] = set()
 
         embed_files = embed_dir.rglob("*.asm")
         for embed_file in embed_files:
+            relative_path = embed_file.relative_to(embed_dir)
+
             binary = embed_build_dir / f"{embed_file.relative_to(embed_dir)}.bin"
+            header = embed_include_dir / "embed" / relative_path.with_suffix(".h")
+            embed_name = "_".join(relative_path.with_suffix("").parts)
+
+            expected_headers.add(header.resolve())
+
             Compile_Assembly_To_Binary(buildContext, embed_file, binary)
 
-            header = embed_include_dir / "embed" / embed_file.relative_to(embed_dir).with_suffix(".h")
-            header.parent.mkdir(parents=True, exist_ok=True)
-            generate_header(str(binary), str(header), f"embed_{embed_file.with_suffix('').name}_binary")
+            embed_file_hash = cacheModule.hash_files([binary], [], buildContext.logger)
+            if not buildContext.buildCache.is_up_to_date(header, embed_file_hash):
+                buildContext.logger.build(f"Generating header {header}")
 
+                header.parent.mkdir(parents=True, exist_ok=True)
+                generate_header(str(binary), str(header), f"embed_{embed_name}_binary")
+
+                buildContext.buildCache.update(header, embed_file_hash)
+
+        if embed_include_dir.exists():
+            for path in embed_include_dir.rglob("*"):
+                if path.is_file() and path.resolve() not in expected_headers:
+                    path.unlink()
+
+            for path in sorted(
+                (p for p in embed_include_dir.rglob("*") if p.is_dir()),
+                key=lambda p: len(p.parts),
+                reverse=True
+            ):
+                if not any(path.iterdir()):
+                    path.rmdir()
 
         # libs
         libs_build_dir = build_dir / "libs"
