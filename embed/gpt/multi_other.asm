@@ -11,7 +11,6 @@ entry:
     ; TODO
 
     call [print_error]
-    ; this is other
     dw 0x99d0, 0x9690, 0x969c, 0x99c8, 0x8f35
 
 
