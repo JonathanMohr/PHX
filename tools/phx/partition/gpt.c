@@ -1,6 +1,4 @@
 #include "gpt.h"
-#include "phx/device/partition.h"
-#include "phx/types.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
@@ -103,8 +101,13 @@
 #define GPT_TYPE_EMPTY \
     0x00000000, 0x0000, 0x0000, 0x0000, 0x000000000000
 
+
+#define GPT_TYPE_BIOS_BOOT_PARTITION \
+    0x21686148, 0x6449, 0x6E6F, 0x744E, 0x656564454649
+
 #define GPT_TYPE_ESP \
     0xC12A7328, 0xF81F, 0x11D2, 0xBA4B, 0x00A0C93EC93B
+
 
 #define GPT_TYPE_MICROSOFT_BASIC_DATA \
     0xEBD0A0A2, 0xB9E5, 0x4433, 0x87C0, 0x68B6B72699C7
@@ -170,6 +173,9 @@ static PHX_Partition_Type_Info GPT_TypeInfos[] = {
         PHX_PARTITION_TYPE_INFO_NAMES("unknown")
     },
     {
+        PHX_PARTITION_TYPE_INFO_NAMES("bios-boot-partition", "bios-boot", "bios")
+    },
+    {
         PHX_PARTITION_TYPE_INFO_NAMES("efi", "esp")
     },
     {
@@ -188,6 +194,9 @@ static GUID GPT_GetTypeByName(const char* name)
     if (strcmp(name, "efi") == 0 || strcmp(name, "esp") == 0)
         return GUID_Create(GPT_TYPE_ESP);
 
+    if (strcmp(name, "bios-boot-partition") == 0 || strcmp(name, "bios-boot") == 0 || strcmp(name, "bios") == 0)
+        return GUID_Create(GPT_TYPE_APPLE_APFS_CONTAINER);
+
     if (strcmp(name, "microsoft-basic-data") == 0 || strcmp(name, "ms") == 0 || strcmp(name, "ms-basic-data") == 0)
         return GUID_Create(GPT_TYPE_MICROSOFT_BASIC_DATA);
 
@@ -205,6 +214,9 @@ static const char* GPT_GetTypeName(GUID type)
 {
     if (GUID_Compare(type, GPT_TYPE_ESP))
         return "EFI System Partition";
+
+    if (GUID_Compare(type, GPT_TYPE_BIOS_BOOT_PARTITION))
+        return "BIOS Boot Partition";
 
     if (GUID_Compare(type, GPT_TYPE_MICROSOFT_BASIC_DATA))
         return "Microsoft Basic Data";
@@ -912,8 +924,13 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
 
 static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
 {
+    if (device->readonly == PHX_TRUE)
+        return PHX_ERROR_PERMISSION;
+
     if (device->sectorSize < 92)
         return PHX_ERROR_SIZE; // TODO
+
+    const PHX_Bool useMultiBootsector = PHX_FALSE;
 
     // TODO: option for multi bootsector + multi other
 
@@ -929,11 +946,25 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     if (device->totalSectors < bootsectorSectors + 2 + partitionArraySectors * 2 + 1)
         return PHX_ERROR_SIZE;
 
+    const PHX_SectorSize startUsable = bootsectorSectors + 1 + partitionArraySectors;
+
     GPT_Data* data = GPT_AllocateData(context, bootsectorSectors, 1, partitionArraySectors, device->sectorSize);
     if (!data) return PHX_ERROR_MEMORY;
 
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
+    else if (useMultiBootsector == PHX_TRUE)
+    {
+        const PHX_SectorSize sectorCount = (embed_gpt_multi_other_binary_size + device->sectorSize - 1) / device->sectorSize;
+
+        PHX_u8 bootsectorBuffer[512];
+        memcpy(bootsectorBuffer, embed_gpt_multi_bootsector_binary_data, 512);
+
+        PHX_Write_Le_u64(bootsectorBuffer + 424, startUsable);
+        PHX_Write_Le_u64(bootsectorBuffer + 432, sectorCount);
+
+        memcpy(data->bootsector, bootsectorBuffer, 512);
+    }
     else
         memcpy(data->bootsector, embed_gpt_single_binary_data, 512);
 
@@ -955,7 +986,53 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     data->partitionArrayLba = bootsectorSectors + 1;
     data->altPartitionArrayLba = device->totalSectors - 1 - partitionArraySectors;
 
-    for (PHX_u32 i = 0; i < partitionEntryCount; i++)
+    PHX_u32 i = 0;
+    if (useMultiBootsector == PHX_TRUE)
+    {
+        GPT_Partition* partition = &partitions[0];
+
+        const PHX_SectorSize sectorCount = (embed_gpt_multi_other_binary_size + device->sectorSize - 1) / device->sectorSize;
+
+        // TODO: Better
+        partition->partition.signature.first = PHX_Context_GetRandomU64(context);
+        partition->partition.signature.second = PHX_Context_GetRandomU64(context);
+        partition->partition.signature.type = PHX_PARTITION_SIGNATURE_GUID;
+
+        partition->partition.start = startUsable;
+        partition->partition.size = sectorCount;
+
+        partition->partition.flags = 0;
+        partition->partition.type = PHX_PARTITION_TYPE_SPECIFIC;
+
+        partition->type = GUID_Create(GPT_TYPE_BIOS_BOOT_PARTITION);
+        partition->attributes = 0;
+
+        PHX_u8* otherBuffer = context->allocator->allocate(context->allocator, sectorCount * device->sectorSize);
+        if (!otherBuffer)
+        {
+            context->allocator->free(context->allocator, partitionBuffer);
+            context->allocator->free(context->allocator, partitions);
+            GPT_FreeData(context, data);
+            return PHX_ERROR_MEMORY;
+        }
+        memcpy(otherBuffer, embed_gpt_multi_other_binary_data, embed_gpt_multi_other_binary_size);
+        memset(otherBuffer + embed_gpt_multi_other_binary_size, 0, sectorCount * device->sectorSize - embed_gpt_multi_other_binary_size);
+
+        if (device->write(device, otherBuffer, startUsable, sectorCount) != sectorCount)
+        {
+            context->allocator->allocate(context->allocator, sectorCount * device->sectorSize);
+            context->allocator->free(context->allocator, partitionBuffer);
+            context->allocator->free(context->allocator, partitions);
+            GPT_FreeData(context, data);
+            return PHX_ERROR_IO;
+        }
+
+        context->allocator->allocate(context->allocator, sectorCount * device->sectorSize);
+
+        i = 1;
+    }
+
+    while (i < partitionEntryCount)
     {
         GPT_Partition* partition = &partitions[i];
 
@@ -972,6 +1049,8 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
 
         memset(&partition->type, 0, sizeof(partition->type));
         partition->attributes = 0;
+
+        i++;
     }
 
     outTable->signature.first = PHX_Context_GetRandomU64(context);
@@ -980,8 +1059,8 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
 
     outTable->partitionSlots = partitionEntryCount;
 
-    outTable->startUsable = bootsectorSectors + 1 + partitionArraySectors;
-    outTable->sizeUsable = device->totalSectors - bootsectorSectors - 2 * (1 + partitionArraySectors);
+    outTable->startUsable = startUsable;
+    outTable->sizeUsable = device->totalSectors - startUsable - (1 + partitionArraySectors);
 
     outTable->context = context;
     outTable->disk = device;
