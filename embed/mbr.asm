@@ -21,8 +21,8 @@ pnp_offset:
     mov sp, 0x7C00
     mov si, sp
 
-    mov [pnp_segment], es
-    mov [pnp_offset], di
+    push es
+    push di
 
     mov ds, ax
     mov es, ax
@@ -35,6 +35,9 @@ pnp_offset:
     jmp 0x0000:at_0600
 
 at_0600:
+    pop word [pnp_offset]
+    pop word [pnp_segment]
+
     mov [boot_drive], dl
     sti
 
