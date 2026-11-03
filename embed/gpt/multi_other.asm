@@ -3,14 +3,14 @@
 [cpu 8086]
 
 entry:
-    pop [pnp.offset]
-    pop [pnp.segment]
-    pop [print_error]
-    pop [read_sector_raw]
+    pop word [pnp.offset]
+    pop word [pnp.segment]
+    pop word [print_error]
+    pop word [read_sector_raw]
 
     ; TODO
 
-    call print_error
+    call [print_error]
     ; this is other
     dw 0x99d0, 0x9690, 0x969c, 0x99c8, 0x8f35
 

@@ -111,7 +111,7 @@ next_stage_too_big:
 disk_error:
     call print_error
     ; "disk error"
-    disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
+    dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
 
 ;
 ; ds:si - Points to 64-bit LBA
