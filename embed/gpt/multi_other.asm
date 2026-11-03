@@ -43,6 +43,8 @@ pnp:
     .segment dw 0
     .offset dw 0
 
+boot_drive equ 0x0600
+
 read_sector_raw dw 0
 print_error dw 0
 
