@@ -63,18 +63,37 @@ check_header:
     mov ax, [header_buffer + 12]
 
     cmp ax, 92
+.format_error_alias_bf:
     jb short format_error_alias
 
     cmp ax, [sector_size]
+.format_error_alias_af:
     ja short format_error_alias
 
-    ; TODO: CRC
+    ; CRC32
+    push word [header_buffer + 18]
+    push word [header_buffer + 16]
+    mov word [header_buffer + 16], 0
+    mov word [header_buffer + 18], 0
+
+    mov si, header_buffer
+    mov cx, ax
+    call calculate_crc32
+
+    pop bx
+    pop cx
+    
+    cmp ax, bx
+    jne short format_error_alias
+    cmp dx, cx
+    jne short format_error_alias
 
     ; this lba
     mov si, header_buffer + 24
     mov di, header_lba
     mov cx, 4
     repe cmpsw
+.format_error_alias_zf:
     jne short format_error_alias
 
     ; partition entry count
@@ -84,19 +103,19 @@ check_header:
 
     ; partition entry size
     cmp word [header_buffer + 86], 0x0000
-    jne short format_error_alias
+    jne short .format_error_alias_zf
 
     mov bx, [header_buffer + 84]
 
     cmp bx, 32768
-    ja short format_error_alias
+    ja short .format_error_alias_af
 
     cmp bx, 128
-    jb short format_error_alias
+    jb short .format_error_alias_bf
 
     lea ax, [bx - 1]
     test ax, bx
-    jnz short format_error_alias
+    jnz short .format_error_alias_zf
 
     mov ax, [sector_size]
     cmp ax, bx
@@ -430,6 +449,37 @@ read_sector:
     pop ax
     popf
 
+    ret
+
+
+;
+; ds:si - data
+; cx    - len
+;
+; -> ds:ax
+;
+
+calculate_crc32:
+    mov ax, 0xFFFF
+    mov dx, 0xFFFF
+    jcxz .done
+.byte_loop:
+    xor al, [si]
+    inc si
+    mov bl, 8
+.bit_loop:
+    shr dx, 1
+    rcr ax, 1
+    jnc .no_xor
+    xor ax, 0x8320
+    xor dx, 0xEDB8
+.no_xor:
+    dec bl
+    jnz .bit_loop
+    loop .byte_loop
+.done:
+    not ax
+    not dx
     ret
 
 
