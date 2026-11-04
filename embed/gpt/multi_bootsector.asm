@@ -6,9 +6,10 @@ entry:
 
 boot_drive:
     cli
-    cld
 
 sector_size:
+    cld
+
     xor ax, ax
 
     mov ss, ax
