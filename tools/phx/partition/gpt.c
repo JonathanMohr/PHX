@@ -438,7 +438,7 @@ static PHX_Result GPT_WriteChanges(PHX_Partition_Table_Device* table)
         if (partition->partition.type == PHX_PARTITION_TYPE_EMPTY)
         {
             memset(rawPartition, 0, partitionEntrySize);
-            break;
+            continue;
         }
 
         GUID partitionGuid = {partition->partition.signature.first, partition->partition.signature.second};
