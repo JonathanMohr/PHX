@@ -1,4 +1,5 @@
 #include "gpt.h"
+#include "phx/device/partition.h"
 
 #include <phx/base/serialization.h>
 #include <phx/base/intrinsic.h>
@@ -7,6 +8,7 @@
 #include <embed/gpt/single.h>
 #include <embed/gpt/multi_bootsector.h>
 #include <embed/gpt/multi_other.h>
+#include <embed/none.h>
 
 /*
 
@@ -236,6 +238,72 @@ static PHX_Partition_Type GPT_GetPartitionType(GUID type)
     // TODO
     (void)type;
     return PHX_PARTITION_TYPE_SPECIFIC;
+}
+
+
+#define GPT_BOOTLOADER_PRESET_DEFAULT "none"
+static PHX_Partition_BootloaderPreset_Info GPT_BootloaderPresetInfos[] = {
+    {
+        PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES("none")
+    },
+    {
+        PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES("single", "simple")
+    },
+    {
+        PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES("multi", "staged")
+    }
+};
+
+typedef enum
+{
+    GPT_BOOTLOADER_PRESET_BOOTSECTOR,
+    GPT_BOOTLOADER_PRESET_PARTITION
+} GPT_Bootloader_Preset_Type;
+
+typedef struct
+{
+    const PHX_u8* bootsector;
+    const PHX_u8* partitionContent;
+    PHX_Size partitionSize;
+    GPT_Bootloader_Preset_Type type;
+} GPT_Bootloader_Preset;
+
+GPT_Bootloader_Preset GPT_GetBootloaderPreset(const char* presetName)
+{
+    GPT_Bootloader_Preset preset = {
+        PHX_NULL,
+        PHX_NULL,
+        0,
+        GPT_BOOTLOADER_PRESET_BOOTSECTOR
+    };
+
+    if (!presetName)
+    {
+        preset.bootsector = embed_none_binary_data;
+        preset.type = GPT_BOOTLOADER_PRESET_BOOTSECTOR;
+    }
+
+    else if (strcmp(presetName, "none") == 0)
+    {
+        preset.bootsector = embed_none_binary_data;
+        preset.type = GPT_BOOTLOADER_PRESET_BOOTSECTOR;
+    }
+
+    else if (strcmp(presetName, "single") == 0 || strcmp(presetName, "simple") == 0)
+    {
+        preset.bootsector = embed_gpt_single_binary_data;
+        preset.type = GPT_BOOTLOADER_PRESET_BOOTSECTOR;
+    }
+
+    else if (strcmp(presetName, "multi") == 0 || strcmp(presetName, "staged") == 0)
+    {
+        preset.bootsector = embed_gpt_multi_bootsector_binary_data;
+        preset.partitionContent = embed_gpt_multi_other_binary_data;
+        preset.partitionSize = embed_gpt_multi_other_binary_size;
+        preset.type = GPT_BOOTLOADER_PRESET_PARTITION;
+    }
+
+    return preset;
 }
 
 
@@ -612,7 +680,11 @@ static const PHX_Partition_Table_Operations GPT_Operations = {
 
     GPT_Close,
 
+    GPT_BOOTLOADER_PRESET_DEFAULT,
+    GPT_BootloaderPresetInfos,
     GPT_TypeInfos,
+
+    sizeof(GPT_BootloaderPresetInfos) / sizeof(PHX_Partition_BootloaderPreset_Info),
     sizeof(GPT_TypeInfos) / sizeof(PHX_Partition_Type_Info),
 
     GPT_SPECIFIC_TYPE_LEN
@@ -922,15 +994,17 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
     return PHX_SUCCESS;
 }
 
-static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
+static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const char* bootloaderPresetName, const PHX_u8* bootsector)
 {
     if (device->readonly == PHX_TRUE)
         return PHX_ERROR_PERMISSION;
 
-    if (device->sectorSize < 92)
+    if (device->sectorSize < 512)
         return PHX_ERROR_SIZE; // TODO
 
-    const PHX_Bool useMultiBootsector = PHX_FALSE;
+    const GPT_Bootloader_Preset bootloaderPreset = GPT_GetBootloaderPreset(bootloaderPresetName);
+    if (!bootloaderPreset.bootsector)
+        return PHX_ERROR_PRESET;
 
     // TODO: option for multi bootsector + multi other
 
@@ -951,14 +1025,12 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     GPT_Data* data = GPT_AllocateData(context, bootsectorSectors, 1, partitionArraySectors, device->sectorSize);
     if (!data) return PHX_ERROR_MEMORY;
 
-    if (bootsector)
-        memcpy(data->bootsector, bootsector, 512);
-    else if (useMultiBootsector == PHX_TRUE)
+    if (bootloaderPreset.type == GPT_BOOTLOADER_PRESET_PARTITION)
     {
-        const PHX_SectorSize sectorCount = (embed_gpt_multi_other_binary_size + device->sectorSize - 1) / device->sectorSize;
-
         PHX_u8 bootsectorBuffer[512];
-        memcpy(bootsectorBuffer, embed_gpt_multi_bootsector_binary_data, 512);
+        memcpy(bootsectorBuffer, bootloaderPreset.bootsector, 512);
+
+        const PHX_SectorSize sectorCount = (bootloaderPreset.partitionSize + device->sectorSize - 1) / device->sectorSize;
 
         PHX_Write_Le_u64(bootsectorBuffer + 424, startUsable);
         PHX_Write_Le_u64(bootsectorBuffer + 432, sectorCount);
@@ -966,7 +1038,10 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         memcpy(data->bootsector, bootsectorBuffer, 512);
     }
     else
-        memcpy(data->bootsector, embed_gpt_single_binary_data, 512);
+        memcpy(data->bootsector, bootloaderPreset.bootsector, 512);
+
+    if (bootsector)
+        memcpy(data->bootsector, bootsector, 512);
 
     GPT_Partition* partitions = context->allocator->allocate(context->allocator, sizeof(GPT_Partition) * partitionEntryCount);
     if (!partitions)
@@ -987,11 +1062,11 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     data->altPartitionArrayLba = device->totalSectors - 1 - partitionArraySectors;
 
     PHX_u32 i = 0;
-    if (useMultiBootsector == PHX_TRUE)
+    if (bootloaderPreset.type == GPT_BOOTLOADER_PRESET_PARTITION)
     {
         GPT_Partition* partition = &partitions[0];
 
-        const PHX_SectorSize sectorCount = (embed_gpt_multi_other_binary_size + device->sectorSize - 1) / device->sectorSize;
+        const PHX_SectorSize sectorCount = (bootloaderPreset.partitionSize + device->sectorSize - 1) / device->sectorSize;
 
         // TODO: Better
         partition->partition.signature.first = PHX_Context_GetRandomU64(context);
@@ -1015,8 +1090,8 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
             GPT_FreeData(context, data);
             return PHX_ERROR_MEMORY;
         }
-        memcpy(otherBuffer, embed_gpt_multi_other_binary_data, embed_gpt_multi_other_binary_size);
-        memset(otherBuffer + embed_gpt_multi_other_binary_size, 0, sectorCount * device->sectorSize - embed_gpt_multi_other_binary_size);
+        memcpy(otherBuffer, bootloaderPreset.partitionContent, bootloaderPreset.partitionSize);
+        memset(otherBuffer + bootloaderPreset.partitionSize, 0, sectorCount * device->sectorSize - bootloaderPreset.partitionSize);
 
         if (device->write(device, otherBuffer, startUsable, sectorCount) != sectorCount)
         {

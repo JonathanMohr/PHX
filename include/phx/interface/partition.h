@@ -12,7 +12,7 @@ extern "C" {
 typedef struct PHX_Partition_Interface
 {
     PHX_Result (*openPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable);
-    PHX_Result (*formatPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector);
+    PHX_Result (*formatPartitionTable)(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const char* bootloaderPreset, const PHX_u8* bootsector);
 
     const PHX_Partition_Table_Operations* ops;
     

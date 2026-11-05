@@ -120,7 +120,7 @@ disk_error:
 ; does not destroy cs, ds, ss, es, si and di
 ;
 
-%define RETRIES 3
+%define RETRIES 5
 read_sector:
     push ds
     push si

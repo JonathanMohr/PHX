@@ -30,7 +30,7 @@ entry:
 ; target offset in bx
 ;
 
-%define RETRIES 3
+%define RETRIES 5
 read_sector:
     pop word [bp - 10]
 

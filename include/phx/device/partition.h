@@ -51,6 +51,12 @@ typedef struct PHX_Partition_Type_Info
 } PHX_Partition_Type_Info;
 #define PHX_PARTITION_TYPE_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, NULL }
 
+typedef struct PHX_Partition_BootloaderPreset_Info
+{
+    const char** names;
+} PHX_Partition_BootloaderPreset_Info;
+#define PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, NULL }
+
 typedef struct PHX_Partition_Table_Device PHX_Partition_Table_Device;
 
 typedef struct PHX_Partition_Table_Operations
@@ -70,7 +76,11 @@ typedef struct PHX_Partition_Table_Operations
 
     void (*close)(PHX_Partition_Table_Device* table);
 
+    const char* defaultBootloaderPreset;
+    PHX_Partition_BootloaderPreset_Info* bootloaderPresetInfos;
     PHX_Partition_Type_Info* typeInfos;
+
+    PHX_Size bootloaderPresetCount;
     PHX_Size typeCount;
 
     PHX_Size specificTypeLen;

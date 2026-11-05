@@ -2,7 +2,7 @@
 [org 0x0600]
 [cpu 8086]
 
-%define RETRIES 3
+%define RETRIES 5
 
 ;
 ; Reusing code that will not be used again after initializing as space for variable

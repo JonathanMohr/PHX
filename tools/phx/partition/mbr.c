@@ -6,6 +6,7 @@
 #include <phx/base/intrinsic.h>
 
 #include <embed/mbr.h>
+#include <embed/none.h>
 
 /*
     MBR Bootsector:
@@ -176,7 +177,30 @@ static PHX_Partition_Type MBR_GetPartitionType(PHX_u8 type)
 }
 
 
-static inline void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
+#define MBR_BOOTLOADER_PRESET_DEFAULT "mbr"
+static PHX_Partition_BootloaderPreset_Info MBR_BootloaderPresetInfos[] = {
+    {
+        PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES("none")
+    },
+    {
+        PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES("mbr")
+    }
+};
+
+static const PHX_u8* MBR_GetBootloaderPresetBootsector(const char* preset)
+{
+    if (!preset) return embed_mbr_binary_data;
+
+    if (strcmp(preset, "none") == 0)
+        return embed_none_binary_data;
+    if (strcmp(preset, "mbr") == 0)
+        return embed_mbr_binary_data;
+
+    return PHX_NULL;
+}
+
+
+static void MBR_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
 {
     if (cylinder > 1023 || sector > 63 || sector == 0)
     {
@@ -376,7 +400,11 @@ static const PHX_Partition_Table_Operations MBR_Operations = {
 
     MBR_Close,
 
+    MBR_BOOTLOADER_PRESET_DEFAULT,
+    MBR_BootloaderPresetInfos,
     MBR_TypeInfos,
+
+    sizeof(MBR_BootloaderPresetInfos) / sizeof(PHX_Partition_BootloaderPreset_Info),
     sizeof(MBR_TypeInfos) / sizeof(PHX_Partition_Type_Info),
 
     MBR_SPECIFIC_TYPE_LEN
@@ -502,11 +530,21 @@ static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
     return PHX_SUCCESS;
 }
 
-static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const PHX_u8* bootsector)
+static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device* device, PHX_Partition_Table_Device* outTable, const char* bootloaderPreset, const PHX_u8* bootsector)
 {
+    if (device->readonly == PHX_TRUE)
+        return PHX_ERROR_PERMISSION;
+    
+    if (device->sectorSize < 512)
+        return PHX_ERROR_SIZE; // TODO
+
     const PHX_SectorSize bootsectorSectors = (512 + device->sectorSize - 1) / device->sectorSize;
     if (bootsectorSectors >= device->totalSectors)
         return PHX_ERROR_SIZE;
+
+    const PHX_u8* bootloaderBootsector = MBR_GetBootloaderPresetBootsector(bootloaderPreset ? bootloaderPreset : "default");
+    if (!bootloaderBootsector)
+        return PHX_ERROR_PRESET;
 
     MBR_Data* data = MBR_AllocateData(context, bootsectorSectors, device->sectorSize);
     if (!data) return PHX_ERROR_MEMORY;
@@ -526,10 +564,10 @@ static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         return PHX_ERROR_MEMORY;
     }
 
+    memcpy(data->bootsector, bootloaderBootsector, 512);
+
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
-    else
-        memcpy(data->bootsector, embed_mbr_binary_data, 512);
 
     for (int i = 0; i < 4; i++)
     {

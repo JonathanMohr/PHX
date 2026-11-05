@@ -15,6 +15,7 @@
 #include "disk/disk.h"
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
+#include "phx/device/partition.h"
 
 static void print_help(const char* name);
 
@@ -467,6 +468,47 @@ static int partition(PHX_Context* context, const char* executable, const char* c
         return 0;
     }
 
+    if (strcmp(commandStr, "bootloader-presets") == 0)
+    {
+        if (argCount < 1)
+        {
+            print_help(executable);
+            return 1;
+        }
+        
+        const char* format = args[0];
+        PHX_Partition_Interface* interface = PHX_Partition_FindInterfaceByType(format);
+        if (!interface)
+        {
+            fputs("Unknown format ", stderr);
+            fputs(format, stderr);
+            fputc('\n', stderr);
+        }
+
+        fputs(" Default: ", stdout);
+        fputs(interface->ops->defaultBootloaderPreset, stdout);
+        fputc('\n', stdout);
+
+        for (PHX_Size i = 0; i < interface->ops->bootloaderPresetCount; i++)
+        {
+            PHX_Partition_BootloaderPreset_Info* presetInfo = &interface->ops->bootloaderPresetInfos[i];
+
+            const char** names = presetInfo->names;
+            fputs(" - ", stdout);
+            while (*names)
+            {
+                if (names != presetInfo->names)
+                    fprintf(stdout, " / %s", *names);
+                else
+                    fputs(*names, stdout);
+                names++;
+            }
+            fputc('\n', stdout);
+        }
+
+        return 0;
+    }
+
     if (strcmp(commandStr, "info") == 0)
     {
         fixedArgCount = 1;
@@ -514,6 +556,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
     // Flags
     PHX_Bool flags_bootable = PHX_FALSE;
     const char* flags_type = PHX_NULL;
+    const char* flags_bootloader_preset = PHX_NULL;
     for (int i = fixedArgCount; i < argCount; i++)
     {
         if (strcmp(args[i], "--bootable") == 0)
@@ -525,6 +568,19 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             flags_bootable = PHX_TRUE;
+        }
+        else if (strcmp(args[i], "--bootloader-preset") == 0)
+        {
+            if (flags_bootloader_preset)
+            {
+                fputs("Warning: --bootloader-preset used multiple times\n", stderr);
+                continue;
+            }
+
+            if (i + 1 >= argCount)
+                fputs("Warning: No argument after --bootloader-preset\n", stderr);
+            else
+                flags_bootloader_preset = args[++i];
         }
         else if (strcmp(args[i], "--type") == 0)
         {
@@ -652,9 +708,12 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             PHX_Partition_Table_Device table;
-            if ((result = interface->formatPartitionTable(context, &diskDevice, &table, PHX_NULL)) != PHX_SUCCESS)
+            if ((result = interface->formatPartitionTable(context, &diskDevice, &table, flags_bootloader_preset, PHX_NULL)) != PHX_SUCCESS)
             {
-                fputs("Error formatting partition table\n", stderr);
+                if (result == PHX_ERROR_PRESET)
+                    fprintf(stdout, "Invalid bootloader preset: %s\n", flags_bootloader_preset ? flags_bootloader_preset : "<none>");
+                else
+                    fputs("Error formatting partition table\n", stderr);
 
                 diskDevice.close(&diskDevice);
                 return 1;
@@ -2443,8 +2502,10 @@ static void print_help(const char* name)
         "  Commands:\n"
         "  > list                                 List supported interfaces\n"
         "  > types <format>                       List supported types for format\n"
+        "  > bootloader-presets <format>          List supported bootloader presets of format\n"
         "  > info <image>                         Print information about the partition table\n"
-        "  > create <image> <format>              Create empty partition table\n"
+        "  > create <image> <format> [--bootloader-preset <preset>]\n"
+        "  -> Create empty partition table\n"
         "  > add <image> <index> <start> <size> [--bootable] [--type <type>]\n"
         "  -> Add partition to partition table\n"
         "  > remove <image> <index>               Remove partition from partition table\n"

@@ -23,6 +23,7 @@ typedef PHX_u8 PHX_Result;
 #define PHX_ERROR_NAME_TOO_LONG 12
 #define PHX_ERROR_DIRECTORY 13
 #define PHX_ERROR_INVALID_PATH 14
+#define PHX_ERROR_PRESET 15
 
 
 typedef struct PHX_DetailedResult
