@@ -128,14 +128,14 @@ jobs:
         run: |
           FLAGS="-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }} "
           FLAGS+="--os ${{ matrix.os_name }} --arch ${{ matrix.arch }} "
-          python3 -m ci $FLAGS
+          python3 -m build $FLAGS
 
       - name: Build on Windows
         if: ${{ matrix.os_name == 'windows' }}
         run: |
           set FLAGS=-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }}
           set FLAGS=%FLAGS% --os ${{ matrix.os_name }} --arch ${{ matrix.arch }}
-          python -m ci %FLAGS%
+          python -m build %FLAGS%
         shell: cmd
 
       - name: Upload binaries as artifact
