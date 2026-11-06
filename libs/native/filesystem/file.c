@@ -20,6 +20,7 @@
 #   include <sys/stat.h>
 #   include <errno.h>
 #   include <string.h>
+#   include <limits.h>
 
 #   ifdef __APPLE__
 #       include <sys/disk.h>
