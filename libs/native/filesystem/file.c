@@ -20,7 +20,6 @@
 #   include <sys/stat.h>
 #   include <errno.h>
 #   include <string.h>
-#   include <stdint.h>
 
 #   ifdef __APPLE__
 #       include <sys/disk.h>
@@ -36,6 +35,7 @@
 
 #endif
 
+#include <stdint.h>
 #include <stdio.h>
 
 static PHX_File_Operations PHX_Native_File_Operations = {
