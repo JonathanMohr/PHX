@@ -193,6 +193,9 @@ static PHX_Partition_Type_Info GPT_TypeInfos[] = {
 
 static GUID GPT_GetTypeByName(const char* name)
 {
+    if (strcmp(name, "unknown") == 0)
+        return GUID_Create(GPT_TYPE_LINUX_FILESYSTEM_DATA);
+
     if (strcmp(name, "efi") == 0 || strcmp(name, "esp") == 0)
         return GUID_Create(GPT_TYPE_ESP);
 

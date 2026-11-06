@@ -193,6 +193,7 @@ static const PHX_u8* MBR_GetBootloaderPresetBootsector(const char* preset)
 
     if (strcmp(preset, "none") == 0)
         return embed_none_binary_data;
+
     if (strcmp(preset, "mbr") == 0)
         return embed_mbr_binary_data;
 
@@ -542,7 +543,7 @@ static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
     if (bootsectorSectors >= device->totalSectors)
         return PHX_ERROR_SIZE;
 
-    const PHX_u8* bootloaderBootsector = MBR_GetBootloaderPresetBootsector(bootloaderPreset ? bootloaderPreset : "default");
+    const PHX_u8* bootloaderBootsector = MBR_GetBootloaderPresetBootsector(bootloaderPreset);
     if (!bootloaderBootsector)
         return PHX_ERROR_PRESET;
 
