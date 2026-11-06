@@ -5,7 +5,7 @@ PHX_u32 PHX_Filesystem_FAT_HashName(const char* name)
     PHX_u32 hash = 2166136261u;
     while (*name)
     {
-        hash ^= (PHX_Byte)*name;
+        hash ^= (PHX_u8)*name;
         hash *= 16777619u;
         name++;
     }

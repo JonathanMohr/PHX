@@ -53,7 +53,7 @@ PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 clu
         return PHX_ERROR_INTERNAL;
 
     PHX_u64 fatIndex;
-    PHX_Byte entrySize;
+    PHX_u8 entrySize;
 
     switch (data->version)
     {
@@ -83,8 +83,8 @@ PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 clu
     if (data->usedDevice->read(data->usedDevice, data->buffer, currentSector, 1) != 1)
         return PHX_ERROR_IO;
 
-    PHX_Byte entryBytes[4];
-    for (PHX_Byte i = 0; i < entrySize; i++)
+    PHX_u8 entryBytes[4];
+    for (PHX_u8 i = 0; i < entrySize; i++)
     {
         if (offsetInSector + i == data->bytesPerSector)
         {
@@ -147,7 +147,7 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
     PHX_u64 currentSector = fatStartSector + fatIndex / (PHX_u64)data->bytesPerSector;
     PHX_u16 offsetInSector = (PHX_u16)(fatIndex % (PHX_u64)data->bytesPerSector);
 
-    const PHX_Byte copyCount = (data->activeFat == PHX_FILESYSTEM_FAT_ACTIVE_ALL) ? data->fatCount : 1;
+    const PHX_u8 copyCount = (data->activeFat == PHX_FILESYSTEM_FAT_ACTIVE_ALL) ? data->fatCount : 1;
 
     if (data->usedDevice->read(data->usedDevice, data->buffer, currentSector, 1) != 1)
         return PHX_ERROR_IO;
@@ -159,13 +159,13 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
             const PHX_Bool isOddCluster = (cluster & 1) != 0;
 
             if (isOddCluster)
-                data->buffer[offsetInSector] = (PHX_Byte)((data->buffer[offsetInSector] & 0x0F) | ((value & 0x0F) << 4));
+                data->buffer[offsetInSector] = (PHX_u8)((data->buffer[offsetInSector] & 0x0F) | ((value & 0x0F) << 4));
             else
-                data->buffer[offsetInSector] = (PHX_Byte)(value & 0xFF);
+                data->buffer[offsetInSector] = (PHX_u8)(value & 0xFF);
 
             if ((PHX_u32)offsetInSector + 1 == data->bytesPerSector)
             {
-                for (PHX_Byte copy = copyCount; copy > 0; copy--)
+                for (PHX_u8 copy = copyCount; copy > 0; copy--)
                 {
                     if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * singleFatSize, 1) != 1)
                         return PHX_ERROR_IO;
@@ -180,9 +180,9 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
                 offsetInSector++;
 
             if (isOddCluster)
-                data->buffer[offsetInSector] = (PHX_Byte)((value >> 4) & 0xFF);
+                data->buffer[offsetInSector] = (PHX_u8)((value >> 4) & 0xFF);
             else
-                data->buffer[offsetInSector] = (PHX_Byte)((data->buffer[offsetInSector] & 0xF0) | ((value >> 8) & 0x0F));
+                data->buffer[offsetInSector] = (PHX_u8)((data->buffer[offsetInSector] & 0xF0) | ((value >> 8) & 0x0F));
             break;
         }
 
@@ -195,7 +195,7 @@ PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cl
             break;
     }
 
-    for (PHX_Byte copy = copyCount; copy > 0; copy--)
+    for (PHX_u8 copy = copyCount; copy > 0; copy--)
     {
         if (data->usedDevice->write(data->usedDevice, data->buffer, currentSector + (PHX_u64)(copy - 1) * singleFatSize, 1) != 1)
             return PHX_ERROR_IO;

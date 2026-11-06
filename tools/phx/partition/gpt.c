@@ -412,7 +412,7 @@ static void GPT_UpdatePartitionInfo(GPT_Partition* partition)
 }
 
 
-static inline void GPT_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte sector, PHX_Byte out[3])
+static inline void GPT_EncodeCHS(PHX_u16 cylinder, PHX_u8 head, PHX_u8 sector, PHX_u8 out[3])
 {
     if (cylinder > 1023 || sector > 63 || sector == 0)
     {
@@ -422,8 +422,8 @@ static inline void GPT_EncodeCHS(PHX_u16 cylinder, PHX_Byte head, PHX_Byte secto
     }
 
     out[0] = head;
-    out[1] = (PHX_Byte)(((cylinder >> 2) & 0xC0) | (sector & 0x3F));
-    out[2] = (PHX_Byte)(cylinder & 0xFF);
+    out[1] = (PHX_u8)(((cylinder >> 2) & 0xC0) | (sector & 0x3F));
+    out[2] = (PHX_u8)(cylinder & 0xFF);
 }
 
 static inline void GPT_WriteProtectedMBR(PHX_u8* bootsector, PHX_Disk_Device* disk)

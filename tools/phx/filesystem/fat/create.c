@@ -59,7 +59,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
     
     const PHX_u32 lfnSlotCount = (PHX_u32)((utf16Count + 13 - 1) / 13);
     const PHX_u32 totalEntries = lfnSlotCount + 1;
-    const PHX_Byte lfnChecksum = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
+    const PHX_u8 lfnChecksum = PHX_Filesystem_FAT_LFN_Checksum((PHX_u8*)shortName);
 
     const PHX_Bool isDir = (type == PHX_FILESYSTEM_NODE_TYPE_DIRECTORY) ? PHX_TRUE : PHX_FALSE;
     PHX_u32 cluster = 0;
@@ -85,8 +85,8 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
 
         memset(data->clusterBuffer, 0, data->bytesPerCluster);
 
-        PHX_Byte* dot = data->clusterBuffer;
-        PHX_Byte* dotdot = dot + PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+        PHX_u8* dot = data->clusterBuffer;
+        PHX_u8* dotdot = dot + PHX_FILESYSTEM_FAT_DIRENT_SIZE;
 
         *(dot + PHX_FILESYSTEM_FAT_DIRENT_NAM) = '.';
         memset(dot + PHX_FILESYSTEM_FAT_DIRENT_NAM + 1, ' ', 10);
@@ -133,7 +133,7 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
     }
 
 
-    PHX_Byte entries[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u8 entries[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
     for (PHX_u32 i = 0; i < totalEntries; i++)
     {
         if (i < totalEntries - 1)
@@ -142,9 +142,9 @@ PHX_Result PHX_Filesystem_FAT_CreateNode(PHX_Filesystem_Device* fs, PHX_Filesyst
         }
         else
         {
-            PHX_Byte* entry = entries[i];
+            PHX_u8* entry = entries[i];
 
-            PHX_Byte attribute = 0;
+            PHX_u8 attribute = 0;
             if (attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_READONLY)
                 attribute |= PHX_FILESYSTEM_FAT_ENTRY_READONLY;
             if (attributes & PHX_FILESYSTEM_NODE_ATTRIBUTE_HIDDEN)

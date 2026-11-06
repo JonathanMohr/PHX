@@ -6,13 +6,7 @@ extern "C" {
 #endif
 
 
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define PHX_INTERNAL_LITTLE_ENDIAN
-#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define PHX_INTERNAL_BIG_ENDIAN
-#else
-#error "Endianness not defined"
-#endif
+#include <phx/detail.h>
 
 
 #include <phx/types.h>
@@ -49,7 +43,7 @@ static inline PHX_u64 PHX_Internal_Swap64(PHX_u64 val)
 }
 
 
-#ifdef PHX_INTERNAL_LITTLE_ENDIAN
+#ifdef PHX_DETAIL_LITTLE_ENDIAN
 
 #define PHX_Endianness_Convert_u8_Le(val)  PHX_Internal_Keep8(val)
 #define PHX_Endianness_Convert_u16_Le(val) PHX_Internal_Keep16(val)

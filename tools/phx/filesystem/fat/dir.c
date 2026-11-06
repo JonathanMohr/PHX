@@ -16,7 +16,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem_Device* fs, PHX_F
 
     if (dir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version != PHX_FILESYSTEM_FAT_32)
     {
-        PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+        PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
         for (PHX_u16 i = 0; i < data->specific.fat12_16.rootDirEntryCount; i++)
         {
@@ -52,12 +52,12 @@ PHX_Result PHX_Filesystem_FAT_Dir_GetEntryCount(PHX_Filesystem_Device* fs, PHX_F
         if ((result = PHX_Filesystem_FAT_ReadFAT(data, cluster, &cluster)) != PHX_SUCCESS)
             return result;
 
-        PHX_Byte* entries = data->clusterBuffer;
+        PHX_u8* entries = data->clusterBuffer;
 
         PHX_Bool eod = PHX_FALSE;
         for (PHX_u32 i = 0; i < data->bytesPerCluster / PHX_FILESYSTEM_FAT_DIRENT_SIZE; i++)
         {
-            PHX_Byte* entry = entries + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+            PHX_u8* entry = entries + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
 
             if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_DELETED || read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_ATR) == PHX_FILESYSTEM_FAT_LFN_ATTRIBUTE || read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_ATR) & PHX_FILESYSTEM_FAT_ENTRY_VOLUME_LABEL)
                 continue;
@@ -96,15 +96,15 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem_Device* fs, PHX_Files
     const PHX_Bool rootDirectory = (dir->number == PHX_FILESYSTEM_FAT_NODE_NUMBER_ROOT && data->version != PHX_FILESYSTEM_FAT_32);
 
     PHX_u16 lfnChars[20 * 13];
-    PHX_Byte lfnExpected = 0;
-    PHX_Byte lfnChecksum = 0;
-    PHX_Byte haveLfn = PHX_FALSE;
+    PHX_u8 lfnExpected = 0;
+    PHX_u8 lfnChecksum = 0;
+    PHX_Bool haveLfn = PHX_FALSE;
 
     while (1)
     {
         PHX_u32 entryCluster;
         PHX_u32 entryIndex;
-        PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+        PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
         if (rootDirectory)
         {
@@ -172,9 +172,9 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem_Device* fs, PHX_Files
         {
             if (data->readWithLFN != PHX_TRUE) continue;
 
-            const PHX_Byte order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
+            const PHX_u8 order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
 
-            const PHX_Byte sequence = order & 0x1F;
+            const PHX_u8 sequence = order & 0x1F;
             const PHX_Bool isLast = (order & 0x40) ? PHX_TRUE : PHX_FALSE;
             
             if (sequence == 0 || sequence > 20)
@@ -212,7 +212,7 @@ PHX_Result PHX_Filesystem_FAT_Dir_ReadEntry(PHX_Filesystem_Device* fs, PHX_Files
         }
 
         {
-            const PHX_Byte* shortNameRaw = entry + PHX_FILESYSTEM_FAT_DIRENT_NAM;
+            const PHX_u8* shortNameRaw = entry + PHX_FILESYSTEM_FAT_DIRENT_NAM;
 
             const PHX_Bool isDot = (shortNameRaw[0] == '.' && shortNameRaw[1] == ' ') ? PHX_TRUE : PHX_FALSE;
             const PHX_Bool isDotDot = (shortNameRaw[0] == '.' && shortNameRaw[1] == '.' && shortNameRaw[2] == ' ') ? PHX_TRUE : PHX_FALSE;

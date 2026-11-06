@@ -1213,7 +1213,7 @@ static int extract(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* node,
             return 1;
         }
 
-        PHX_Byte buffer[4096];
+        PHX_u8 buffer[4096];
         PHX_Filesystem_Node_Size written = 0;
         while (written < node->size)
         {
@@ -1415,7 +1415,7 @@ static int insert(PHX_Filesystem_Device* filesystem, PHX_Filesystem_Node* parent
                 return 1;
             }
 
-            PHX_Byte buffer[4096];
+            PHX_u8 buffer[4096];
             PHX_FileSize done = 0;
             while (done < size)
             {
@@ -2278,7 +2278,7 @@ static int filesystem(PHX_Context* context, const char* executable, const char* 
                 goto cleanup;
             }
 
-            PHX_Byte bootsector[512];
+            PHX_u8 bootsector[512];
             if (PHX_Native_File_Read(&bootsectorFileDevice, bootsector, 0, 512) != 512)
             {
                 fputs("Error reading from bootsector file\n", stderr);
@@ -2379,7 +2379,7 @@ static int raw(PHX_Context* context, const char* executable, const char* command
             }
 
             const PHX_Size blocksPerRead = (device->sectorSize >= 16384) ? 1 : (16384 / device->sectorSize);
-            PHX_Byte* buffer = context->allocator->allocate(context->allocator, device->sectorSize * blocksPerRead);
+            PHX_u8* buffer = context->allocator->allocate(context->allocator, device->sectorSize * blocksPerRead);
             if (!buffer)
             {
                 fputs("Could not allocate buffer\n", stderr);

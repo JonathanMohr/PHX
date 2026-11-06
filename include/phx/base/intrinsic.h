@@ -5,7 +5,15 @@
 extern "C" {
 #endif
 
-#include <string.h>
+#include <phx/types.h>
+
+int memcmp(const void* s1, const void* s2, PHX_Size n);
+void* memcpy(void* dst, const void* src, PHX_Size n);
+void* memmove(void* dst, const void* src, PHX_Size n);
+void* memset(void* dst, int c, PHX_Size n);
+
+int strcmp(const char* s1, const char* s2);
+PHX_Size strlen(const char* s);
 
 #ifdef __cplusplus
 }

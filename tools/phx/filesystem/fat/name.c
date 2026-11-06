@@ -1,13 +1,13 @@
 #include "fat.h"
 
-void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13])
+void PHX_Filesystem_FAT_BuildShortName(const PHX_u8 rawName[11], char out[13])
 {
-    PHX_Byte base[8];
+    PHX_u8 base[8];
     memcpy(base, rawName, 8);
     if (base[0] == PHX_FILESYSTEM_FAT_ENTRY_KANJI_ESCAPE)
         base[0] = 0xE5;
 
-    const PHX_Byte* ext = rawName + 8;
+    const PHX_u8* ext = rawName + 8;
 
     int len = 0;
     for (int i = 0; i < 8 && base[i] != ' '; i++)
@@ -23,9 +23,9 @@ void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13])
     out[len] = '\0';
 }
 
-void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_Byte outCount, char* out)
+void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_u8 outCount, char* out)
 {
-    PHX_Byte charIndex = 0;
+    PHX_u8 charIndex = 0;
     while (*name && charIndex < outCount && (!nameEnd || name < nameEnd))
     {
         if (*name >= 'a' && *name <= 'z')
@@ -57,7 +57,7 @@ static PHX_Result shortNameExists(PHX_Filesystem_Device* fs, PHX_Filesystem_Node
     {
         for (PHX_u16 i = 0; i < data->specific.fat12_16.rootDirEntryCount; i++)
         {
-            PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+            PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
             if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntries(data, i, 1, entry)) != PHX_SUCCESS)
                 return result;
 
@@ -92,7 +92,7 @@ static PHX_Result shortNameExists(PHX_Filesystem_Device* fs, PHX_Filesystem_Node
         
         for (PHX_u32 i = 0; i < entriesPerCluster; i++)
         {
-            PHX_Byte* entry = data->clusterBuffer + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+            PHX_u8* entry = data->clusterBuffer + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
 
             if (*(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_FREE)
             {
@@ -123,7 +123,7 @@ static PHX_Result shortNameExists(PHX_Filesystem_Device* fs, PHX_Filesystem_Node
 PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11])
 {
     static const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_$%'@~!(){}^#&";
-    static const size_t alphabetSize = sizeof(alphabet) - 1;
+    static const PHX_Size alphabetSize = sizeof(alphabet) - 1;
 
     /*
         1.  8 chars

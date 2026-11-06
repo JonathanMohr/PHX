@@ -511,7 +511,7 @@ def main() -> bool:
         base_toolchain.Add_Include_Directory(include_dir)
 
         base_build_mode = copy.deepcopy(buildMode)
-        base_build_mode.host = HOST.HOSTED
+        base_build_mode.host = HOST.FREESTANDING
 
         base_lib = Build_Static_Library(logger, base_toolchain, base_build_mode, base_path, [], libs_build_dir / "core", "phx-core", True)
 

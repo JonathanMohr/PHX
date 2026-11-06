@@ -41,7 +41,7 @@ PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Read(PHX_Filesystem_Device* fs,
         if (data->usedDevice->read(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
             break;
 
-        memcpy((PHX_Byte*)buffer + read, (PHX_Byte*)data->clusterBuffer + offsetInCluster, chunk);
+        memcpy((PHX_u8*)buffer + read, (PHX_u8*)data->clusterBuffer + offsetInCluster, chunk);
         
         read += chunk;
         openFile->pos += chunk;
@@ -152,9 +152,9 @@ PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem_Device* fs
             break;
 
         if (done < gap)
-            memset((PHX_Byte*)data->clusterBuffer + offsetInCluster, 0, chunk);
+            memset((PHX_u8*)data->clusterBuffer + offsetInCluster, 0, chunk);
         else
-            memcpy((PHX_Byte*)data->clusterBuffer + offsetInCluster, (const PHX_Byte*)buffer + (done - gap), chunk);
+            memcpy((PHX_u8*)data->clusterBuffer + offsetInCluster, (const PHX_u8*)buffer + (done - gap), chunk);
 
         if (data->usedDevice->write(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
             break;
@@ -179,7 +179,7 @@ PHX_Filesystem_Node_Size PHX_Filesystem_FAT_File_Write(PHX_Filesystem_Device* fs
         PHX_u32 entryCluster = (PHX_u32)(file->number >> 32);
         PHX_u32 entryIndex = (PHX_u32)(file->number & 0xFFFFFFFF);
 
-        PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+        PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
         PHX_Result result;
 
         if (entryCluster == 0)

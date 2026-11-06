@@ -71,7 +71,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem_Device* fs, PHX_Filesystem_
 
     PHX_u16 index = (PHX_u16)index32;
 
-    PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
     if (cluster == 0)
     {
@@ -108,7 +108,7 @@ PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem_Device* fs, PHX_Filesystem_
         memcpy(entry, data->buffer + offsetInSector, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
     }
 
-    const PHX_Byte attributes = read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_ATR);
+    const PHX_u8 attributes = read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_ATR);
 
     extra->startCluster = read_u16(entry + PHX_FILESYSTEM_FAT_DIRENT_FCL);
     if (data->version == PHX_FILESYSTEM_FAT_32)

@@ -229,39 +229,39 @@ extern "C" {
 #define PHX_Filesystem_FAT_Write_u16 write_u16
 #define PHX_Filesystem_FAT_Write_u32 write_u32
 
-static inline PHX_Byte read_u8(const PHX_Byte* buffer)
+static inline PHX_u8 read_u8(const PHX_u8* buffer)
 {
-    PHX_Byte val;
+    PHX_u8 val;
     memcpy(&val, buffer, sizeof(val));
     return val;
 }
 
-static inline PHX_u16 read_u16(const PHX_Byte* buffer)
+static inline PHX_u16 read_u16(const PHX_u8* buffer)
 {
     PHX_u16 val;
     memcpy(&val, buffer, sizeof(val));
     return Endian_Convert_u16_Le(val);
 }
 
-static inline PHX_u32 read_u32(const PHX_Byte* buffer)
+static inline PHX_u32 read_u32(const PHX_u8* buffer)
 {
     PHX_u32 val;
     memcpy(&val, buffer, sizeof(val));
     return Endian_Convert_u32_Le(val);
 }
 
-static inline void write_u8(PHX_Byte* buffer, PHX_Byte val)
+static inline void write_u8(PHX_u8* buffer, PHX_u8 val)
 {
     memcpy(buffer, &val, sizeof(val));
 }
 
-static inline void write_u16(PHX_Byte* buffer, PHX_u16 val)
+static inline void write_u16(PHX_u8* buffer, PHX_u16 val)
 {
     PHX_u16 rawVal = Endian_Convert_u16_Le(val);
     memcpy(buffer, &rawVal, sizeof(rawVal));
 }
 
-static inline void write_u32(PHX_Byte* buffer, PHX_u32 val)
+static inline void write_u32(PHX_u8* buffer, PHX_u32 val)
 {
     PHX_u32 rawVal = Endian_Convert_u32_Le(val);
     memcpy(buffer, &rawVal, sizeof(rawVal));
@@ -279,8 +279,8 @@ typedef enum
 typedef struct PHX_Filesystem_FAT_Data
 {
     PHX_Disk_Device* usedDevice;
-    PHX_Byte* buffer;
-    PHX_Byte* clusterBuffer;
+    PHX_u8* buffer;
+    PHX_u8* clusterBuffer;
 
     PHX_Filesystem_FAT_Version version;
 
@@ -318,11 +318,11 @@ typedef struct PHX_Filesystem_FAT_Data
 
     PHX_u16 activeFat;
 
-    PHX_Byte fatCount;
-    PHX_Byte mediaDescriptor;
+    PHX_u8 fatCount;
+    PHX_u8 mediaDescriptor;
 
-    PHX_Byte bootsector[512];
-    PHX_Byte fsInfo[512];
+    PHX_u8 bootsector[512];
+    PHX_u8 fsInfo[512];
 
     PHX_Bool freeClusterCountKnown;
 
@@ -367,8 +367,8 @@ PHX_u32 PHX_Filesystem_FAT_Cluster(PHX_Filesystem_FAT_Version version, PHX_u32 c
 PHX_Result PHX_Filesystem_FAT_ReadFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32* outValue);
 PHX_Result PHX_Filesystem_FAT_WriteFAT(PHX_Filesystem_FAT_Data* data, PHX_u32 cluster, PHX_u32 value);
 
-PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_Byte* outEntries);
-PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_Byte* entries);
+PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_u8* outEntries);
+PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_u8* entries);
 
 PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem_Device* fs, PHX_u32 entryCluster, PHX_u32 entryIndex, const void* entries, PHX_u32 totalEntries);
 PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, PHX_u32 totalEntries, PHX_u32* clusterOut, PHX_u32* indexOut, PHX_u32* mainClusterOut, PHX_u32* mainIndexOut);
@@ -382,12 +382,12 @@ PHX_Result PHX_Filesystem_FAT_FindFreeClusters(PHX_Filesystem_FAT_Data* data, PH
 PHX_Result PHX_Filesystem_FAT_AppendClusters(PHX_Filesystem_FAT_Data* data, PHX_u32 lastCluster, PHX_u32 count, PHX_u32* firstNewClusterOut);
 
 
-void PHX_Filesystem_FAT_LFN_ExtractChars(const PHX_Byte* lfn, PHX_u16 out[13]);
-PHX_Byte PHX_Filesystem_FAT_LFN_Checksum(const PHX_Byte shortName[11]);
-void PHX_Filesystem_FAT_LFN_BuildEntry(const PHX_u16* utf16Name, PHX_u32 totalChars, PHX_u32 totalSlots, PHX_u32 slotIndex, PHX_Byte checksum, PHX_Byte* entryOut);
+void PHX_Filesystem_FAT_LFN_ExtractChars(const PHX_u8* lfn, PHX_u16 out[13]);
+PHX_u8 PHX_Filesystem_FAT_LFN_Checksum(const PHX_u8 shortName[11]);
+void PHX_Filesystem_FAT_LFN_BuildEntry(const PHX_u16* utf16Name, PHX_u32 totalChars, PHX_u32 totalSlots, PHX_u32 slotIndex, PHX_u8 checksum, PHX_u8* entryOut);
 
-void PHX_Filesystem_FAT_BuildShortName(const PHX_Byte rawName[11], char out[13]);
-void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_Byte outCount, char* out);
+void PHX_Filesystem_FAT_BuildShortName(const PHX_u8 rawName[11], char out[13]);
+void PHX_Filesystem_FAT_GetShortNameCharacters(const char* name, const char* nameEnd, PHX_u8 outCount, char* out);
 
 PHX_Result PHX_Filesystem_FAT_GenerateShortName(PHX_Filesystem_Device* fs, PHX_Filesystem_Node* dir, const char firstChars[8], const char hash[4], const char ext[3], char shortNameOut[11]);
 
@@ -395,7 +395,7 @@ PHX_u32 PHX_Filesystem_FAT_HashName(const char* name);
 void PHX_Filesystem_FAT_HashToChars(PHX_u32 hash, char out[4]);
 
 
-PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_Byte* bootsector);
+PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_u8* bootsector);
 void PHX_Filesystem_FAT_Destroy(PHX_Filesystem_Device* fs);
 
 PHX_Result PHX_Filesystem_FAT_GetNode(PHX_Filesystem_Device* fs, PHX_Filesystem_Node_Number number, PHX_Filesystem_Node* nodeOut);

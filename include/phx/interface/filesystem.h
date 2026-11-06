@@ -12,7 +12,7 @@ extern "C" {
 typedef struct PHX_Filesystem_Interface
 {
     PHX_Result (*openFilesystem)(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, PHX_Bool readonly);
-    PHX_Result (*formatFilesystem)(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, const PHX_Byte* bootsector);
+    PHX_Result (*formatFilesystem)(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, const PHX_u8* bootsector);
 
     const char* name;
     const char* type;

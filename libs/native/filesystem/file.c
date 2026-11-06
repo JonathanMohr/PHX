@@ -331,7 +331,7 @@ PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode m
 
         if (size != 0)
         {
-            const PHX_Byte zero = 0;
+            const PHX_u8 zero = 0;
             if (PHX_File_Seek(file, size - 1) != PHX_TRUE ||
                 fwrite(&zero, 1, 1, file) != 1 ||
                 fflush(file) != 0 ||

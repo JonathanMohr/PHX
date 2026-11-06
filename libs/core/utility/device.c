@@ -2,6 +2,8 @@
 
 #include <phx/base/intrinsic.h>
 
+typedef PHX_u64 PHX_BlockByteSize;
+
 #define PHX_BLOCK_SIZE_TRANSFORM_TYPE "BLOCK-SIZE-TRANSFORM-DEVICE"
 
 typedef enum
@@ -19,7 +21,7 @@ typedef struct PHX_SectorSizeTransform
     PHX_Context* context;
     PHX_Disk_Device* source;
 
-    PHX_Byte* scratch;
+    PHX_u8* scratch;
     PHX_SectorSize scratchSourceBlocks;
 
     PHX_SectorSize targetBlockSize;
@@ -60,7 +62,7 @@ static PHX_SectorSize BST_Write_TargetMultiple(PHX_SectorSizeTransform* t, const
 }
 
 
-static PHX_SectorSize BST_Read_SourceMultiple(PHX_SectorSizeTransform* t, PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
+static PHX_SectorSize BST_Read_SourceMultiple(PHX_SectorSizeTransform* t, PHX_u8* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     const PHX_SectorSize ratio = t->ratio;
     const PHX_SectorSize targetBlockSize = t->targetBlockSize;
@@ -94,7 +96,7 @@ static PHX_SectorSize BST_Read_SourceMultiple(PHX_SectorSizeTransform* t, PHX_By
     return done;
 }
 
-static PHX_SectorSize BST_Write_SourceMultiple(PHX_SectorSizeTransform* t, const PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
+static PHX_SectorSize BST_Write_SourceMultiple(PHX_SectorSizeTransform* t, const PHX_u8* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     const PHX_SectorSize ratio = t->ratio;
     const PHX_SectorSize targetBlockSize = t->targetBlockSize;
@@ -140,7 +142,7 @@ static PHX_SectorSize BST_Write_SourceMultiple(PHX_SectorSizeTransform* t, const
 }
 
 
-static PHX_SectorSize BST_Read_General(PHX_SectorSizeTransform* t, PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
+static PHX_SectorSize BST_Read_General(PHX_SectorSizeTransform* t, PHX_u8* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     const PHX_SectorSize targetBlockSize = t->targetBlockSize;
     const PHX_SectorSize sourceBlockSize = t->source->sectorSize;
@@ -179,7 +181,7 @@ static PHX_SectorSize BST_Read_General(PHX_SectorSizeTransform* t, PHX_Byte* buf
     return done;
 }
 
-static PHX_SectorSize BST_Write_General(PHX_SectorSizeTransform* t, const PHX_Byte* buffer, PHX_SectorSize block, PHX_SectorSize count)
+static PHX_SectorSize BST_Write_General(PHX_SectorSizeTransform* t, const PHX_u8* buffer, PHX_SectorSize block, PHX_SectorSize count)
 {
     const PHX_SectorSize targetBlockSize = t->targetBlockSize;
     const PHX_SectorSize sourceBlockSize = t->source->sectorSize;
@@ -236,8 +238,8 @@ static PHX_SectorSize BST_Read(PHX_Disk_Device* device, void* buffer, PHX_Sector
     {
         case PHX_BST_IDENTITY:        return BST_Read_Identity(t, buffer, block, count);
         case PHX_BST_TARGET_MULTIPLE: return BST_Read_TargetMultiple(t, buffer, block, count);
-        case PHX_BST_SOURCE_MULTIPLE: return BST_Read_SourceMultiple(t, (PHX_Byte*)buffer, block, count);
-        case PHX_BST_GENERAL:         return BST_Read_General(t, (PHX_Byte*)buffer, block, count);
+        case PHX_BST_SOURCE_MULTIPLE: return BST_Read_SourceMultiple(t, (PHX_u8*)buffer, block, count);
+        case PHX_BST_GENERAL:         return BST_Read_General(t, (PHX_u8*)buffer, block, count);
     }
     return 0;
 }
@@ -250,8 +252,8 @@ static PHX_SectorSize BST_Write(PHX_Disk_Device* device, const void* buffer, PHX
     {
         case PHX_BST_IDENTITY:        return BST_Write_Identity(t, buffer, block, count);
         case PHX_BST_TARGET_MULTIPLE: return BST_Write_TargetMultiple(t, buffer, block, count);
-        case PHX_BST_SOURCE_MULTIPLE: return BST_Write_SourceMultiple(t, (const PHX_Byte*)buffer, block, count);
-        case PHX_BST_GENERAL:         return BST_Write_General(t, (const PHX_Byte*)buffer, block, count);
+        case PHX_BST_SOURCE_MULTIPLE: return BST_Write_SourceMultiple(t, (const PHX_u8*)buffer, block, count);
+        case PHX_BST_GENERAL:         return BST_Write_General(t, (const PHX_u8*)buffer, block, count);
     }
     return 0;
 }
@@ -305,7 +307,7 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_Disk_Device* de
 
         const PHX_SectorSize maxSrcBlocks = PHX_CeilDiv(PHX_BST_CHUNK_TARGET_BLOCKS, t->ratio) + 1;
         t->scratchSourceBlocks = maxSrcBlocks;
-        t->scratch = (PHX_Byte*)context->allocator->allocate(context->allocator, maxSrcBlocks * sourceBlockSize);
+        t->scratch = (PHX_u8*)context->allocator->allocate(context->allocator, maxSrcBlocks * sourceBlockSize);
         if (!t->scratch)
         {
             context->allocator->free(context->allocator, t);
@@ -322,7 +324,7 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_Disk_Device* de
         const PHX_SectorSize chunkBytes = PHX_BST_CHUNK_TARGET_BLOCKS * targetBlockSize;
         const PHX_SectorSize maxSrcBlocks = PHX_CeilDiv(chunkBytes, sourceBlockSize) + 1;
         t->scratchSourceBlocks = maxSrcBlocks;
-        t->scratch = (PHX_Byte*)context->allocator->allocate(context->allocator, maxSrcBlocks * sourceBlockSize);
+        t->scratch = (PHX_u8*)context->allocator->allocate(context->allocator, maxSrcBlocks * sourceBlockSize);
         if (!t->scratch)
         {
             context->allocator->free(context->allocator, t);

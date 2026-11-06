@@ -49,13 +49,13 @@ typedef struct PHX_Partition_Type_Info
 {
     const char** names;
 } PHX_Partition_Type_Info;
-#define PHX_PARTITION_TYPE_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, NULL }
+#define PHX_PARTITION_TYPE_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, PHX_NULL }
 
 typedef struct PHX_Partition_BootloaderPreset_Info
 {
     const char** names;
 } PHX_Partition_BootloaderPreset_Info;
-#define PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, NULL }
+#define PHX_PARTITION_BOOTLOADER_PRESET_INFO_NAMES(...) (const char*[]){ __VA_ARGS__, PHX_NULL }
 
 typedef struct PHX_Partition_Table_Device PHX_Partition_Table_Device;
 

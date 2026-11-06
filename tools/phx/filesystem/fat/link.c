@@ -30,9 +30,9 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
     PHX_u32 lfnCount = 0;
 
     PHX_u16 lfnChars[20 * 13];
-    PHX_Byte lfnExpected = 0;
-    PHX_Byte lfnChecksum = 0;
-    PHX_Byte haveLfn = PHX_FALSE;
+    PHX_u8 lfnExpected = 0;
+    PHX_u8 lfnChecksum = 0;
+    PHX_Bool haveLfn = PHX_FALSE;
 
     const PHX_Size nameLen = strlen(name);
 
@@ -40,7 +40,7 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
     {
         PHX_u32 entryCluster;
         PHX_u32 entryIndex;
-        PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+        PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
         if (rootDirectory)
         {
@@ -97,9 +97,9 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
         {
             if (data->readWithLFN != PHX_TRUE) continue;
 
-            const PHX_Byte order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
+            const PHX_u8 order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
 
-            const PHX_Byte sequence = order & 0x1F;
+            const PHX_u8 sequence = order & 0x1F;
             const PHX_Bool isLast = (order & 0x40) ? PHX_TRUE : PHX_FALSE;
             
             if (sequence == 0 || sequence > 20)
@@ -166,7 +166,7 @@ PHX_Result PHX_Filesystem_FAT_UnlinkEntry(PHX_Filesystem_Device* fs, PHX_Filesys
             const PHX_u32 startIndex = (useLfn == PHX_TRUE) ? lfnStartIndex : entryIndex;
             const PHX_u32 totalCount = (useLfn == PHX_TRUE) ? (lfnCount + 1) : 1;
 
-            PHX_Byte deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+            PHX_u8 deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
             for (PHX_u32 i = 0; i < totalCount; i++)
             {
                 memset(&deletedSlots[i], 0, PHX_FILESYSTEM_FAT_DIRENT_SIZE);

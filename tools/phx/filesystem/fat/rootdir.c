@@ -1,6 +1,6 @@
 #include "fat.h"
 
-PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_Byte* outEntries)
+PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, PHX_u8* outEntries)
 {
     if (data->version != PHX_FILESYSTEM_FAT_12 && data->version != PHX_FILESYSTEM_FAT_16)
         return PHX_ERROR_INTERNAL;
@@ -16,7 +16,7 @@ PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* 
     PHX_u32 sector = data->specific.fat12_16.rootDirSector + (index / entriesPerSector);
     PHX_u32 entryInSector = index % entriesPerSector;
     PHX_u32 remaining = count;
-    PHX_Byte* out = outEntries;
+    PHX_u8* out = outEntries;
 
     while (remaining > 0)
     {
@@ -38,7 +38,7 @@ PHX_Result PHX_Filesystem_FAT_ReadRootDirectoryEntries(PHX_Filesystem_FAT_Data* 
     return PHX_SUCCESS;
 }
 
-PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_Byte* entries)
+PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data* data, PHX_u16 index, PHX_u16 count, const PHX_u8* entries)
 {
     if (data->version != PHX_FILESYSTEM_FAT_12 && data->version != PHX_FILESYSTEM_FAT_16)
         return PHX_ERROR_INTERNAL;
@@ -54,7 +54,7 @@ PHX_Result PHX_Filesystem_FAT_WriteRootDirectoryEntries(PHX_Filesystem_FAT_Data*
     PHX_u32 sector = data->specific.fat12_16.rootDirSector + (index / entriesPerSector);
     PHX_u32 entryInSector = index % entriesPerSector;
     PHX_u32 remaining = count;
-    const PHX_Byte* in = entries;
+    const PHX_u8* in = entries;
 
     while (remaining > 0)
     {
@@ -92,7 +92,7 @@ PHX_Result PHX_Filesystem_FAT_WriteEntries(PHX_Filesystem_Device* fs, PHX_u32 en
     }
 
     const PHX_u32 entriesPerCluster = data->bytesPerCluster / PHX_FILESYSTEM_FAT_DIRENT_SIZE;
-    const PHX_Byte* src = entries;
+    const PHX_u8* src = entries;
 
     PHX_u32 remaining = totalEntries;
     PHX_u32 cluster = entryCluster;
@@ -143,7 +143,7 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem_Device* fs, PHX_
 
         for (PHX_u16 i = 0; i < data->specific.fat12_16.rootDirEntryCount; i++)
         {
-            PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+            PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
             if ((result = PHX_Filesystem_FAT_ReadRootDirectoryEntries(data, i, 1, entry)) != PHX_SUCCESS)
                 return result;
 
@@ -215,11 +215,11 @@ PHX_Result PHX_Filesystem_FAT_FindFreeEntrySlots(PHX_Filesystem_Device* fs, PHX_
         if (data->usedDevice->read(data->usedDevice, data->clusterBuffer, PHX_Filesystem_FAT_GetClusterStart(data, cluster), data->sectorsPerCluster) != data->sectorsPerCluster)
             return PHX_ERROR_IO;
 
-        PHX_Byte* entries = data->clusterBuffer;
+        PHX_u8* entries = data->clusterBuffer;
 
         for (PHX_u32 i = 0; i < entriesPerCluster; i++)
         {
-            PHX_Byte* entry = entries + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+            PHX_u8* entry = entries + i * PHX_FILESYSTEM_FAT_DIRENT_SIZE;
 
             if (read_u8(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM) == PHX_FILESYSTEM_FAT_ENTRY_FREE)
             {

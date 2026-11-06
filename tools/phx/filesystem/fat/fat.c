@@ -102,17 +102,17 @@ void PHX_Filesystem_FAT_UpdateFsInfo(PHX_Filesystem_FAT_Data* data)
 static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
     PHX_Filesystem_FAT_Data* data, const char oemIdentifier[8],
     PHX_u16 sectorsPerTrack, PHX_u16 numberOfHeads,
-    PHX_u32 hiddenSectors, PHX_Byte driveNumber,
+    PHX_u32 hiddenSectors, PHX_u8 driveNumber,
     PHX_u32 volumeId,
     const char volumeLabel[11], const char filesystemType[8]
 )
 {
-    PHX_Byte* bootsector = data->bootsector;
+    PHX_u8* bootsector = data->bootsector;
 
     memcpy(bootsector + PHX_FILESYSTEM_FAT_HEADER_OEM, oemIdentifier, 8);
 
     write_u16(bootsector + PHX_FILESYSTEM_FAT_HEADER_BPS, data->bytesPerSector);
-    write_u8(bootsector + PHX_FILESYSTEM_FAT_HEADER_SPC, (PHX_Byte)data->sectorsPerCluster);
+    write_u8(bootsector + PHX_FILESYSTEM_FAT_HEADER_SPC, (PHX_u8)data->sectorsPerCluster);
     write_u16(bootsector + PHX_FILESYSTEM_FAT_HEADER_RES, data->reservedSectors);
 
     write_u8(bootsector + PHX_FILESYSTEM_FAT_HEADER_FAC, data->fatCount);
@@ -174,7 +174,7 @@ static void PHX_Filesystem_FAT_WriteBootsectorBuffer(
     *(bootsector + 511) = 0xAA;
 }
 
-static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_Filesystem_FAT_Data* data, const PHX_Byte* bootsector, PHX_u8 sectorsPerTrack, PHX_u8 totalHeads, PHX_u64 id)
+static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_Filesystem_FAT_Data* data, const PHX_u8* bootsector, PHX_u8 sectorsPerTrack, PHX_u8 totalHeads, PHX_u64 id)
 {
     if (bootsector)
         memcpy(data->bootsector, bootsector, 512);
@@ -219,7 +219,7 @@ static PHX_Result PHX_Filesystem_FAT_UpdateBootsector(PHX_Context* context, PHX_
 }
 
 
-PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_Byte* bootsector)
+PHX_Result PHX_Filesystem_FAT_ChangeBootsector(PHX_Filesystem_Device* fs, const PHX_u8* bootsector)
 {
     if (fs->readonly == PHX_TRUE) return PHX_ERROR_PERMISSION;
     return PHX_Filesystem_FAT_UpdateBootsector(fs->context, fs->data, bootsector, fs->device->sectorsPerTrack, fs->device->totalHeads, fs->id);
@@ -259,7 +259,7 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Di
 
     const PHX_SectorSize blocksForBootsector = (512 + device->sectorSize - 1) / device->sectorSize;
 
-    PHX_Byte* sectorBuffer = context->allocator->allocate(context->allocator, blocksForBootsector * device->sectorSize);
+    PHX_u8* sectorBuffer = context->allocator->allocate(context->allocator, blocksForBootsector * device->sectorSize);
     if (!sectorBuffer)
     {
         context->allocator->free(context->allocator, data);
@@ -278,17 +278,17 @@ static PHX_Result PHX_Filesystem_FAT_OpenFilesystem(PHX_Context* context, PHX_Di
     context->allocator->free(context->allocator, sectorBuffer);
 
     const PHX_u16 bytesPerSector = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_BPS);
-    const PHX_Byte sectorsPerCluster = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_SPC);
+    const PHX_u8 sectorsPerCluster = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_SPC);
     const PHX_u16 reservedSectors = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_RES);
 
-    const PHX_Byte fatCount = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_FAC);
+    const PHX_u8 fatCount = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_FAC);
     const PHX_u16 rootDirEntryCount = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_RDC);
     const PHX_u32 totalSectors = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_TOS) ? read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_TOS) : read_u32(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_LTS);
 
     const PHX_u16 fatSize16 = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_FAS);
     const PHX_u32 fatSize = fatSize16 ? fatSize16 : read_u32(data->bootsector + PHX_FILESYSTEM_FAT32_HEADER_FAS32);
 
-    const PHX_Byte mediaDescriptor = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_MED);
+    const PHX_u8 mediaDescriptor = read_u8(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_MED);
     
     // const PHX_u16 sectorsPerTrack = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_SPT);
     // const PHX_u16 numberOfHeads = read_u16(data->bootsector + PHX_FILESYSTEM_FAT_HEADER_NOH);
@@ -574,7 +574,7 @@ static PHX_u32 ceilToPowerOfTwo32(PHX_u32 value)
     return result;
 }
 
-static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX_Byte fatCount, PHX_Byte fatEntryBitCount, PHX_u32 minClusterCount, PHX_u32 maxClusterCount, PHX_u64 totalSectorCount, PHX_u16 bytesPerSector, PHX_u16 maxSectorsPerCluster, PHX_u32 minSectorsPerClusterFloor, PHX_u16* outSectorsPerCluster, PHX_u32* outFatSectors)
+static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX_u8 fatCount, PHX_u8 fatEntryBitCount, PHX_u32 minClusterCount, PHX_u32 maxClusterCount, PHX_u64 totalSectorCount, PHX_u16 bytesPerSector, PHX_u16 maxSectorsPerCluster, PHX_u32 minSectorsPerClusterFloor, PHX_u16* outSectorsPerCluster, PHX_u32* outFatSectors)
 {
     if (totalSectorCount > 0xFFFFFFFF)
         return PHX_FALSE;
@@ -594,7 +594,7 @@ static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX
 
     const PHX_u32 minSectorsPerCluster = ceilToPowerOfTwo32(minSectorsPerClusterUnrounded);
 
-    for (PHX_Byte attempt = 0; attempt < 2; attempt++)
+    for (PHX_u8 attempt = 0; attempt < 2; attempt++)
     {
         PHX_u32 sectorsPerCluster = (attempt == 0) ? minSectorsPerCluster / 2 : minSectorsPerCluster;
         if (sectorsPerCluster < minSectorsPerClusterFloor)
@@ -624,7 +624,7 @@ static PHX_Bool fitsFatType(PHX_u16 reservedSectors, PHX_u16 rootEntryCount, PHX
 
 #define allow64kCluster PHX_FALSE
 
-static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, const PHX_Byte* bootsector)
+static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_Disk_Device* device, PHX_Filesystem_Device* outFs, const PHX_u8* bootsector)
 {
     PHX_Result result;
 
@@ -690,8 +690,8 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
 
     PHX_u16 activeFAT = PHX_FILESYSTEM_FAT_ACTIVE_ALL;
 
-    PHX_Byte fatCount = 2;
-    PHX_Byte mediaDescriptor = PHX_FILESYSTEM_FAT_MEDIA_DESCRIPTOR_DISK; // TODO
+    PHX_u8 fatCount = 2;
+    PHX_u8 mediaDescriptor = PHX_FILESYSTEM_FAT_MEDIA_DESCRIPTOR_DISK; // TODO
 
 
     // if FAT32
@@ -924,7 +924,7 @@ static PHX_Result PHX_Filesystem_FAT_FormatFilesystem(PHX_Context* context, PHX_
     }
 
 
-    const PHX_Byte* buffer = zeroBuffer;
+    const PHX_u8* buffer = zeroBuffer;
     PHX_Size bufferSize = sizeof(zeroBuffer);
     if (bytesPerSector > bufferSize)
     {

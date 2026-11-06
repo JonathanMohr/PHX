@@ -21,12 +21,12 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
     PHX_u32 lfnCount = 0;
 
     PHX_u16 lfnChars[20 * 13];
-    PHX_Byte lfnExpected = 0;
-    PHX_Byte lfnChecksum = 0;
-    PHX_Byte haveLfn = PHX_FALSE;
+    PHX_u8 lfnExpected = 0;
+    PHX_u8 lfnChecksum = 0;
+    PHX_Bool haveLfn = PHX_FALSE;
 
     PHX_Bool found = PHX_FALSE;
-    PHX_Byte mainEntry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u8 mainEntry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
     PHX_u32 srcStartCluster = 0;
     PHX_u32 srcStartIndex = 0;
     PHX_u32 srcTotalCount = 0;
@@ -44,7 +44,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
     {
         PHX_u32 entryCluster;
         PHX_u32 entryIndex;
-        PHX_Byte entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+        PHX_u8 entry[PHX_FILESYSTEM_FAT_DIRENT_SIZE];
 
         if (srcRootDirectory)
         {
@@ -101,9 +101,9 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
         {
             if (data->readWithLFN != PHX_TRUE) continue;
 
-            const PHX_Byte order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
+            const PHX_u8 order = read_u8(entry + PHX_FILESYSTEM_FAT_LFNENT_ORD);
 
-            const PHX_Byte sequence = order & 0x1F;
+            const PHX_u8 sequence = order & 0x1F;
             const PHX_Bool isLast = (order & 0x40) ? PHX_TRUE : PHX_FALSE;
             
             if (sequence == 0 || sequence > 20)
@@ -223,7 +223,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
 
     const PHX_u32 lfnSlotCount = (PHX_u32)((utf16Count + 13 - 1) / 13);
     const PHX_u32 totalEntries = lfnSlotCount + 1;
-    const PHX_Byte lfnChecksumNew = PHX_Filesystem_FAT_LFN_Checksum((PHX_Byte*)shortName);
+    const PHX_u8 lfnChecksumNew = PHX_Filesystem_FAT_LFN_Checksum((PHX_u8*)shortName);
 
     PHX_u32 entryCluster;
     PHX_u32 entryIndex;
@@ -232,7 +232,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
     if ((result = PHX_Filesystem_FAT_FindFreeEntrySlots(fs, dstDir, totalEntries, &entryCluster, &entryIndex, &mainEntryCluster, &mainEntryIndex)) != PHX_SUCCESS)
         return result;
 
-    PHX_Byte entries[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u8 entries[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
     for (PHX_u32 i = 0; i < totalEntries; i++)
     {
         if (i < totalEntries - 1)
@@ -241,7 +241,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
         }
         else
         {
-            PHX_Byte* entry = entries[i];
+            PHX_u8* entry = entries[i];
             memcpy(entry, mainEntry, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
             memcpy(entry + PHX_FILESYSTEM_FAT_DIRENT_NAM, shortName, 8);
             memcpy(entry + PHX_FILESYSTEM_FAT_DIRENT_EXT, shortName + 8, 3);
@@ -267,7 +267,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
             if (data->usedDevice->read(data->usedDevice, data->buffer, movedStart, 1) != 1)
                 return PHX_ERROR_IO;
 
-            PHX_Byte* dotdot = data->buffer + PHX_FILESYSTEM_FAT_DIRENT_SIZE;
+            PHX_u8* dotdot = data->buffer + PHX_FILESYSTEM_FAT_DIRENT_SIZE;
             write_u16(dotdot + PHX_FILESYSTEM_FAT_DIRENT_FCH, (data->version == PHX_FILESYSTEM_FAT_32) ? (PHX_u16)(newParentCluster >> 16) : 0);
             write_u16(dotdot + PHX_FILESYSTEM_FAT_DIRENT_FCL, (PHX_u16)(newParentCluster & 0xFFFF));
 
@@ -276,7 +276,7 @@ PHX_Result PHX_Filesystem_FAT_MoveEntry(PHX_Filesystem_Device* fs, PHX_Filesyste
         }
     }
 
-    PHX_Byte deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
+    PHX_u8 deletedSlots[21][PHX_FILESYSTEM_FAT_DIRENT_SIZE];
     for (PHX_u32 i = 0; i < srcTotalCount; i++)
     {
         memset(&deletedSlots[i], 0, PHX_FILESYSTEM_FAT_DIRENT_SIZE);
