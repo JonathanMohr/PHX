@@ -5,6 +5,8 @@
 #include <time.h>
 #include <inttypes.h>
 
+#include <phx/version/version.h>
+
 #include <phx/native/filesystem.h>
 #include <phx/native/memory.h>
 
@@ -2488,7 +2490,7 @@ static void print_help(const char* name)
 
     fputs("\nDirect commands:\n", stream);
     fputs("  > help/-h                            Print this message\n", stream);
-    // TODO: fputs("\n  > version/-v                         Print version message\n", stream);
+    fputs("  > version/-v                         Print version message\n", stream);
 
     fputs("\nArea \"disk\":\n", stream);
     fputs("  Commands:\n", stream);
@@ -2541,15 +2543,6 @@ static void print_help(const char* name)
 }
 
 
-static void print_version(void)
-{
-    FILE* const stream = stdout;
-
-    fputs("PHX version " VERSION " (https://github.com/JonathanMohr/PHX)\n", stream);
-    fputs("Compiled on " __DATE__ "\n", stream);
-}
-
-
 static void printWarning(PHX_Warning warning)
 {
     const char* f = "Unknown warning: ";
@@ -2585,7 +2578,7 @@ int main(int argc, const char* argv[])
 
     if (strcmp(area, "version") == 0 || strcmp(area, "-v") == 0)
     {
-        print_version();
+        PHX_Print_Version();
         return 0;
     }
 

@@ -412,7 +412,6 @@ def main() -> bool:
     toolchain = Get_LLVM_Toolchain(buildContext)
     toolchain.Set_STDC("c99")
     toolchain.Set_STDCPP("c++98")
-    toolchain.Add_Define("VERSION", f"\"{version}\"")
     toolchain.Add_Define("PHX_BUILD")
 
     try:
@@ -516,6 +515,18 @@ def main() -> bool:
 
         base_lib = Build_Static_Library(logger, base_toolchain, base_build_mode, base_path, [], libs_build_dir / "core", "phx-core", True)
 
+        ## version
+        version_path = libs_dir / "version"
+        version_toolchain = copy.deepcopy(toolchain)
+        version_toolchain.context = toolchain.context
+        version_toolchain.Add_Include_Directory(include_dir)
+        version_toolchain.Add_Define("VERSION", f"\"{version}\"")
+
+        version_build_mode = copy.deepcopy(buildMode)
+        version_build_mode.host = HOST.HOSTED
+
+        version_lib = Build_Static_Library(logger, version_toolchain, version_build_mode, version_path, [], libs_build_dir / "version", "phx-version", True)
+
         ## charsets
         charsets_path = libs_dir / "charsets"
 
@@ -559,19 +570,7 @@ def main() -> bool:
         phxBuildMode = copy.deepcopy(buildMode)
         phxBuildMode.host = HOST.HOSTED
 
-        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [native_lib, base_lib, charsets_lib], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
-
-
-        # PHX-LFS
-        phx_lfsToolchain = copy.deepcopy(toolchain)
-        phx_lfsToolchain.context = toolchain.context
-        phx_lfsToolchain.Add_Include_Directory(tools_dir / "phx-lfs")
-
-        phx_lfsBuildMode = copy.deepcopy(buildMode)
-        phx_lfsBuildMode.werror = False
-        phx_lfsBuildMode.host = HOST.HOSTED
-
-        phx_lfs = Build_Executable(logger, phx_lfsToolchain, phx_lfsBuildMode, [], [], tools_dir / "phx-lfs", build_dir / "tools" / "phx-lfs", "phx-lfs")
+        phx = Build_Executable(logger, phxToolchain, phxBuildMode, [native_lib, base_lib, charsets_lib, version_lib], [], tools_dir / "phx", build_dir / "tools" / "phx", "phx")
 
 
         # dist
@@ -611,10 +610,6 @@ def main() -> bool:
         phx_executable, phx_executable_debug_info = phx
         bin_phx = bin_dir / phx_executable.name
         Copy_Path(logger, phx_executable, bin_phx)
-
-        phx_lfs_executable, phx_lfs_executable_debug_info = phx_lfs
-        bin_phx_lfs = bin_dir / phx_lfs_executable.name
-        Copy_Path(logger, phx_lfs_executable, bin_phx_lfs)
 
     except Exception as e:
         logger.error(f"Build failed: {e}")
