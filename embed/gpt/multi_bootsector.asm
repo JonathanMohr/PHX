@@ -121,7 +121,7 @@ disk_error:
 ;
 
 %define RETRIES 5
-read_sector:
+read_sector: ; TODO: When LBA is supported it overwrites the sector count in disk address packet on error
     push ds
     push si
     push di

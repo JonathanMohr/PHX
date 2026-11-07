@@ -70,7 +70,7 @@ partition_found:
     test cl, 1
     jz short .no_lba
 
-.use_lba:
+.use_lba: ; TODO: When LBA is supported it overwrites the sector count in disk address packet on error
     xor ax, ax
     push ax
     push ax
