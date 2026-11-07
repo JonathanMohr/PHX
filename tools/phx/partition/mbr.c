@@ -255,7 +255,7 @@ static PHX_Result MBR_WriteChanges(PHX_Partition_Table_Device* table)
     if (table->disk->read(table->disk, data->bootsectorBuffer, 0, bootsectorSectors) != bootsectorSectors)
         return PHX_ERROR_IO;
 
-    memcpy(data->bootsectorBuffer, data->bootsectorBuffer, 512);
+    memcpy(data->bootsectorBuffer, data->bootsector, 512);
 
     PHX_u32 signature = (PHX_u32)(table->signature.first & 0xFFFFFFFF);
     PHX_Write_Le_u32(data->bootsectorBuffer + MBR_BOOTSECTOR_DSIG, signature);
