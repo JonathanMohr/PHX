@@ -2436,7 +2436,6 @@ static int raw(PHX_Context* context, const char* executable, const char* command
                     }
                     if (device->write(device, buffer, currentBlock, chunk) != chunk)
                     {
-                        printf("device->write(device, buffer, %" PRIu64 ", %" PRIu64 ")\n", currentBlock, chunk);
                         fputs("Could not write chunk to device\n", stderr);
 
                         context->allocator->free(context->allocator, buffer);
