@@ -658,6 +658,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             fputc('\n', stdout);
             fprintf(stdout, "  Partition Slots: %" PRIu64 "\n", table.partitionSlots);
             fputs("  Partitions:\n", stdout);
+            PHX_PartitionSize currentEmptyCount = 0;
             for (PHX_PartitionSize i = 0; i < table.partitionSlots; i++)
             {
                 PHX_Partition* partition = PHX_Partition_Table_GetPartition(&table, i);
@@ -665,18 +666,28 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 const char* typeName = table.ops->getTypeName(&table, i);
                 table.ops->getSpecificType(&table, i, specificType);
 
-                if (partition->name[0] == '\0')
-                    fprintf(stdout, "    Partition Slot %" PRIu64 ": ", i + 1);
-                else
-                    fprintf(stdout, "    Partition Slot %" PRIu64 " \"%s\": ", i + 1, partition->name);
+                if (currentEmptyCount > 0 && (partition->type != PHX_PARTITION_TYPE_EMPTY || i + 1 >= table.partitionSlots))
+                {
+                    if (currentEmptyCount > 1)
+                        fprintf(stdout, "    Partition Slots %" PRIu64 " - %" PRIu64 ": Empty\n", i - currentEmptyCount + 1, i + 1);
+                    else
+                        fprintf(stdout, "    Partition Slot %" PRIu64 ": Empty\n", i);
+                }
 
                 if (partition->type == PHX_PARTITION_TYPE_EMPTY)
                 {
-                    fputs("Empty\n", stdout);
+                    currentEmptyCount++;
                     continue;
                 }
+
+                currentEmptyCount = 0;
+
+                if (partition->name[0] == '\0')
+                    fprintf(stdout, "    Partition Slot %" PRIu64 ": \n", i + 1);
                 else
-                    fputc('\n', stdout);
+                    fprintf(stdout, "    Partition Slot %" PRIu64 " \"%s\": \n", i + 1, partition->name);
+
+                (void)currentEmptyCount;
 
                 fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
                 fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
@@ -2470,36 +2481,34 @@ static void print_help(const char* name)
 
     fprintf(stream, "Usage:\n  %s <area> <command> [...]\n  %s <direct command> [...]", name, name);
 
-    fputs("\nMeanings:\n", stream);
-    fputs("  Image                                  Path referencing a file with any disk image format\n", stream);
-    fputs("  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n", stream);
-    fputs("  Format                                 Type specifier for the interface\n", stream);
-    fputs("  Start/Size                             Size specifier in bytes\n", stream);
-
     fputs(
-        "\nSize specifier:\n"
+        "\n"
+        "Meanings:\n"
+        "  Image                                  Path referencing a file with any disk image format\n"
+        "  Device                                 Path to a disk image and optionally with a partition number (':' + partition index)\n"
+        "  Format                                 Type specifier for the interface\n"
+        "  Index                                  Index specifier in decimal"
+        "  Start/Size                             Size specifier in bytes\n"
+        "\n"
+        "Size specifier:\n"
         "  You can use the power-suffixes 'k' (p=1), 'm' (p=2), 'g' (p=3) and 't' (p=4).\n"
         "  The default base is 1024, if you use 'd' after the power-suffix, the base\n"
         "  will be 1000. Write any decimal number with '.' as decimal point (for example\n"
         "  100, 0.5, 32, 83.29), then the power-suffix and then the base-suffix.\n"
         "  The value will be calculated by 'n * b^p' (n = entered number, p = power,\n"
-        "  b = base) and will be rounded to the nearest integer.\n",
-        stream
-    );
-
-    fputs("\nDirect commands:\n", stream);
-    fputs("  > help/-h                            Print this message\n", stream);
-    fputs("  > version/-v                         Print version message\n", stream);
-
-    fputs("\nArea \"disk\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > create <image> <format> <size>       Create a new disk image\n", stream);
-    fputs("  > info <image>                         Print information about the disk image\n", stream);
-
-
-    fputs(
-        "\nArea \"partition\":\n"
+        "  b = base) and will be rounded to the nearest integer.\n"
+        "\n"
+        "Direct commands:\n"
+        "  > help/-h                            Print this message\n"
+        "  > version/-v                         Print version message\n"
+        "\n"
+        "Area \"disk\":\n"
+        "  Commands:\n"
+        "  > list                                 List supported interfaces\n"
+        "  > create <image> <format> <size>       Create a new disk image\n"
+        "  > info <image>                         Print information about the disk image\n"
+        "\n"
+        "Area \"partition\":\n"
         "  Commands:\n"
         "  > list                                 List supported interfaces\n"
         "  > types <format>                       List supported types for format\n"
@@ -2510,35 +2519,33 @@ static void print_help(const char* name)
         "  > add <image> <index> <start> <size> [--bootable] [--type <type>]\n"
         "  -> Add partition to partition table\n"
         "  > remove <image> <index>               Remove partition from partition table\n"
-        "  > bootsector <image> <file>            Set bootsector of partition table\n",
-        stderr
+        "  > bootsector <image> <file>            Set bootsector of partition table\n"
+        // TODO: "  > signature <image> <signature>      Set signature of partition table\n"
+        "\n"
+        "Area \"filesystem\":\n"
+        "  Commands:\n"
+        "  > list                                 List supported interfaces\n"
+        "  > info <image>                         Print information about the filesystem\n"
+        "  > format <image> <format>              Format a device with a filesystem\n"
+        "  > extract <image <path> <host-path>    Extract entry to host entry\n"
+        "  > insert <image <path> <host-path>     Insert entry from host entry\n"
+        "  > mkdir <image> <path>                 Create a new directory\n"
+        "  > touch <image> <path>                 Create a new empty file\n"
+        "  > list <image> <path>                  List entries of a directory\n"
+        "  > tree <image> <path>                  List entries of a directory recursively\n"
+        "  > cat <image> <path>                   Print content of a file\n"
+        "  > write <image> <path> <host-file>     Write content from a host file to a device file\n"
+        "  > read <image> <path> <host-file>      Read content from a device file to a host file\n"
+        "  > remove <image> <path>                Remove an entry\n"
+        "  > move <image> <src-path> <dst-path>   Move an entry\n"
+        "  > bootsector <image> <file>            Set bootsector of filesystem\n"
+        "\n"
+        "Area \"raw\":\n"
+        "  Commands:\n"
+        "  > read <device> <file>                 Read from device to file\n"
+        "  > write <device> <file>                Read from file to device\n",
+        stream
     );
-    // TODO: "  > signature <image> <signature>      Set signature of partition table\n"
-
-
-    fputs("\nArea \"filesystem\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > list                                 List supported interfaces\n", stream);
-    fputs("  > info <image>                         Print information about the filesystem\n", stream);
-    fputs("  > format <image> <format>              Format a device with a filesystem\n", stream);
-    fputs("  > extract <image <path> <host-path>    Extract entry to host entry\n", stream);
-    fputs("  > insert <image <path> <host-path>     Insert entry from host entry\n", stream);
-    fputs("  > mkdir <image> <path>                 Create a new directory\n", stream);
-    fputs("  > touch <image> <path>                 Create a new empty file\n", stream);
-    fputs("  > list <image> <path>                  List entries of a directory\n", stream);
-    fputs("  > tree <image> <path>                  List entries of a directory recursively\n", stream);
-    fputs("  > cat <image> <path>                   Print content of a file\n", stream);
-    fputs("  > write <image> <path> <host-file>     Write content from a host file to a device file\n", stream);
-    fputs("  > read <image> <path> <host-file>      Read content from a device file to a host file\n", stream);
-    fputs("  > remove <image> <path>                Remove an entry\n", stream);
-    fputs("  > move <image> <src-path> <dst-path>   Move an entry\n", stream);
-    fputs("  > bootsector <image> <file>            Set bootsector of filesystem\n", stream);
-
-
-    fputs("\nArea \"raw\":\n", stream);
-    fputs("  Commands:\n", stream);
-    fputs("  > read <device> <file>                 Read from device to file\n", stream);
-    fputs("  > write <device> <file>                Read from file to device\n", stream);
 }
 
 

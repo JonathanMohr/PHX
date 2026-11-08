@@ -2,6 +2,8 @@
 [org 0x0600]
 [cpu 8086]
 
+%define RETRIES 5
+
 entry:
 
 boot_drive:
@@ -106,13 +108,13 @@ check_disk:
 
 next_stage_too_big:
     call print_error
-    ; "n.stage too big"
-    dw 0x6ee4, 0x980c, 0x26a6, 0x73b4, 0x0a0d
+    ; "part too big"
+    dw 0x7822, 0x9ea6, 0x73b4, 0x0a0d
 
 disk_error:
     call print_error
-    ; "disk error"
-    dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
+    ; "disk err"
+    dw 0x1a24, 0x5688, 0x8c75
 
 ;
 ; ds:si - Points to 64-bit LBA
@@ -120,7 +122,6 @@ disk_error:
 ; does not destroy cs, ds, ss, es, si and di
 ;
 
-%define RETRIES 5
 read_sector: ; TODO: When LBA is supported it overwrites the sector count in disk address packet on error
     push ds
     push si
@@ -142,10 +143,6 @@ read_lba:
 
     mov al, 0x10
     push ax
-
-    mov si, sp
-    push ss
-    pop ds
 
     mov ah, 0x42
     jmp short read_int13_retry
@@ -203,8 +200,12 @@ disk_error_alias_zf:
     ; jmp short read_int13_retry
 
 read_int13_retry:
+    mov si, sp
+    push ss
+    pop ds
     mov di, RETRIES
 .again:
+    mov byte [si + 2], 1
     push ax
     push bx
     push cx

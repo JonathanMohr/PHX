@@ -2,6 +2,8 @@
 [org 0x0600]
 [cpu 8086]
 
+%define RETRIES 5
+
 entry:
     cli
     cld
@@ -30,23 +32,20 @@ entry:
 ; target offset in bx
 ;
 
-%define RETRIES 5
 read_sector: ; TODO: When LBA is supported it overwrites the sector count in disk address packet on error
     pop word [bp - 10]
 
     xor ax, ax
-
     push ax ; segment
     push bx ; offset
-
-    inc ax
-    push ax ; sector count
-
     mov al, 0x10
-    push ax
 
     mov cx, RETRIES
 .again:
+    cwd
+    inc dx
+    push dx ; sector count
+    push ax ; size 0x10 / reserved 0
     mov si, sp
     push cx
     mov ah, 0x42
@@ -69,14 +68,16 @@ read_sector: ; TODO: When LBA is supported it overwrites the sector count in dis
     xor ah, ah
     int 0x13
     pop cx
+    pop ax
+    pop dx
     loop .again
 
     ; jmp short disk_error
 
 disk_error:
     call print_error
-    ; "disk error"
-    disk_error_msg dw 0x1a24, 0x5688, 0x8c5c, 0x8eb5
+    ; "disk err"
+    dw 0x1a24, 0x5688, 0x8c75
 
 at_0600:
     sti
@@ -164,13 +165,8 @@ partition_entry_buffer equ 0x7E00    ; up to 32.5 KiB sectors
 
 no_partition_found:
     call print_error
-    ; "no bootable partition"
-    dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9a26, 0x439b
-
-; format_error:
-;     call print_error
-;     ; "format error"
-;     dw 0x2ba2, 0x6026, 0xd122, 0x8ba3
+    ; "no bootable part."
+    dw 0x6bb4, 0x0b9c, 0x9802, 0x5934, 0x7822, 0x9ef5
 
 ; "!\r\npress any key to restart..."
 press_enter_to_restart_msg dw 0xe7ba, 0x7c48, 0x94b4, 0x0370, 0xd288, 0xc6a6, 0x76a2, 0x24a6, 0x0466, 0xdef7
