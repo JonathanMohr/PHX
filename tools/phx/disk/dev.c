@@ -60,6 +60,7 @@ static PHX_Bool PHX_DEV_GetDevice(PHX_Context* context, PHX_File_Device* device,
         return PHX_FALSE;
     }
 
+    out->physicalSectorSize = data->fileDevice.physicalSectorSize;
     out->sectorSize = data->fileDevice.sectorSize;
     out->totalSectors = data->fileDevice.totalSectors;
     out->data = data;
@@ -102,6 +103,7 @@ static PHX_Bool PHX_DEV_FormatDevice(PHX_Context* context, PHX_File_Device* devi
         return PHX_FALSE;
     }
 
+    out->physicalSectorSize = data->fileDevice.physicalSectorSize;
     out->sectorSize = data->fileDevice.sectorSize;
     out->totalSectors = data->fileDevice.totalSectors;
     out->data = data;

@@ -19,6 +19,7 @@ typedef struct PHX_File_Operations
 
 struct PHX_File_Device
 {
+    PHX_SectorSize physicalBlockSize;
     PHX_SectorSize blockSize;
     PHX_FileSize blockCount;
 

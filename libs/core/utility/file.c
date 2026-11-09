@@ -20,6 +20,7 @@ static void PHX_Disk_Device_File_Close(PHX_Disk_Device* device)
 
 void PHX_File_GetDiskDevice(PHX_File_Device* fileDevice, PHX_Disk_Device* out)
 {
+    out->physicalSectorSize = fileDevice->physicalBlockSize;
     out->sectorSize = fileDevice->blockSize;
     out->totalSectors = fileDevice->blockCount;
     out->data = fileDevice;

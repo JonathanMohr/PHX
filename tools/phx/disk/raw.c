@@ -62,6 +62,7 @@ static PHX_Bool PHX_RAW_GetDevice(PHX_Context* context, PHX_File_Device* device,
         return PHX_FALSE;
     }
 
+    out->physicalSectorSize = sectorSize;
     out->sectorSize = sectorSize;
     out->totalSectors = data->transformedDevice.totalSectors;
     out->data = data;
@@ -103,6 +104,7 @@ static PHX_Bool PHX_RAW_FormatDevice(PHX_Context* context, PHX_File_Device* devi
         return PHX_FALSE;
     }
 
+    out->physicalSectorSize = sectorSize;
     out->sectorSize = sectorSize;
     out->totalSectors = data->transformedDevice.totalSectors;
     out->data = data;

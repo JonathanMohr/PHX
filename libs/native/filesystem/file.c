@@ -378,6 +378,7 @@ PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode m
                 return result;
             }
 
+            out->physicalBlockSize = info.physicalBlockSize;
             out->blockSize = info.blockSize;
             out->blockCount = info.blockCount;
         }
@@ -391,6 +392,7 @@ PHX_DetailedResult PHX_Native_File_Open(const char* path, PHX_Native_File_Mode m
                 return result;
             }
 
+            out->physicalBlockSize = 1;
             out->blockSize = 1;
             out->blockCount = fileSize;
         }

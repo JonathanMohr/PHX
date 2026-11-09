@@ -9,6 +9,7 @@ extern "C" {
 
 typedef struct PHX_Disk_Device
 {
+    PHX_SectorSize physicalSectorSize;
     PHX_SectorSize sectorSize;
     PHX_SectorSize totalSectors;
 

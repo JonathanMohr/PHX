@@ -55,6 +55,7 @@ PHX_Bool PHX_Partition_CreateDevice(PHX_Context* context, PHX_Disk_Device* devic
     data->start = partition->start;
     data->size = partition->size;
 
+    outDevice->physicalSectorSize = device->physicalSectorSize;
     outDevice->sectorSize = device->sectorSize;
     outDevice->totalSectors = partition->size;
     outDevice->data = data;

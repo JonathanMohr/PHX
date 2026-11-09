@@ -18,6 +18,7 @@
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
 #include "phx/device/partition.h"
+#include "phx/types.h"
 
 static void print_help(const char* name);
 
@@ -118,6 +119,47 @@ static PHX_AnySize PHX_Size_FromStr(const char* str, PHX_Bool* overflow, PHX_Any
     return result + frac;
 }
 #define PHX_Size_FromStr(str, overflow, type) ((type)PHX_Size_FromStr(str, overflow, (PHX_AnySize)(type)~(type)0))
+
+
+static void PHX_Size_Print(FILE* stream, PHX_AnySize size)
+{
+    const char suffixes[] = {'B', 'K', 'M', 'G', 'T'};
+    const PHX_AnySize base = 1024;
+    const PHX_AnySize maxDivisor = base * base * base * base;
+
+    PHX_Size divisorCount = 0;
+    PHX_AnySize divisor = 1;
+    while (divisor < maxDivisor && size > divisor * base)
+    {
+        divisor *= base;
+        divisorCount++;
+    }
+
+    PHX_AnySize wholePart = size / divisor;
+    const PHX_AnySize rest = size % divisor;
+
+    PHX_AnySize fraction = (rest * 100 + divisor / 2) / divisor;
+    if (fraction >= 100)
+    {
+        wholePart++;
+        fraction -= 100;
+    }
+
+    int digits = 2;
+    while (digits > 0 && fraction % 10 == 0)
+    {
+        fraction /= 10;
+        digits--;
+    }
+
+    const char* prefix = ((rest * 100) % divisor == 0) ? "" : "~";
+
+    if (digits == 0)
+        fprintf(stream, "%s%" PHX_FORMAT_ANYSIZE "%c", prefix, wholePart, suffixes[divisorCount]);
+    else
+        fprintf(stream, "%s%" PHX_FORMAT_ANYSIZE ".%0*" PHX_FORMAT_ANYSIZE "%c", prefix, wholePart, digits, fraction, suffixes[divisorCount]);
+}
+
 
 static PHX_Disk_Device* PHX_Device_FromStr(PHX_Context* context, const char* str, PHX_File_Device* fileDevice, PHX_Disk_Device* diskOut, PHX_Disk_Device* partitionOut, PHX_Bool readonly)
 {
@@ -391,8 +433,13 @@ static int disk(PHX_Context* context, const char* executable, const char* comman
             }
 
             fprintf(stdout, "%s (%s):\n", imagePath, diskDevice.type);
+            fprintf(stdout, "  Physical Sector Size: %" PRIu64 "\n", diskDevice.physicalSectorSize);
             fprintf(stdout, "  Sector Size: %" PRIu64 "\n", diskDevice.sectorSize);
             fprintf(stdout, "  Total Sectors: %" PRIu64 "\n", diskDevice.totalSectors);
+
+            fputs("  Total Size: ", stdout);
+            PHX_Size_Print(stdout, diskDevice.sectorSize * diskDevice.totalSectors);
+            fputc('\n', stdout);
 
             fprintf(stdout, "  Total Cylinders: %" PRIu64 "\n", diskDevice.totalCylinders);
             fprintf(stdout, "  Total Heads: %" PRIu8 "\n", diskDevice.totalHeads);
@@ -651,11 +698,19 @@ static int partition(PHX_Context* context, const char* executable, const char* c
             }
 
             fprintf(stdout, "%s (%s):\n", imagePath, table.type);
-            fprintf(stdout, "  Usable start: %" PRIu64 " (Sector: %" PRIu64 ")\n", table.startUsable * diskDevice.sectorSize, table.startUsable);
-            fprintf(stdout, "  Usable size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", table.sizeUsable * diskDevice.sectorSize, table.sizeUsable);
+
+            fputs("  Usable Start: ", stdout);
+            PHX_Size_Print(stdout, table.startUsable * diskDevice.sectorSize);
+            fprintf(stdout, " (Sector: %" PHX_FORMAT_SECTORSIZE ", Byte-Index: %" PHX_FORMAT_SECTORSIZE ")\n", table.startUsable, table.startUsable * diskDevice.sectorSize);
+
+            fputs("  Usable Size: ", stdout);
+            PHX_Size_Print(stdout, table.sizeUsable * diskDevice.sectorSize);
+            fprintf(stdout, " (Sectors: %" PHX_FORMAT_SECTORSIZE ", Bytes: %" PHX_FORMAT_SECTORSIZE ")\n", table.sizeUsable, table.sizeUsable * diskDevice.sectorSize);
+
             fputs("  Signature: ", stdout);
             print_signature(stdout, &table.signature);
             fputc('\n', stdout);
+
             fprintf(stdout, "  Partition Slots: %" PRIu64 "\n", table.partitionSlots);
             fputs("  Partitions:\n", stdout);
             PHX_PartitionSize currentEmptyCount = 0;
@@ -689,8 +744,14 @@ static int partition(PHX_Context* context, const char* executable, const char* c
 
                 (void)currentEmptyCount;
 
-                fprintf(stdout, "      Start: %" PRIu64 " (Sector: %" PRIu64 ")\n", partition->start * diskDevice.sectorSize, partition->start);
-                fprintf(stdout, "      Size: %" PRIu64 " (Sectors: %" PRIu64 ")\n", partition->size * diskDevice.sectorSize, partition->size);
+                fputs("      Start: ", stdout);
+                PHX_Size_Print(stdout, partition->start * diskDevice.sectorSize);
+                fprintf(stdout, " (Sector: %" PHX_FORMAT_SECTORSIZE ", Byte-Index: %" PHX_FORMAT_SECTORSIZE ")\n", partition->start, partition->start * diskDevice.sectorSize);
+
+                fputs("      Size: ", stdout);
+                PHX_Size_Print(stdout, partition->size * diskDevice.sectorSize);
+                fprintf(stdout, " (Sectors: %" PHX_FORMAT_SECTORSIZE ", Bytes: %" PHX_FORMAT_SECTORSIZE ")\n", partition->size, partition->size * diskDevice.sectorSize);
+
                 if (typeName)
                     fprintf(stdout, "      Type: %s (%s)\n", typeName, specificType);
                 else

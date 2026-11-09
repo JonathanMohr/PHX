@@ -332,6 +332,7 @@ PHX_Bool PHX_BlockCountTransformDevice(PHX_Context* context, PHX_Disk_Device* de
         }
     }
 
+    outDevice->physicalSectorSize = device->physicalSectorSize;
     outDevice->sectorSize = targetBlockSize;
     outDevice->totalSectors = outBlockCount;
     outDevice->data = t;
