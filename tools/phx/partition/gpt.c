@@ -747,7 +747,7 @@ static PHX_Result GPT_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
     if (found != PHX_TRUE)
     {
         GPT_FreeData(context, data);
-        return PHX_FALSE;
+        return PHX_ERROR_FORMAT;
     }
 
     PHX_u64 firstUsableLba;
