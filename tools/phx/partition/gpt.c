@@ -690,7 +690,10 @@ static const PHX_Partition_Table_Operations GPT_Operations = {
     sizeof(GPT_BootloaderPresetInfos) / sizeof(PHX_Partition_BootloaderPreset_Info),
     sizeof(GPT_TypeInfos) / sizeof(PHX_Partition_Type_Info),
 
-    GPT_SPECIFIC_TYPE_LEN
+    GPT_SPECIFIC_TYPE_LEN,
+
+    PHX_PARTITION_SIGNATURE_GUID,
+    PHX_PARTITION_SIGNATURE_GUID
 };
 
 
@@ -1072,9 +1075,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         const PHX_SectorSize sectorCount = (bootloaderPreset.partitionSize + device->sectorSize - 1) / device->sectorSize;
 
         // TODO: Better
-        partition->partition.signature.first = PHX_Context_GetRandomU64(context);
-        partition->partition.signature.second = PHX_Context_GetRandomU64(context);
-        partition->partition.signature.type = PHX_PARTITION_SIGNATURE_GUID;
+        PHX_Partition_CreateRandomSignature(context, &partition->partition.signature, PHX_PARTITION_SIGNATURE_GUID);
 
         partition->partition.start = startUsable;
         partition->partition.size = sectorCount;
@@ -1131,9 +1132,7 @@ static PHX_Result GPT_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         i++;
     }
 
-    outTable->signature.first = PHX_Context_GetRandomU64(context);
-    outTable->signature.second = PHX_Context_GetRandomU64(context);
-    outTable->signature.type = PHX_PARTITION_SIGNATURE_GUID;
+    PHX_Partition_CreateRandomSignature(context, &outTable->signature, PHX_PARTITION_SIGNATURE_GUID);
 
     outTable->partitionSlots = partitionEntryCount;
 

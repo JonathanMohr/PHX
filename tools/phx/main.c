@@ -7,6 +7,7 @@
 
 #include <phx/version/version.h>
 
+#include <phx/native/random.h>
 #include <phx/native/filesystem.h>
 #include <phx/native/memory.h>
 
@@ -17,8 +18,6 @@
 #include "disk/disk.h"
 #include "partition/partition.h"
 #include "filesystem/filesystem.h"
-#include "phx/device/partition.h"
-#include "phx/types.h"
 
 static void print_help(const char* name);
 
@@ -289,8 +288,8 @@ static void print_signature(FILE* stream, PHX_Partition_Signature* signature)
             fputs("NO SIGNATURE", stream);
             break;
         
-        case PHX_PARTITION_SIGNATURE_FIRST:
-            fprintf(stream, "0x%" PRIX64, signature->first);
+        case PHX_PARTITION_SIGNATURE_32:
+            fprintf(stream, "0x%" PRIX32, (PHX_u32)signature->first);
             break;
 
         case PHX_PARTITION_SIGNATURE_GUID:
@@ -894,10 +893,7 @@ static int partition(PHX_Context* context, const char* executable, const char* c
                 return 1;
             }
 
-            // TODO
-            partition->signature.first = 0;
-            partition->signature.second = 0;
-            partition->signature.type = PHX_PARTITION_SIGNATURE_NONE;
+            PHX_Partition_CreateRandomSignature(context, &partition->signature, table.ops->partitionSignatureType);
 
             partition->start = start / diskDevice.sectorSize;
             partition->size = size / diskDevice.sectorSize;
@@ -2662,7 +2658,7 @@ int main(int argc, const char* argv[])
 
         (PHX_Time)time(NULL),
         
-        (PHX_u32)time(NULL),
+        PHX_Native_GetRandomSeed(),
 
         PHX_TRUE,
 

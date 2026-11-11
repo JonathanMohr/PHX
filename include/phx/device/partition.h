@@ -12,7 +12,7 @@ extern "C" {
 
 typedef PHX_u64 PHX_Partition_Signature_Type;
 #define PHX_PARTITION_SIGNATURE_NONE 0
-#define PHX_PARTITION_SIGNATURE_FIRST 1
+#define PHX_PARTITION_SIGNATURE_32 1
 #define PHX_PARTITION_SIGNATURE_GUID 2
 
 typedef struct PHX_Partition_Signature
@@ -84,6 +84,9 @@ typedef struct PHX_Partition_Table_Operations
     PHX_Size typeCount;
 
     PHX_Size specificTypeLen;
+
+    PHX_Partition_Signature_Type tableSignatureType;
+    PHX_Partition_Signature_Type partitionSignatureType;
 } PHX_Partition_Table_Operations;
 
 struct PHX_Partition_Table_Device
@@ -113,6 +116,8 @@ static inline PHX_Partition* PHX_Partition_Table_GetPartition(PHX_Partition_Tabl
     PHX_u8* partition = table->partitions + table->partitionSize * index;
     return (PHX_Partition*)partition;
 }
+
+void PHX_Partition_CreateRandomSignature(PHX_Context* context, PHX_Partition_Signature* signature, PHX_Partition_Signature_Type type);
 
 #ifdef __cplusplus
 }

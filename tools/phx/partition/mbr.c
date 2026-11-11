@@ -408,7 +408,10 @@ static const PHX_Partition_Table_Operations MBR_Operations = {
     sizeof(MBR_BootloaderPresetInfos) / sizeof(PHX_Partition_BootloaderPreset_Info),
     sizeof(MBR_TypeInfos) / sizeof(PHX_Partition_Type_Info),
 
-    MBR_SPECIFIC_TYPE_LEN
+    MBR_SPECIFIC_TYPE_LEN,
+
+    PHX_PARTITION_SIGNATURE_32,
+    PHX_PARTITION_SIGNATURE_NONE
 };
 
 
@@ -509,7 +512,7 @@ static PHX_Result MBR_OpenPartitionTable(PHX_Context* context, PHX_Disk_Device* 
 
     outTable->signature.first = diskSignature;
     outTable->signature.second = 0;
-    outTable->signature.type = PHX_PARTITION_SIGNATURE_FIRST;
+    outTable->signature.type = PHX_PARTITION_SIGNATURE_32;
 
     outTable->partitionSlots = 4;
 
@@ -587,10 +590,7 @@ static PHX_Result MBR_FormatPartitionTable(PHX_Context* context, PHX_Disk_Device
         partition->type = 0;
     }
 
-    outTable->signature.first = 0;
-    while (outTable->signature.first == 0) outTable->signature.first = PHX_Context_GetRandomU32(context);
-    outTable->signature.second = 0;
-    outTable->signature.type = PHX_PARTITION_SIGNATURE_FIRST;
+    PHX_Partition_CreateRandomSignature(context, &outTable->signature, PHX_PARTITION_SIGNATURE_32);
 
     outTable->partitionSlots = 4;
 
