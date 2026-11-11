@@ -51,7 +51,7 @@ def Parse_Dependency_File(dep_file: Path) -> list[str]:
     return tokens[1:]
 
 def Get_Compile_Flags(mode: BuildMode) -> list[str]:
-    flags = []
+    flags: list[str] = []
 
     # Don't leak absolute paths
     flags.append(f"-fdebug-prefix-map={mode.project_root}=project_root")
@@ -403,7 +403,7 @@ def Compile_C_Source(self: toolchain.Toolchain, mode: BuildMode, src: Path, src_
 
     for define in self.defines:
         k, v = define
-        args.append(f"-D{k}={v}" if v is not None else f"-D{k}")
+        args.append(f"-D{k}={v}" if v != "" else f"-D{k}")
 
     for includeDirectory in self.includeDirs:
         args.append(f"-I{includeDirectory}")
@@ -446,7 +446,7 @@ def Compile_CPP_Source(self: toolchain.Toolchain, mode: BuildMode, src: Path, sr
 
     for define in self.defines:
         k, v = define
-        args.append(f"-D{k}={v}" if v is not None else f"-D{k}")
+        args.append(f"-D{k}={v}" if v != "" else f"-D{k}")
 
     for includeDirectory in self.includeDirs:
         args.append(f"-I{includeDirectory}")
@@ -503,12 +503,14 @@ def Link_Executable(self: toolchain.Toolchain, mode: BuildMode, objects: list[Pa
     
     if mode.target_os == OS.macOS:
         llvm_dsymutil = shutil.which("llvm-dsymutil")
-        if llvm_dsymutil:
-            LLVM_DSYMUTIL = llvm_dsymutil
-        else:
-            LLVM_DSYMUTIL = shutil.which("dsymutil")
-
-        if not LLVM_DSYMUTIL: toolchain.Require_Tool("llvm-dsymutil")
+        if llvm_dsymutil is None:
+            llvm_dsymutil = shutil.which("dsymutil")
+        if llvm_dsymutil is None:
+            toolchain.Require_Tool("llvm-dsymutil")
+            raise RuntimeError("Should not get here")
+    else:
+        llvm_dsymutil = ""
+    LLVM_DSYMUTIL = llvm_dsymutil
 
     if mode.target_os == OS.Windows:
         executable = out_dir / f"{name}.exe"
@@ -590,12 +592,14 @@ def Link_DynamicLibrary(self: toolchain.Toolchain, mode: BuildMode, objects: lis
     
     if mode.target_os == OS.macOS:
         llvm_dsymutil = shutil.which("llvm-dsymutil")
-        if llvm_dsymutil:
-            LLVM_DSYMUTIL = llvm_dsymutil
-        else:
-            LLVM_DSYMUTIL = shutil.which("dsymutil")
-
-        if not LLVM_DSYMUTIL: toolchain.Require_Tool("llvm-dsymutil")
+        if llvm_dsymutil is None:
+            llvm_dsymutil = shutil.which("dsymutil")
+        if llvm_dsymutil is None:
+            toolchain.Require_Tool("llvm-dsymutil")
+            raise RuntimeError("Should not get here")
+    else:
+        llvm_dsymutil = ""
+    LLVM_DSYMUTIL = llvm_dsymutil
 
     match mode.target_os:
         case OS.Windows:

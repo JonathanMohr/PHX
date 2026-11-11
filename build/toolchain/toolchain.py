@@ -8,7 +8,7 @@ class Toolchain:
     # self, mode, src, src_rel, out_dir, doCompileCommands -> object
     Compile_Function: TypeAlias = Callable[["Toolchain", BuildMode, Path, Path, Path, bool], Path]
     # self, mode, objects, name, out_dir -> lib
-    Archive_Function: TypeAlias = Callable[["Toolchain", BuildMode, list[Path], str, Path, bool], Path]
+    Archive_Function: TypeAlias = Callable[["Toolchain", BuildMode, list[Path], str, Path], Path]
     # self, mode, objects, libraries, name, out_dir -> executable, debug_info | None
     Link_Executable_Function: TypeAlias = Callable[["Toolchain", BuildMode, list[Path], list[Path], str, Path], tuple[Path, Path | None]]
     # self, mode, objects, libraries, name, out_dir, plugin -> dylib, implib | None, debug_info | None
@@ -52,7 +52,7 @@ class Toolchain:
         self.stdcpp = stdcpp
 
     def Add_Define(self, name: str, value: str | None = None):
-        self.defines.append((name, value))
+        self.defines.append((name, value or ""))
 
     def Add_Include_Directory(self, dir: Path):
         self.includeDirs.append(dir)

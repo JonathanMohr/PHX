@@ -1,11 +1,10 @@
 import build.toolchain.toolchain as toolchain
 import build.cache as cache
-import build.compileCommands as compileCommands
-from build.defs import BuildMode, ARCH, OS, OPTIMIZATION, PORTABILITY, LINKING, HOST, BuildContext
+#import build.compileCommands as compileCommands
+from build.defs import BuildMode, ARCH, OS, BuildContext
 
 from pathlib import Path
 import subprocess
-import shutil
 
 def Compile_Assembly_Source(self: toolchain.Toolchain, mode: BuildMode, src: Path, src_rel: Path, out_dir: Path, doCompileCommands: bool) -> Path:
     if mode.target_arch != ARCH.x86_64:
@@ -28,7 +27,7 @@ def Compile_Assembly_Source(self: toolchain.Toolchain, mode: BuildMode, src: Pat
         if v: args.extend(["-D", f"{k}={v}"])
         else: args.extend(["-D", k])
 
-    for include in self.includeDirectories:
+    for include in self.includeDirs:
         args.extend(["-I", str(include)])
 
     match mode.target_os:

@@ -29,7 +29,7 @@ def get_in_file(src_file: Path, out_file: Path, chunk_size: int = 65536) -> int:
         case _:
             return 0
 
-def get_random_file(out_file: Path, n, chunk_size: int = 65536):
+def get_random_file(out_file: Path, n: int, chunk_size: int = 65536):
     rng = random.Random()
     with out_file.open("wb") as f:
         remaining = n

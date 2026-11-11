@@ -9,7 +9,10 @@ import tests.disk as disk
 import tests.partition as partition
 import tests.filesystem as filesystem
 
-def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class: TESTCLASS, phx: Path, host_os: OS) -> bool:
+def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class: TESTCLASS, phx: Path, host_os: OS, use_root: bool) -> bool:
+    if test_class == TESTCLASS.NONE:
+        return True
+
     test_build_dir = build_dir / "tests"
     test_dir = project_dir / "tests"
 
@@ -35,12 +38,12 @@ def test(logger: logging.Logger, project_dir: Path, build_dir: Path, test_class:
         context.use_tsk = False
 
 
-    if host_os == OS.macOS:
-        if shutil.which("diskutil") is None:
-            logger.warning("Could not find diskutil")
-        else:
-            context.use_diskutil = True
-
+    if use_root:
+        if host_os == OS.macOS:
+            if shutil.which("diskutil") is None:
+                logger.warning("Could not find diskutil")
+            else:
+                context.use_diskutil = True
 
     if context.use_diskutil:
         context.require_mount = True

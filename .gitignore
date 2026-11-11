@@ -1,6 +1,6 @@
 /.build/
 
-/.dist/
+/dist/
 /logs/
 /sysroots/
 

@@ -95,8 +95,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
     in_file = build_dir / f"tmp-in.bin"
     out_file = build_dir / f"tmp-out.bin"
 
-    if context.cleanup_artifacts:
-        tmp_image = build_dir / "tmp-image.img"
+    tmp_image = build_dir / "tmp-image.img"
 
     failed: bool = False
     for i, file in enumerate(files, start=1):

@@ -5,7 +5,7 @@ from build.toolchain.get import Get_LLVM_Toolchain
 
 from build.compileCommands import CompileCommands
 import build.cache as cacheModule
-import build.logger as loggerModule
+import build.buildlogger as buildlogger
 import build.archive as archiveModule
 
 from build.toolchain.nasm import Compile_Assembly_To_Binary
@@ -22,7 +22,7 @@ import platform
 import subprocess
 import os
 
-def Build_Sources_To_Objects(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, src_dir: Path, build_dir: Path, doCompileCommands: bool) -> Path:
+def Build_Sources_To_Objects(logger: logging.Logger, toolchain: Toolchain, mode: BuildMode, src_dir: Path, build_dir: Path, doCompileCommands: bool) -> list[Path]:
     patterns = ["*.c", "*.cpp", "*.asm"]
 
     files: list[Path] = []
@@ -88,7 +88,7 @@ def Build_Executable(logger: logging.Logger, toolchain: Toolchain, mode: BuildMo
 
         if mode.linking == LINKING.DYNAMIC:
             for dynamic_library in dynamic_libraries:
-                dylib, implib, debug_info = dynamic_library
+                dylib, implib, _debug_info = dynamic_library
                 if implib: libs.append(implib)
                 else: libs.append(dylib)
         else:
@@ -118,7 +118,7 @@ def Copy_Path(logger: logging.Logger, src: Path, dst: Path):
     else:
         logger.warning(f"{src} does not exist")
 
-def run_git(cmd):
+def run_git(cmd: list[str]):
     try:
         return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
     except subprocess.CalledProcessError:
@@ -150,7 +150,7 @@ def to_c_identifier(name: str) -> str:
         ident = "_" + ident
     return ident
 
-def generate_header(input_path: str, output_path: str, var_name: str = None, bytes_per_line: int = 16):
+def generate_header(input_path: str, output_path: str, var_name: str | None = None, bytes_per_line: int = 16):
     with open(input_path, "rb") as f:
         data = f.read()
 
@@ -195,6 +195,13 @@ def main() -> bool:
         dest="debug",
         action="store_true",
         help="Build with debug mode"
+    )
+
+    argparser.add_argument(
+        "--no-root",
+        dest="no_root",
+        action="store_true",
+        help="Don't run any Root tests"
     )
 
     argparser.add_argument(
@@ -253,7 +260,7 @@ def main() -> bool:
 
     args = argparser.parse_args()
 
-    logger = logging.getLogger("ci")
+    logger = buildlogger.get("ci")
     logger.setLevel(logging.DEBUG)
 
     console_handler = logging.StreamHandler()
@@ -318,8 +325,6 @@ def main() -> bool:
             
             target_arch = host_arch
 
-    isHost = host_os == target_os and host_arch == target_arch
-
     project_dir = Path(".")
     include_dir = project_dir / "include"
     libs_dir = project_dir / "libs"
@@ -329,13 +334,13 @@ def main() -> bool:
 
     archives_path = project_dir / "archives"
 
-    dist_dir = project_dir / ".dist"
+    dist_dir = project_dir / "dist"
     general_build_dir = project_dir / ".build"
 
-    general_log_dir = project_dir / "logs"
+    # general_log_dir = project_dir / "logs"
 
     specific_build_dir = general_build_dir / ("dist_build" if dist_build else "local_build")
-    specific_log_dir = general_log_dir / ("dist_build" if dist_build else "local_build")
+    # specific_log_dir = general_log_dir / ("dist_build" if dist_build else "local_build")
 
     compileCommandsPath = project_dir / "compile_commands.json"
 
@@ -389,21 +394,21 @@ def main() -> bool:
         case ARCH.x86_64: target_arch_str = "x86_64"
         case ARCH.arm64: target_arch_str = "arm64"
 
-    match buildMode.optimization:
-        case OPTIMIZATION.NONE: optimization_str = "none"
-        case OPTIMIZATION.SPEED: optimization_str = "speed"
-        case OPTIMIZATION.SIZE: optimization_str = "size"
+    #match buildMode.optimization:
+    #    case OPTIMIZATION.NONE: optimization_str = "none"
+    #    case OPTIMIZATION.SPEED: optimization_str = "speed"
+    #    case OPTIMIZATION.SIZE: optimization_str = "size"
 
-    match buildMode.portability:
-        case PORTABILITY.PORTABLE: portability_str = "portable"
-        case PORTABILITY.MACHINE: portability_str = "machine"
+    #match buildMode.portability:
+    #    case PORTABILITY.PORTABLE: portability_str = "portable"
+    #    case PORTABILITY.MACHINE: portability_str = "machine"
 
-    match buildMode.linking:
-        case LINKING.STATIC: linking_str = "static"
-        case LINKING.DYNAMIC: linking_str = "dynamic"
+    #match buildMode.linking:
+    #    case LINKING.STATIC: linking_str = "static"
+    #    case LINKING.DYNAMIC: linking_str = "dynamic"
 
     build_dir = specific_build_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
-    log_dir = specific_log_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
+    # log_dir = specific_log_dir / ("debug" if args.debug else "release") / target_os_str / target_arch_str # / optimization_str / portability_str / linking_str
 
     buildCache = cacheModule.BuildCache(build_dir / "cache.json", logger)
     compileCommands = CompileCommands()
@@ -605,9 +610,9 @@ def main() -> bool:
         ## bin
         bin_dir = dist_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
-            
+
         ### phx
-        phx_executable, phx_executable_debug_info = phx
+        phx_executable, _phx_executable_debug_info = phx
         bin_phx = bin_dir / phx_executable.name
         Copy_Path(logger, phx_executable, bin_phx)
 
@@ -617,7 +622,7 @@ def main() -> bool:
         buildCache.save()
         return False
 
-    if not test(logger, project_dir, build_dir, test_class, bin_phx, host_os):
+    if not test(logger, project_dir, build_dir, test_class, bin_phx, host_os, not args.no_root):
         logger.error(f"Tests failed")
 
         buildCache.save()
@@ -628,7 +633,7 @@ def main() -> bool:
 
     if args.archive:
         archives_path.mkdir(parents=True, exist_ok=True)
-        archive = archiveModule.archive(target_os, target_arch, dist_dir, archives_path / archive_name)
+        _archive = archiveModule.archive(target_os, target_arch, dist_dir, archives_path / archive_name)
         
     return True
 

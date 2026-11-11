@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from enum import Enum
+from typing import Any
 import json
 
 class Language(Enum):
@@ -38,7 +39,7 @@ class CompileCommands:
         )
     
     def write(self, file: Path):
-        data = []
+        data: list[Any] = []
 
         cwd = Path.cwd()
 

@@ -1,7 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
-import logging
+from build.buildlogger import BuildLogger
 
 from build.cache import BuildCache
 from build.compileCommands import CompileCommands
@@ -63,7 +63,7 @@ class BuildMode:
 
 @dataclass()
 class BuildContext:
-    logger: logging.Logger
+    logger: BuildLogger
     buildCache: BuildCache
     compileCommands: CompileCommands
 

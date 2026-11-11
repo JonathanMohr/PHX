@@ -57,13 +57,13 @@ If you decide to build manually, you will need the following tools available in 
 git clone https://github.com/JonathanMohr/phx
 cd phx
 
-# Build
-python3 -m build
+# Build (-t none = do not run tests)
+python3 -m build [-t none]
 # or
-python -m build
+python -m build [-t none]
 ```
 
-After building, `./.dist` will contain the install prefix (`/bin`, etc.). Copy its contents to a location of your choice (e.g. `~/.local/phx`), then either add its directories to you `PATH` (and possibly `MANPATH`, etc.), or link the necessary files and directories into a directory that's already on it.
+After building, `./dist` will contain the install prefix (`/bin`, etc.). Copy its contents to a location of your choice (e.g. `~/.local/phx`), then either add its directories to you `PATH` (and possibly `MANPATH`, etc.), or link the necessary files and directories into a directory that's already on it.
 
 ## Third-Party
 

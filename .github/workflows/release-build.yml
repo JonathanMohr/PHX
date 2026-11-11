@@ -65,14 +65,14 @@ jobs:
         run: |
           FLAGS="-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }} "
           FLAGS+="--os ${{ matrix.os_name }} --arch ${{ matrix.arch }} "
-          python3 -m build $FLAGS -v "${{ github.event.release.tag_name }}"
+          python3 -m build $FLAGS -t none --no-root -v "${{ github.event.release.tag_name }}"
 
       - name: Build on Windows
         if: ${{ matrix.os_name == 'windows' }}
         run: |
           set FLAGS=-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }}
           set FLAGS=%FLAGS% --os ${{ matrix.os_name }} --arch ${{ matrix.arch }}
-          python -m build %FLAGS% -v "${{ github.event.release.tag_name }}"
+          python -m build %FLAGS% -t none --no-root -v "${{ github.event.release.tag_name }}"
         shell: cmd
 
       - name: Upload archive as release asset

@@ -34,6 +34,12 @@ on:
         default: false
         type: boolean
 
+      run_tests:
+        description: "Run tests"
+        required: true
+        default: true
+        type: boolean
+
 jobs:
   planner:
     name: Planner
@@ -41,6 +47,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       should_run: ${{ steps.set-matrix.outputs.should_run }}
+      run_tests: ${{ steps.set-matrix.outputs.run_tests }}
     steps:
       - id: set-matrix
         run: |
@@ -86,6 +93,7 @@ jobs:
 
           echo "Matrix=$MATRIX" >> $GITHUB_OUTPUT
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+          echo "run_tests=$RUN_TESTS" >> $GITHUB_OUTPUT
 
   build:
     name: Build
@@ -128,14 +136,18 @@ jobs:
         run: |
           FLAGS="-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }} "
           FLAGS+="--os ${{ matrix.os_name }} --arch ${{ matrix.arch }} "
-          python3 -m build $FLAGS
+          if [ "${{ needs.planner.outputs.run_tests }}" != "true" ]; then
+            FLAGS+="-t none"
+          fi
+          python3 -m build $FLAGS --no-root
 
       - name: Build on Windows
         if: ${{ matrix.os_name == 'windows' }}
         run: |
           set FLAGS=-a -A phx-${{ matrix.os_name }}-${{ matrix.arch }}
           set FLAGS=%FLAGS% --os ${{ matrix.os_name }} --arch ${{ matrix.arch }}
-          python -m build %FLAGS%
+          if not "${{ needs.planner.outputs.run_tests }}"=="true" set FLAGS=%FLAGS% -t none
+          python -m build %FLAGS% --no-root
         shell: cmd
 
       - name: Upload binaries as artifact

@@ -3,6 +3,7 @@ from tests.context import TestContext
 
 from tests.files import get_in_file, get_random_file
 
+from typing import Any, cast
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
@@ -130,18 +131,27 @@ def mount(logger: logging.Logger, image_path: Path, host_os: OS) -> Path | None:
                     str(image_path)
                 ], capture_output=True, check=True)
 
-                plist = plistlib.loads(result.stdout)
-                system_entities = plist.get("system-entities") if isinstance(plist, dict) else None
-                if not isinstance(system_entities, list):
+                raw = plistlib.loads(result.stdout)
+                if not isinstance(raw, dict):
+                    logger.error(f"Could not parse plist output of hdiutil: {raw}")
+                    return None
+
+                plist = cast(dict[str, Any], raw)
+                entities_raw = plist.get("system-entities")
+                if not isinstance(entities_raw, list):
                     logger.error(f"Could not parse plist output of hdiutil: {plist}")
                     return None
+
+                system_entities = cast(list[Any], entities_raw)
 
                 for e in system_entities:
                     if not isinstance(e, dict):
                         logger.warning(f"Entry of plist output is not a dict: {e}")
                         continue
 
-                    dev_entry = e.get("dev-entry")
+                    entity = cast(dict[str, Any], e)
+
+                    dev_entry = entity.get("dev-entry")
                     if dev_entry is None:
                         logger.warning(f"Entry of plist output does not have a dev-entry field")
                         continue
@@ -164,21 +174,21 @@ def unmount(logger: logging.Logger, device_path: Path, host_os: OS) -> bool:
 
     match host_os:
         case OS.Windows:
-            return None # TODO
+            return False # TODO
 
         case OS.Linux:
-            return None # TODO
+            return False # TODO
 
         case OS.macOS:
             try:
-                result = subprocess.run([
+                _result = subprocess.run([
                     "hdiutil", "detach",
                     str(device_path)
                 ], capture_output=True, check=True)
 
             except Exception as e:
                 logger.error(f"Error while unmounting {device_path} with hdiutil: {e}")
-                return None
+                return False
 
         case _:
             logger.error(f"Unknown host os: {host_os}")
@@ -259,15 +269,19 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
         logger.error(f"Error while running diskutil for image ({name}): {e}")
         return False
 
-    data = plistlib.loads(result.stdout)
-    if not isinstance(data, dict):
-        logger.error(f"Could not parse plist output of diskutil for image ({name}): {data}")
+    data_raw = plistlib.loads(result.stdout)
+    if not isinstance(data_raw, dict):
+        logger.error(f"Could not parse plist output of diskutil for image ({name}): {data_raw}")
         return False
 
-    disks_data = data.get("AllDisksAndPartitions")
-    if not isinstance(disks_data, list):
+    data = cast(dict[str, Any], data_raw)
+
+    disks_data_raw = data.get("AllDisksAndPartitions")
+    if not isinstance(disks_data_raw, list):
         logger.error(f"Could not get AllDisksAndPartitions from output of diskutil for image ({name}): {data}")
         return False
+
+    disks_data = cast(list[dict[str, Any]], disks_data_raw)
 
     if len(disks_data) < 1:
         logger.error(f"No elements in array ({name}): {disks_data}")
@@ -316,14 +330,16 @@ def check_with_diskutil(logger: logging.Logger, device_path: Path, config: Confi
         logger.error(f"Expected partition count ({len(expected_partitions)}) does not match actual partition count: {len(disk_partitions)} ({name})")
         return False
 
-    for index, (disk_partition, partition) in enumerate(zip(disk_partitions, expected_partitions)):
+    for index, (disk_partition_raw, partition) in enumerate(zip(disk_partitions, expected_partitions)):
         expected_partition_type = partition_get_type(partition, format) or "unknown"
         expected_partition_size = partition_get_size(partition, format)
         # TODO: Also check start by maybe reading or something
 
-        if not isinstance(disk_partition, dict):
+        if not isinstance(disk_partition_raw, dict):
             logger.warning(f"Could not get partition {index} from output of diskutil for image ({name}): {data}")
             continue
+
+        disk_partition = cast(dict[str, Any], disk_partition_raw)
 
         partition_content = disk_partition.get("Content")
         if not isinstance(partition_content, str):
@@ -453,8 +469,7 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
     data_out_file = build_dir / f"tmp-out.bin"
     bootsector_file = build_dir / f"tmp-bootsector.bin"
 
-    if context.cleanup_artifacts:
-        tmp_image = build_dir / "tmp-image.img"
+    tmp_image = build_dir / "tmp-image.img"
 
     failed: bool = False
     for i, config_file in enumerate(image_configs, start=1):
@@ -465,10 +480,12 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
             logger.warning(f"Could not read {config_file}: {e}")
             continue
 
-        config_data_image = config_data.get("image")
-        if not isinstance(config_data_image, dict):
-            logger.warning(f"{'No' if config_data_image is None else 'Invalid'} 'image' field in {config_file}")
+        config_data_image_raw = config_data.get("image")
+        if not isinstance(config_data_image_raw, dict):
+            logger.warning(f"{'No' if config_data_image_raw is None else 'Invalid'} 'image' field in {config_file}")
             continue
+
+        config_data_image = cast(dict[str, Any], config_data_image_raw)
 
         bootsector = config_data_image.get("bootsector")
         if isinstance(bootsector, str):
@@ -491,18 +508,22 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
         config = Config(bootsector, mbr_size or size, gpt_size or size, [])
 
 
-        config_partitions = config_data.get("partitions")
-        if config_partitions is None: config_partitions = []
-        if not isinstance(config_partitions, list):
+        config_partitions_raw = config_data.get("partitions")
+        if config_partitions_raw is None: config_partitions_raw = []
+        if not isinstance(config_partitions_raw, list):
             logger.warning(f"Invalid partitions specified in {config_file}")
             continue
 
+        config_partitions = cast(list[Any], config_partitions_raw)
+
         skip = False
-        for config_partition in config_partitions:
-            if not isinstance(config_partition, dict):
+        for config_partition_raw in config_partitions:
+            if not isinstance(config_partition_raw, dict):
                 logger.warning(f"Invalid partitions specified in {config_file}")
                 skip = True
                 break
+
+            config_partition = cast(dict[str, Any], config_partition_raw)
 
             config_partition_mbr_type = config_partition.get("mbr-type", None)
             if not isinstance(config_partition_mbr_type, str) and config_partition_mbr_type is not None:
@@ -642,6 +663,8 @@ def test(logger: logging.Logger, context: TestContext, test_class: TESTCLASS, ph
                     logger.error(f"Mounting failed")
                     failed = True
                     continue
+            else:
+                device_path = Path("")
 
 
             if context.use_diskutil:
